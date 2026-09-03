@@ -10,11 +10,15 @@
 //! optimization (bitboards / make-unmake) lands in M1.
 
 pub mod board;
+pub mod eval;
 pub mod fen;
 pub mod movegen;
 pub mod perft;
+pub mod search;
 
 pub use board::*;
+pub use eval::{eval, material};
 pub use fen::*;
 pub use movegen::{generate_legal, generate_pseudo, is_attacked, king_square};
 pub use perft::{perft, perft_divide};
+pub use search::{best_move, in_check, search, SearchResult, MATE, MATE_THRESHOLD};
