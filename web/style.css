@@ -1,0 +1,135 @@
+:root {
+  --light: #e9edf2;
+  --dark: #6f8bab;
+  --sel: #f6d36b;
+  --tgt: rgba(40, 180, 99, 0.55);
+  --panel: #22314a;
+  --border: #35507a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: #0f1420;
+  color: #e7ecf3;
+  display: flex;
+  justify-content: center;
+}
+
+main {
+  padding: 24px;
+  max-width: 560px;
+  width: 100%;
+}
+
+h1 {
+  margin: 0 0 2px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.tag {
+  font-size: 0.5em;
+  vertical-align: middle;
+  background: var(--panel);
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: #9fc0ff;
+}
+
+.tagline {
+  margin: 0 0 16px;
+  color: #8ea0b8;
+  font-style: italic;
+}
+
+.status {
+  margin: 10px 0;
+  font-weight: 600;
+  min-height: 1.4em;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.sq {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sq.light {
+  background: var(--light);
+}
+.sq.dark {
+  background: var(--dark);
+}
+
+.sq.selected {
+  box-shadow: inset 0 0 0 4px var(--sel);
+}
+
+.sq.target::after {
+  content: "";
+  position: absolute;
+  width: 32%;
+  height: 32%;
+  border-radius: 50%;
+  background: var(--tgt);
+}
+
+.piece {
+  font-size: clamp(26px, 8.5vw, 48px);
+  line-height: 1;
+}
+.piece.white {
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+.piece.black {
+  color: #10151d;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+button,
+select {
+  background: var(--panel);
+  color: #e7ecf3;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.thinking {
+  color: #9fc0ff;
+  font-style: italic;
+}
+
+.foot {
+  margin-top: 18px;
+  color: #7f92ab;
+  font-size: 0.9em;
+}

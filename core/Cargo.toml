@@ -1,7 +1,8 @@
 [workspace]
 resolver = "2"
-members = ["engine"]
+members = ["engine", "bindings"]
 
-# Glassboard portable core (Rust). Compiles to native and (later) WebAssembly.
-# M0 member: `engine` (board, move generation, perft). `assist`, `nn`, and
-# `bindings` crates join at their milestones (see docs/ARCHITECTURE.md).
+# Glassboard portable core (Rust). Compiles to native and WebAssembly.
+# Members: `engine` (board, move generation, search — M0/M1) and `bindings`
+# (wasm-bindgen wrapper for the web shell — M2). `assist` and `nn` crates join
+# at their milestones (see docs/ARCHITECTURE.md).

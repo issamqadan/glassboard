@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Glassboard</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Glassboard <span class="tag">Classic</span></h1>
+      <p class="tagline">Chess, in the open.</p>
+      <div id="status" class="status">Loading engine…</div>
+      <div id="board" class="board" aria-label="chess board"></div>
+      <div class="controls">
+        <button id="new">New game</button>
+        <label>
+          Engine depth
+          <select id="depth">
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+        <span id="thinking" class="thinking"></span>
+      </div>
+      <p class="foot">You are White. Click a piece, then a highlighted square. The engine plays Black.</p>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
