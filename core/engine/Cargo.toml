@@ -1,0 +1,9 @@
+[package]
+name = "glassboard-engine"
+version = "0.1.0"
+edition = "2021"
+description = "Glassboard chess engine core: board, move generation, perft (M0)."
+
+[lib]
+name = "engine"
+path = "src/lib.rs"

@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["engine"]
+
+# Glassboard portable core (Rust). Compiles to native and (later) WebAssembly.
+# M0 member: `engine` (board, move generation, perft). `assist`, `nn`, and
+# `bindings` crates join at their milestones (see docs/ARCHITECTURE.md).
