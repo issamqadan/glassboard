@@ -44,9 +44,16 @@ alternative rather than silently implementing it.
 
 ## Tech stack
 
-**OPEN DECISION — not yet chosen.** This is the next foundational call (language for the
-engine, ML framework, and UI/gameplay layer). Until decided, do not assume a stack. See
-"Open decisions" below. Once chosen, document build/test/run commands here.
+**DECIDED (2026-09-03).** Principle: **Portable Core + Thin Platform Shells** — full detail in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+- **Core:** **Rust** → compiled to **WebAssembly** (web) + **native** (desktop/mobile/console).
+  Holds engine, rules, assistance spectrum, handicap calc, transparency log, and neural inference.
+- **Training:** **Python + PyTorch** (offline; ships only trained weights to the core).
+- **Shells:** **Web first — TypeScript + React** over the WASM core; Tauri/native/console later.
+
+The core exists so behavior — the handicap, and the glass-box log — is **identical on every
+platform**. That is a fairness requirement, not just convenience.
 
 ## Build / test / run commands
 
@@ -74,8 +81,8 @@ Repo-specific skills that encode the disciplines the vision demands:
 
 ## Open decisions (decide before deep implementation)
 
-1. **Tech stack** — engine language (e.g. Rust/C++/Go for the hot search loop), ML framework,
-   and gameplay/UI layer. Biggest lever on everything downstream.
+1. ~~**Tech stack**~~ — ✅ **DECIDED 2026-09-03** (Portable Core + Thin Shells; see Tech stack
+   above and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)).
 2. **Strength ruler baseline** — which measurement suites and self-play protocol define "plays
    strongly," and the target Elo band.
 3. **Assistance rung spec** — the concrete definition of each rung and how it maps to an
