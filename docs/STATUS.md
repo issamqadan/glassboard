@@ -32,6 +32,9 @@ native), Python/PyTorch training (later), thin web shell first.
   monotonic, `Off` at parity), and the transparent `GlassBox` log. All help
   flows through `analyze` + `GlassBox::record` — no hidden help by construction.
   UI wiring is the follow-up.
+- ✅ **Matched-mode CLI** (`core/assist/src/bin/matched.rs`): assisted play with
+  a live assistance panel + a both-sides-visible glass-box; the Autopilot rung
+  auto-plays for a hands-free large-gap game. Makes M3 tangible in the terminal.
 
 **Tests:** 22 green — 7 perft, 5 tactics, 4 WASM API, 6 assist
 (`cd core && cargo test`; deep perft: `cargo test --release -- --ignored`).
@@ -42,9 +45,9 @@ native), Python/PyTorch training (later), thin web shell first.
    session). Run the two commands below, open the page, play a game end to end.
 2. Optional M2 polish: last-move highlight, promotion picker UI (currently a
    `prompt`), move list, flip board.
-3. **Wire assistance into the UIs**: surface `analyze` output + the glass-box
-   in the CLI and web shell — the both-sides-visible transparency panel; add a
-   `Matched`-mode game loop that applies `recommended_level` from both ratings.
+3. **Surface assistance in the web shell**: the both-sides glass-box panel +
+   `Matched`-mode loop in `web/` (the terminal version already exists —
+   `core/assist/src/bin/matched.rs`).
 4. **M4 — neural eval + calibration**: train a net (Python/PyTorch), infer in
    Rust; the `assist-calibrate` skill replaces the seed `recommended_level`
    thresholds with a *measured* effective-Elo mapping.
@@ -54,6 +57,12 @@ native), Python/PyTorch training (later), thin web shell first.
 Play in terminal:
 ```sh
 cd core && cargo run --release -p glassboard-engine --bin play -- play 4 white
+```
+
+Play a Matched (assisted) game in terminal:
+```sh
+cd core && cargo run --release -p glassboard-assist --bin matched -- 1200 1700 3
+# args: your_elo engine_elo depth [max_plies]. Large gaps → Autopilot self-plays.
 ```
 
 Play in browser:
