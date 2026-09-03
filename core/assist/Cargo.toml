@@ -1,0 +1,12 @@
+[package]
+name = "glassboard-assist"
+version = "0.1.0"
+edition = "2021"
+description = "Glassboard assistance layer: the transparent assistance spectrum, the Assistance-Handicap model, and the glass-box log (M3)."
+
+[lib]
+name = "assist"
+path = "src/lib.rs"
+
+[dependencies]
+glassboard-engine = { path = "../engine" }

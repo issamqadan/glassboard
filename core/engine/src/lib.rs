@@ -21,4 +21,4 @@ pub use eval::{eval, material};
 pub use fen::*;
 pub use movegen::{generate_legal, generate_pseudo, is_attacked, king_square};
 pub use perft::{perft, perft_divide};
-pub use search::{best_move, in_check, search, SearchResult, MATE, MATE_THRESHOLD};
+pub use search::{best_move, in_check, rank_moves, search, SearchResult, MATE, MATE_THRESHOLD};

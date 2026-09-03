@@ -1,7 +1,7 @@
 # Status — where Glassboard stands
 
 > Running context log so any session can pick up instantly. Newest at top.
-> **Last updated:** 2026-09-03
+> **Last updated:** 2026-09-04
 
 ## Snapshot
 
@@ -26,9 +26,15 @@ native), Python/PyTorch training (later), thin web shell first.
 - ✅ **M2 — web shell (WASM), build + serve working**: `core/bindings`
   (wasm-bindgen `Game` API) + `web/` (vanilla HTML/CSS/JS board). Builds with
   wasm-pack, serves via python http.server. 4 native API tests pass.
+- ✅ **M3 — assistance layer + glass-box (engine-side)**: `core/assist` — the
+  assistance spectrum (`analyze`: awareness / coaching / suggestion / guided /
+  autopilot), the Assistance-Handicap seed (`recommended_level`, gap → rung,
+  monotonic, `Off` at parity), and the transparent `GlassBox` log. All help
+  flows through `analyze` + `GlassBox::record` — no hidden help by construction.
+  UI wiring is the follow-up.
 
-**Tests:** 16 green — 7 perft, 5 tactics, 4 WASM API (`cd core && cargo test`;
-deep perft: `cargo test --release -- --ignored`).
+**Tests:** 22 green — 7 perft, 5 tactics, 4 WASM API, 6 assist
+(`cd core && cargo test`; deep perft: `cargo test --release -- --ignored`).
 
 ## Next session — resume here
 
@@ -36,9 +42,12 @@ deep perft: `cargo test --release -- --ignored`).
    session). Run the two commands below, open the page, play a game end to end.
 2. Optional M2 polish: last-move highlight, promotion picker UI (currently a
    `prompt`), move list, flip board.
-3. **M3 — assistance layer + glass-box log** (the vision's core): `Matched`
-   mode with a first Assistance-Handicap model; awareness/coaching rungs; the
-   both-sides-visible transparency surface. New `core/assist` crate.
+3. **Wire assistance into the UIs**: surface `analyze` output + the glass-box
+   in the CLI and web shell — the both-sides-visible transparency panel; add a
+   `Matched`-mode game loop that applies `recommended_level` from both ratings.
+4. **M4 — neural eval + calibration**: train a net (Python/PyTorch), infer in
+   Rust; the `assist-calibrate` skill replaces the seed `recommended_level`
+   thresholds with a *measured* effective-Elo mapping.
 
 ## How to run
 

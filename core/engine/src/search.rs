@@ -32,6 +32,24 @@ pub fn best_move(b: &Board, depth: u32) -> Option<Move> {
     search(b, depth).best
 }
 
+/// Score every legal move to `depth` and return them best-first. Used by the
+/// assistance layer to offer ranked candidate moves. Each move is searched with
+/// a full window so the scores are directly comparable.
+pub fn rank_moves(b: &Board, depth: u32) -> Vec<(Move, i32)> {
+    let mut nodes = 0u64;
+    let mut scored: Vec<(Move, i32)> = generate_legal(b)
+        .into_iter()
+        .map(|m| {
+            let mut nb = *b;
+            nb.make_move(m);
+            let s = -negamax(&nb, depth.saturating_sub(1), 1, -INF, INF, &mut nodes);
+            (m, s)
+        })
+        .collect();
+    scored.sort_by(|a, b| b.1.cmp(&a.1));
+    scored
+}
+
 /// Search `b` to `max_depth` with iterative deepening; returns the best move.
 pub fn search(b: &Board, max_depth: u32) -> SearchResult {
     let mut best: Option<Move> = None;

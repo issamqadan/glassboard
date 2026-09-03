@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["engine", "bindings"]
+members = ["engine", "bindings", "assist"]
 
 # Glassboard portable core (Rust). Compiles to native and WebAssembly.
 # Members: `engine` (board, move generation, search — M0/M1) and `bindings`
