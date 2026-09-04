@@ -48,8 +48,12 @@ native), Python/PyTorch training (later), thin web shell first.
 1. **Verify M2+M3 in a real browser** (no browser extension this session):
    rebuild wasm, serve, open the page, play a Matched game and watch the
    glass-box fill as you use help.
-2. Optional polish: last-move highlight, a promotion picker (currently a
-   `prompt`), an "autopilot: play recommended" button, move list, flip board.
+2. **Board visual polish** (user feedback 2026-09-04: "board not perfect — good
+   start"): the web board renders but needs refinement — likely rank/file
+   coordinate labels, better piece contrast on dark squares, square sizing /
+   responsive layout, and a last-move highlight. Also: promotion picker UI
+   (currently a `prompt`), an "autopilot: play recommended" button, move list,
+   flip board.
 3. **M4 — neural eval + calibration**: train a net (Python/PyTorch), infer in
    Rust; the `assist-calibrate` skill replaces the seed `recommended_level`
    thresholds with a *measured* effective-Elo mapping.
