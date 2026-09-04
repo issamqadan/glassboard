@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 glassboard-engine = { path = "../engine" }
+glassboard-assist = { path = "../assist" }
 wasm-bindgen = "0.2"
 
 # Disable wasm-opt so the build never needs to download a binaryen binary

@@ -8,24 +8,45 @@
   </head>
   <body>
     <main>
-      <h1>Glassboard <span class="tag">Classic</span></h1>
-      <p class="tagline">Chess, in the open.</p>
-      <div id="status" class="status">Loading engine…</div>
-      <div id="board" class="board" aria-label="chess board"></div>
-      <div class="controls">
-        <button id="new">New game</button>
-        <label>
-          Engine depth
+      <header>
+        <h1>Glassboard <span class="tag">Matched</span></h1>
+        <p class="tagline">Chess, in the open.</p>
+      </header>
+
+      <div class="ratings">
+        <label>You (White) <input id="humanElo" type="number" value="1200" min="100" max="3200" /></label>
+        <label>Engine (Black) <input id="engineElo" type="number" value="1700" min="100" max="3200" /></label>
+        <label>Depth
           <select id="depth">
             <option value="2">2</option>
             <option value="3" selected>3</option>
             <option value="4">4</option>
-            <option value="5">5</option>
           </select>
         </label>
-        <span id="thinking" class="thinking"></span>
+        <button id="new">New game</button>
       </div>
-      <p class="foot">You are White. Click a piece, then a highlighted square. The engine plays Black.</p>
+
+      <div id="status" class="status">Loading engine…</div>
+
+      <div class="layout">
+        <div id="board" class="board" aria-label="chess board"></div>
+        <aside class="panels">
+          <section class="panel">
+            <h2>Assistance <span id="level" class="pill">—</span></h2>
+            <div id="assist" class="assist"></div>
+          </section>
+          <section class="panel">
+            <h2>Glass-box <span class="hint">visible to both players</span></h2>
+            <div id="glass" class="glass"></div>
+          </section>
+        </aside>
+      </div>
+
+      <p class="foot">
+        You are White. The Assistance-Handicap is computed from both ratings — the
+        wider the gap, the more help you get, all recorded in the glass-box for
+        your opponent to see. Click a piece then a target, or click a suggested move.
+      </p>
     </main>
     <script type="module" src="./main.js"></script>
   </body>

@@ -29,6 +29,7 @@ version = "0.1.0"
 name = "glassboard-wasm"
 version = "0.1.0"
 dependencies = [
+ "glassboard-assist",
  "glassboard-engine",
  "wasm-bindgen",
 ]

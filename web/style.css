@@ -3,8 +3,11 @@
   --dark: #6f8bab;
   --sel: #f6d36b;
   --tgt: rgba(40, 180, 99, 0.55);
-  --panel: #22314a;
-  --border: #35507a;
+  --hang: #e5484d;
+  --panel: #17203200;
+  --card: #16203400;
+  --line: #2a3a58;
+  --accent: #9fc0ff;
 }
 
 * {
@@ -22,11 +25,11 @@ body {
 
 main {
   padding: 24px;
-  max-width: 560px;
+  max-width: 920px;
   width: 100%;
 }
 
-h1 {
+header h1 {
   margin: 0 0 2px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -35,29 +38,68 @@ h1 {
 .tag {
   font-size: 0.5em;
   vertical-align: middle;
-  background: var(--panel);
+  background: #22314a;
   padding: 3px 9px;
   border-radius: 999px;
-  color: #9fc0ff;
+  color: var(--accent);
 }
 
 .tagline {
-  margin: 0 0 16px;
+  margin: 0 0 14px;
   color: #8ea0b8;
   font-style: italic;
 }
 
+.ratings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ratings label {
+  font-size: 0.9em;
+  color: #b9c6da;
+}
+
+input,
+button,
+select {
+  background: #22314a;
+  color: #e7ecf3;
+  border: 1px solid #35507a;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font: inherit;
+}
+input {
+  width: 76px;
+}
+button {
+  cursor: pointer;
+}
+
 .status {
-  margin: 10px 0;
+  margin: 8px 0 14px;
   font-weight: 600;
   min-height: 1.4em;
+}
+
+.layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
 }
 
 .board {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   aspect-ratio: 1 / 1;
-  width: 100%;
+  flex: 1 1 380px;
+  max-width: 480px;
+  min-width: 300px;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
@@ -71,18 +113,18 @@ h1 {
   cursor: pointer;
   user-select: none;
 }
-
 .sq.light {
   background: var(--light);
 }
 .sq.dark {
   background: var(--dark);
 }
-
 .sq.selected {
   box-shadow: inset 0 0 0 4px var(--sel);
 }
-
+.sq.hanging {
+  box-shadow: inset 0 0 0 4px var(--hang);
+}
 .sq.target::after {
   content: "";
   position: absolute;
@@ -93,7 +135,7 @@ h1 {
 }
 
 .piece {
-  font-size: clamp(26px, 8.5vw, 48px);
+  font-size: clamp(24px, 7vw, 46px);
   line-height: 1;
 }
 .piece.white {
@@ -105,31 +147,104 @@ h1 {
   text-shadow: 0 1px 1px rgba(255, 255, 255, 0.15);
 }
 
-.controls {
+.panels {
+  flex: 1 1 300px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 1em;
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-top: 16px;
+  gap: 8px;
 }
 
-button,
-select {
-  background: var(--panel);
-  color: #e7ecf3;
-  border: 1px solid var(--border);
+.pill {
+  font-size: 0.72em;
+  text-transform: capitalize;
+  background: #23406e;
+  color: var(--accent);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+
+.hint {
+  font-size: 0.72em;
+  font-weight: 400;
+  color: #7f92ab;
+}
+
+.assist,
+.glass {
+  font-size: 0.9em;
+  color: #cdd8e8;
+}
+
+.assist .warn {
+  color: var(--hang);
+  font-weight: 600;
+}
+.assist .msg {
+  margin: 3px 0;
+  color: #b9c6da;
+}
+.assist .cand {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px;
+  margin: 4px 0;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 6px 12px;
-  font: inherit;
   cursor: pointer;
+  background: #14203699;
+}
+.assist .cand:hover {
+  border-color: var(--accent);
+}
+.assist .cand.rec {
+  border-color: #2fa96b;
+}
+.assist .cand .score {
+  color: #8ea0b8;
+  font-variant-numeric: tabular-nums;
+}
+.assist .none {
+  color: #7f92ab;
+  font-style: italic;
 }
 
-.thinking {
-  color: #9fc0ff;
+.glass .ev {
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--line);
+  color: #b9c6da;
+}
+.glass .ev:last-child {
+  border-bottom: none;
+}
+.glass .ev .who {
+  color: var(--accent);
+  text-transform: capitalize;
+}
+.glass .none {
+  color: #7f92ab;
   font-style: italic;
 }
 
 .foot {
   margin-top: 18px;
   color: #7f92ab;
-  font-size: 0.9em;
+  font-size: 0.88em;
+  line-height: 1.5;
 }

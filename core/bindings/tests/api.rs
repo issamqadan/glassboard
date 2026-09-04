@@ -46,3 +46,19 @@ fn rejects_illegal_move() {
     assert!(!g.make_move(0, 24, None));
     assert_eq!(g.side_to_move(), "white", "illegal move does not change turn");
 }
+
+#[test]
+fn assist_and_glassbox_expose_help() {
+    let mut g = Game::new();
+    g.set_ratings(1000, 2000); // gap 1000 -> Guided
+    assert_eq!(g.assist_level(), "guided");
+
+    let json = g.assist(3);
+    assert!(json.contains("\"level\":\"guided\""), "assist JSON: {json}");
+    assert!(json.contains("\"candidates\""), "assist JSON: {json}");
+    assert!(json.contains("\"recommended\""), "assist JSON: {json}");
+
+    let glass = g.glassbox();
+    assert!(glass.starts_with('['), "glassbox is a JSON array: {glass}");
+    assert!(glass.contains("Guided"), "glassbox records the help: {glass}");
+}

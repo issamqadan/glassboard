@@ -35,20 +35,22 @@ native), Python/PyTorch training (later), thin web shell first.
 - ✅ **Matched-mode CLI** (`core/assist/src/bin/matched.rs`): assisted play with
   a live assistance panel + a both-sides-visible glass-box; the Autopilot rung
   auto-plays for a hands-free large-gap game. Makes M3 tangible in the terminal.
+- ✅ **Assistance in the web shell**: `core/bindings` exposes `setRatings`,
+  `assistLevel`, `assist` (JSON), and `glassbox` (JSON); `web/` renders a
+  Matched-mode board with hanging-piece highlights, clickable candidate moves,
+  and a live both-sides glass-box panel. Rebuild wasm to refresh: see web/README.
 
-**Tests:** 22 green — 7 perft, 5 tactics, 4 WASM API, 6 assist
+**Tests:** 23 green — 7 perft, 5 tactics, 6 assist, 5 WASM API
 (`cd core && cargo test`; deep perft: `cargo test --release -- --ignored`).
 
 ## Next session — resume here
 
-1. **Verify M2 in a real browser** (no browser extension was available this
-   session). Run the two commands below, open the page, play a game end to end.
-2. Optional M2 polish: last-move highlight, promotion picker UI (currently a
-   `prompt`), move list, flip board.
-3. **Surface assistance in the web shell**: the both-sides glass-box panel +
-   `Matched`-mode loop in `web/` (the terminal version already exists —
-   `core/assist/src/bin/matched.rs`).
-4. **M4 — neural eval + calibration**: train a net (Python/PyTorch), infer in
+1. **Verify M2+M3 in a real browser** (no browser extension this session):
+   rebuild wasm, serve, open the page, play a Matched game and watch the
+   glass-box fill as you use help.
+2. Optional polish: last-move highlight, a promotion picker (currently a
+   `prompt`), an "autopilot: play recommended" button, move list, flip board.
+3. **M4 — neural eval + calibration**: train a net (Python/PyTorch), infer in
    Rust; the `assist-calibrate` skill replaces the seed `recommended_level`
    thresholds with a *measured* effective-Elo mapping.
 
