@@ -285,3 +285,21 @@ button {
   font-size: 0.88em;
   line-height: 1.5;
 }
+
+/* 2-player role picker */
+.role-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #b9c6da;
+  font-size: 0.9em;
+}
+.role {
+  padding: 5px 12px;
+}
+.role.active {
+  background: #2fa96b;
+  border-color: #2fa96b;
+  color: #06210f;
+  font-weight: 700;
+}

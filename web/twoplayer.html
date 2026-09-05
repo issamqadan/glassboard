@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Glassboard · 2-Player Test</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Glassboard <span class="tag">2-Player</span></h1>
+        <p class="tagline">Chess, in the open — two humans, one transparent handicap.</p>
+      </header>
+
+      <div class="ratings">
+        <span class="role-pick">
+          Play as:
+          <button id="pickWhite" class="role">White</button>
+          <button id="pickBlack" class="role">Black</button>
+        </span>
+        <label>White Elo <input id="whiteElo" type="number" value="1200" min="100" max="3200" /></label>
+        <label>Black Elo <input id="blackElo" type="number" value="1600" min="100" max="3200" /></label>
+        <label>Depth
+          <select id="depth">
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+          </select>
+        </label>
+        <button id="new">New game</button>
+      </div>
+
+      <div id="status" class="status">Loading engine…</div>
+
+      <div class="layout">
+        <div id="board" class="board" aria-label="chess board"></div>
+        <aside class="panels">
+          <section class="panel">
+            <h2>Your Assistance <span id="level" class="pill">—</span></h2>
+            <div id="assist" class="assist"></div>
+          </section>
+          <section class="panel">
+            <h2>Glass-box <span class="hint">visible to both players</span></h2>
+            <div id="glass" class="glass"></div>
+          </section>
+        </aside>
+      </div>
+
+      <p class="foot">
+        <strong>Testing:</strong> open this same page in a second Safari window, pick
+        <em>White</em> in one and <em>Black</em> in the other, and play both roles side by side.
+        The weaker player (by Elo) is assisted; the stronger plays unassisted — and every bit of
+        help appears in <em>both</em> windows' glass-box. Set ratings, then click <strong>New game</strong>
+        (either window) to (re)start.
+      </p>
+    </main>
+    <script type="module" src="./twoplayer.js"></script>
+  </body>
+</html>
