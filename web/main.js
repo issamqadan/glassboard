@@ -5,10 +5,10 @@
 
 import init, { Game } from "./pkg/glassboard_wasm.js";
 
-const GLYPH = {
-  K: "♔", Q: "♕", R: "♖", B: "♗", N: "♘", P: "♙",
-  k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟",
-};
+// Solid glyphs keyed by piece kind; color is decided in CSS by side, so both
+// colors share the same crisp shape and stay legible on any square.
+const GLYPH = { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" };
+const FILES = "abcdefgh";
 
 const boardEl = document.getElementById("board");
 const statusEl = document.getElementById("status");
@@ -23,6 +23,7 @@ let game;
 let selected = null;
 let legalTargets = [];
 let hanging = [];
+let lastMove = null; // { from, to } of the most recent move
 let assistData = null; // parsed assist JSON for the current (White) turn
 let busy = false;
 
@@ -41,6 +42,7 @@ function newGame() {
   game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
   selected = null;
   legalTargets = [];
+  lastMove = null;
   busy = false;
   levelEl.textContent = game.assistLevel();
   onPositionChanged();
@@ -77,18 +79,30 @@ function renderBoard() {
       if (selected === i) sq.classList.add("selected");
       if (legalTargets.includes(i)) sq.classList.add("target");
       if (hanging.includes(i)) sq.classList.add("hanging");
+      if (lastMove && (lastMove.from === i || lastMove.to === i)) sq.classList.add("lastmove");
+
+      // Coordinate labels on the edge squares.
+      if (rank === 0) sq.appendChild(coord("file", FILES[file]));
+      if (file === 0) sq.appendChild(coord("rank", String(rank + 1)));
 
       const c = s[i];
       if (c !== ".") {
         const span = document.createElement("span");
         span.className = "piece " + (isWhitePiece(c) ? "white" : "black");
-        span.textContent = GLYPH[c];
+        span.textContent = GLYPH[c.toLowerCase()];
         sq.appendChild(span);
       }
       sq.addEventListener("click", () => onSquareClick(i));
       boardEl.appendChild(sq);
     }
   }
+}
+
+function coord(kind, text) {
+  const el = document.createElement("span");
+  el.className = "coord " + kind;
+  el.textContent = text;
+  return el;
 }
 
 function renderStatus() {
@@ -193,6 +207,7 @@ function playMove(from, to) {
     paint();
     return;
   }
+  lastMove = { from, to };
   onPositionChanged(); // now Black to move → assist cleared
   setTimeout(engineReply, 150);
 }
@@ -205,7 +220,8 @@ function engineReply() {
   busy = true;
   statusEl.textContent = "Engine thinking…";
   setTimeout(() => {
-    game.engineMove(depth());
+    const uci = game.engineMove(depth());
+    if (uci.length >= 4) lastMove = uciToSquares(uci);
     busy = false;
     onPositionChanged();
   }, 20);
@@ -214,9 +230,12 @@ function engineReply() {
 // --- helpers ---------------------------------------------------------------
 
 function sqName(i) {
-  const file = String.fromCharCode(97 + (i % 8));
-  const rank = 1 + Math.floor(i / 8);
-  return `${file}${rank}`;
+  return `${FILES[i % 8]}${1 + Math.floor(i / 8)}`;
+}
+
+function uciToSquares(uci) {
+  const sq = (s) => (s.charCodeAt(0) - 97) + (s.charCodeAt(1) - 49) * 8;
+  return { from: sq(uci.slice(0, 2)), to: sq(uci.slice(2, 4)) };
 }
 
 function fmtScore(cp) {
