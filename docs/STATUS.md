@@ -1,7 +1,14 @@
 # Status — where Glassboard stands
 
 > Running context log so any session can pick up instantly. Newest at top.
-> **Last updated:** 2026-09-04
+> **Last updated:** 2026-09-06
+
+**Name/domain (parked 2026-09-06):** keeping **Glassboard** for now; a final
+naming pass is deferred (ChatGPT floated descriptive "ChessLevel/LevelChess"
+names — but LevelChess has an existing Play Store app + a for-sale .com, and
+descriptive names are hard to own; recommendation was to keep the distinctive,
+ownable Glassboard). `glassboard.gg` checked **available** (~$52/yr at Porkbun,
+flat renewal) — NOT yet purchased. `.com/.ai/.app/.co/.org` all taken/for-sale.
 
 ## Snapshot
 
@@ -48,6 +55,11 @@ native), Python/PyTorch training (later), thin web shell first.
   is shared/identical in both windows. Board flips per role. Proves the core
   two-humans-with-a-handicap scenario locally. (Real online multiplayer across
   devices is still a future networking milestone.)
+- ✅ **Deploy scaffolding (Path A, invite-only)**: `scripts/build-web.sh`
+  (one-command WASM build → `web/` bundle), `docs/DEPLOY.md` (Cloudflare Pages +
+  custom domain + Cloudflare Access invite gate), `.github/workflows/deploy-web.yml`
+  (optional CI). Static, $0 backend — testers play the assisted vs-engine
+  experience. Human-vs-human remote still needs the multiplayer server.
 
 **Tests:** 23 green — 7 perft, 5 tactics, 6 assist, 5 WASM API
 (`cd core && cargo test`; deep perft: `cargo test --release -- --ignored`).

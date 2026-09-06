@@ -1,0 +1,47 @@
+name: Deploy web
+
+# Builds the WASM core and publishes the static web bundle to Cloudflare Pages.
+# Inert until the CLOUDFLARE_* repo secrets are set (see docs/DEPLOY.md §5).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "core/**"
+      - "web/**"
+      - "scripts/build-web.sh"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (with wasm target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('core/**/Cargo.toml') }}
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+
+      - name: Build web bundle
+        run: ./scripts/build-web.sh
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy web --project-name=glassboard
