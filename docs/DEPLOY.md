@@ -67,9 +67,35 @@ on every push to `main`. Set these repo secrets first
 Until those secrets exist, the workflow is inert (it only runs on push and will
 fail fast without them) — the manual path in §1 works regardless.
 
+## Local testing (all modes, no host, no domain)
+
+- **vs the engine:** `(cd web && python3 -m http.server 8000)` → <http://localhost:8000>
+- **hotseat, two windows (same machine):** open
+  `http://localhost:8000/twoplayer.html` in two windows; pick White in one, Black
+  in the other.
+- **online multiplayer (two devices):**
+  1. Terminal 1 — server: `(cd server && cargo run)` → `ws://…:9001`
+  2. Terminal 2 — web: `(cd web && python3 -m http.server 8000)`
+  3. Two browsers → `http://localhost:8000/multiplayer.html`, same **Room**, Connect.
+  4. **Same Wi-Fi with a friend:** they open `http://<your-LAN-ip>:8000/multiplayer.html`
+     and set the **Server** field to `ws://<your-LAN-ip>:9001`
+     (find your IP with `ipconfig getifaddr en0`).
+
+## Multiplayer server on a free host (for play over the internet)
+
+The static site can live on Pages/Netlify, but the WebSocket **server** needs a
+real server host. Free options that give a URL + TLS (`wss://`): **Fly.io**
+(`*.fly.dev`), Railway, Render.
+
+Outline (Fly.io): install `flyctl` → `fly auth signup` → deploy the `server/`
+crate → get `wss://<name>.fly.dev` → paste that into the web app's **Server**
+field. Because the server depends on the workspace (`../core/engine`), the
+reliable build is a small **Dockerfile** — ask me to generate the `Dockerfile`
++ `fly.toml` when you're ready to deploy the server, and I'll wire it up.
+
 ## Notes
 
-- **No server cost** for this phase — static hosting is free.
+- **No server cost** for the static (vs-AI) phase — static hosting is free.
 - Cache busting: after redeploying, testers may need a hard refresh (⌘⇧R) for
   updated `main.js` / `style.css`.
 - Keep the invite list small; Cloudflare Access free tier covers up to 50 seats.

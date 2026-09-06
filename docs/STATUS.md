@@ -60,17 +60,23 @@ native), Python/PyTorch training (later), thin web shell first.
   custom domain + Cloudflare Access invite gate), `.github/workflows/deploy-web.yml`
   (optional CI). Static, $0 backend — testers play the assisted vs-engine
   experience. Human-vs-human remote still needs the multiplayer server.
+- ✅ **M5 — multiplayer (local / LAN)**: `server/` Rust WebSocket server with
+  engine-validated rooms (server is authoritative — 3 room tests) + a glass-box
+  relay ("visible to both" over the wire); `web/multiplayer.html` +
+  `multiplayer.js` connect over WebSocket. Works locally and across the same
+  Wi-Fi with **no host or domain**. Internet play needs the server deployed to a
+  free host (Fly.io) — see docs/DEPLOY.md.
 
-**Tests:** 23 green — 7 perft, 5 tactics, 6 assist, 5 WASM API
+**Tests:** 26 green — 7 perft, 5 tactics, 6 assist, 5 WASM API, 3 server room
 (`cd core && cargo test`; deep perft: `cargo test --release -- --ignored`).
 
 ## Next session — resume here
 
-1. **Online multiplayer (Option B)** — the real two-humans milestone: a thin
-   networking layer (matchmaking / room codes / move relay over WebSockets) so
-   people play from different devices. Game logic stays in the Rust core; add a
-   small server around it. (Local two-window hotseat test already works:
-   `web/twoplayer.html`.)
+1. **Deploy the multiplayer server to a free host** (Fly.io → `wss://…`) for
+   internet play. Server + client are built and work locally / same-Wi-Fi now
+   (`server/`, `web/multiplayer.html`); this step = generate a Dockerfile +
+   fly.toml and deploy. Then: sync glass-box history to late joiners, reconnect
+   handling, and a game-over rematch button.
 2. **M4 — neural eval + calibration**: train a net (Python/PyTorch), infer in
    Rust; the `assist-calibrate` skill replaces the seed `recommended_level`
    thresholds with a *measured* effective-Elo mapping.

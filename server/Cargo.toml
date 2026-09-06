@@ -1,0 +1,13 @@
+[package]
+name = "glassboard-server"
+version = "0.1.0"
+edition = "2021"
+description = "Glassboard multiplayer server: engine-validated rooms over WebSocket (M5)."
+
+[dependencies]
+glassboard-engine = { path = "../core/engine" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync"] }
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

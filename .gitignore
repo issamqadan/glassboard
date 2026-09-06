@@ -1,5 +1,6 @@
 # Rust
 /core/target/
+/server/target/
 **/*.rs.bk
 
 # Python

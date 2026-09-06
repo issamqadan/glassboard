@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Glassboard · Online</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Glassboard <span class="tag">Online</span></h1>
+        <p class="tagline">Chess, in the open — play a friend, with a transparent handicap.</p>
+      </header>
+
+      <div class="ratings">
+        <label>Server <input id="server" type="text" style="width: 200px" /></label>
+        <label>Room <input id="room" type="text" value="test" style="width: 90px" /></label>
+        <label>Your Elo <input id="elo" type="number" value="1200" min="100" max="3200" /></label>
+        <button id="connect">Connect</button>
+      </div>
+
+      <div id="status" class="status">Enter a room code and connect. Share the room code + server address with your opponent.</div>
+
+      <div class="layout">
+        <div id="board" class="board" aria-label="chess board"></div>
+        <aside class="panels">
+          <section class="panel">
+            <h2>Your Assistance <span id="level" class="pill">—</span></h2>
+            <div id="assist" class="assist"></div>
+          </section>
+          <section class="panel">
+            <h2>Glass-box <span class="hint">visible to both players</span></h2>
+            <div id="glass" class="glass"></div>
+          </section>
+        </aside>
+      </div>
+
+      <p class="foot">
+        Two players join the same <strong>Room</strong> on the same <strong>Server</strong>
+        — first to connect is White, second is Black. The weaker Elo is assisted; every bit of
+        help is relayed to both players' glass-box. The server validates every move, so no one
+        can cheat. On the same Wi-Fi, set the Server to <code>ws://YOUR-LAN-IP:9001</code>.
+      </p>
+    </main>
+    <script type="module" src="./multiplayer.js"></script>
+  </body>
+</html>
