@@ -39,23 +39,31 @@ native), Python/PyTorch training (later), thin web shell first.
   `assistLevel`, `assist` (JSON), and `glassbox` (JSON); `web/` renders a
   Matched-mode board with hanging-piece highlights, clickable candidate moves,
   and a live both-sides glass-box panel. Rebuild wasm to refresh: see web/README.
+- ✅ **Board polish (first pass)**: coordinate labels, crisp outlined pieces
+  legible on any square, last-move highlight. (User confirmed the board looks
+  good in Safari on 2026-09-05.)
+- ✅ **2-player hotseat test** (`web/twoplayer.html` + `twoplayer.js`): two
+  same-origin browser windows sync via BroadcastChannel (no server) — each picks
+  a side, the weaker Elo is assisted, the stronger unassisted, and the glass-box
+  is shared/identical in both windows. Board flips per role. Proves the core
+  two-humans-with-a-handicap scenario locally. (Real online multiplayer across
+  devices is still a future networking milestone.)
 
 **Tests:** 23 green — 7 perft, 5 tactics, 6 assist, 5 WASM API
 (`cd core && cargo test`; deep perft: `cargo test --release -- --ignored`).
 
 ## Next session — resume here
 
-1. **Verify M2+M3 in a real browser** (no browser extension this session):
-   rebuild wasm, serve, open the page, play a Matched game and watch the
-   glass-box fill as you use help.
-2. **Board polish** — first pass done 2026-09-05 (coordinate labels, crisp
-   outlined pieces legible on any square, last-move highlight). Remaining /
-   optional: promotion picker UI (currently a `prompt`), an "autopilot: play
-   recommended" button, move list, flip board, confirm sizing on small screens.
-   (These are pure `web/` edits — no wasm rebuild needed; hard-refresh to see.)
-3. **M4 — neural eval + calibration**: train a net (Python/PyTorch), infer in
+1. **Online multiplayer (Option B)** — the real two-humans milestone: a thin
+   networking layer (matchmaking / room codes / move relay over WebSockets) so
+   people play from different devices. Game logic stays in the Rust core; add a
+   small server around it. (Local two-window hotseat test already works:
+   `web/twoplayer.html`.)
+2. **M4 — neural eval + calibration**: train a net (Python/PyTorch), infer in
    Rust; the `assist-calibrate` skill replaces the seed `recommended_level`
    thresholds with a *measured* effective-Elo mapping.
+3. Optional web polish: promotion picker UI (currently a `prompt`), a move list,
+   an "autopilot: play recommended" button, and sizing on small screens.
 
 ## How to run
 
@@ -75,6 +83,10 @@ Play in browser:
 cd core/bindings && wasm-pack build --target web --out-dir ../../web/pkg
 cd ../../web && python3 -m http.server 8000   # then open http://localhost:8000
 ```
+
+Two-player test (two windows, no server): open
+http://localhost:8000/twoplayer.html in two Safari windows; pick White in one
+and Black in the other. Weaker Elo is assisted; glass-box synced live.
 
 ## Toolchain notes
 
