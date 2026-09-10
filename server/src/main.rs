@@ -1,28 +1,37 @@
 //! Glassboard multiplayer server (M5).
 //!
-//! A minimal WebSocket relay with room codes. Two players join the same room
-//! (first = White, second = Black); the server validates every move against the
-//! engine (see `room.rs`) and broadcasts the resulting position to both. Runs
-//! anywhere Rust runs — locally (`ws://<your-LAN-ip>:9001`) or on a free server
-//! host — no domain required.
+//! A minimal WebSocket relay with room codes, built on axum so it also answers
+//! plain HTTP GET `/` (a health check for hosts) and binds the `PORT` a host
+//! assigns. Two players join the same room (first = White, second = Black); the
+//! server validates every move against the engine (see `room.rs`) and broadcasts
+//! the resulting position — plus the glass-box — to both.
+//!
+//! Bind address: `PORT` (host-provided) → `GLASSBOARD_ADDR` → `0.0.0.0:9001`.
 //!
 //! Protocol (JSON text frames):
-//!   client → server:  {"t":"join","room":"ABCD","elo":1200} | {"t":"move","uci":"e2e4"} | {"t":"reset"}
+//!   client → server:  {"t":"join","room":"ABCD","elo":1200} | {"t":"move","uci":"e2e4"}
+//!                     | {"t":"glass","summary":"..."} | {"t":"reset"}
 //!   server → client:  {"t":"joined","color":"white","fen":...} | {"t":"full"}
-//!                     {"t":"state","fen":...,"turn":...,"status":...,"last":...,"white_elo":..,"black_elo":..}
+//!                     | {"t":"state",...} | {"t":"glass","side":...,"summary":...}
 
 mod room;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use axum::{
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        State,
+    },
+    response::IntoResponse,
+    routing::get,
+    Router,
+};
 use engine::Color;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, Mutex};
-use tokio_tungstenite::accept_async;
-use tokio_tungstenite::tungstenite::Message;
 
 use room::Room;
 
@@ -52,7 +61,10 @@ enum ClientMsg {
 #[derive(Serialize)]
 #[serde(tag = "t", rename_all = "lowercase")]
 enum ServerMsg {
-    Joined { color: String, fen: String },
+    Joined {
+        color: String,
+        fen: String,
+    },
     Full,
     State {
         fen: String,
@@ -70,36 +82,44 @@ enum ServerMsg {
 
 #[tokio::main]
 async fn main() {
-    let addr = std::env::var("GLASSBOARD_ADDR").unwrap_or_else(|_| "0.0.0.0:9001".to_string());
     let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
-    let listener = TcpListener::bind(&addr).await.expect("failed to bind");
-    println!("Glassboard multiplayer server listening on ws://{addr}");
+    let app = Router::new().route("/", get(root)).with_state(rooms);
 
-    while let Ok((stream, peer)) = listener.accept().await {
-        let rooms = rooms.clone();
-        tokio::spawn(async move {
-            if let Err(e) = handle(stream, rooms).await {
-                eprintln!("connection {peer} ended: {e}");
-            }
-        });
+    let addr = std::env::var("PORT")
+        .ok()
+        .map(|p| format!("0.0.0.0:{p}"))
+        .or_else(|| std::env::var("GLASSBOARD_ADDR").ok())
+        .unwrap_or_else(|| "0.0.0.0:9001".to_string());
+
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .expect("failed to bind");
+    println!("Glassboard multiplayer server listening on {addr}");
+    axum::serve(listener, app).await.expect("server error");
+}
+
+/// A WebSocket upgrade runs the game; a plain GET is a health check.
+async fn root(ws: Option<WebSocketUpgrade>, State(rooms): State<Rooms>) -> axum::response::Response {
+    match ws {
+        Some(ws) => ws.on_upgrade(move |socket| handle(socket, rooms)),
+        None => "Glassboard multiplayer server — connect via WebSocket.".into_response(),
     }
 }
 
-async fn handle(stream: TcpStream, rooms: Rooms) -> Result<(), Box<dyn std::error::Error>> {
-    let ws = accept_async(stream).await?;
-    let (mut write, mut read) = ws.split();
+async fn handle(socket: WebSocket, rooms: Rooms) {
+    let (mut sink, mut stream) = socket.split();
 
     // First frame must be a join.
-    let first = match read.next().await {
+    let first = match stream.next().await {
         Some(Ok(Message::Text(t))) => t,
-        _ => return Ok(()),
+        _ => return,
     };
     let (room_code, elo) = match serde_json::from_str::<ClientMsg>(&first) {
         Ok(ClientMsg::Join { room, elo }) => (room, elo),
-        _ => return Ok(()),
+        _ => return,
     };
 
-    // Seat the player and grab the room's broadcast handle.
+    // Seat the player and grab the room broadcast handle.
     let (color, tx) = {
         let mut map = rooms.lock().await;
         let rs = map.entry(room_code.clone()).or_insert_with(|| {
@@ -112,10 +132,8 @@ async fn handle(stream: TcpStream, rooms: Rooms) -> Result<(), Box<dyn std::erro
         match rs.room.join(elo) {
             Some(c) => (c, rs.tx.clone()),
             None => {
-                let _ = write
-                    .send(Message::Text(serde_json::to_string(&ServerMsg::Full)?))
-                    .await;
-                return Ok(());
+                let _ = sink.send(Message::Text(json(&ServerMsg::Full))).await;
+                return;
             }
         }
     };
@@ -124,33 +142,41 @@ async fn handle(stream: TcpStream, rooms: Rooms) -> Result<(), Box<dyn std::erro
         Color::Black => "black",
     };
 
-    // Tell this client which seat it took.
-    let fen0 = rooms.lock().await.get(&room_code).map(|rs| rs.room.fen()).unwrap_or_default();
-    write
-        .send(Message::Text(serde_json::to_string(&ServerMsg::Joined {
+    // Tell this client its seat.
+    let fen0 = rooms
+        .lock()
+        .await
+        .get(&room_code)
+        .map(|rs| rs.room.fen())
+        .unwrap_or_default();
+    if sink
+        .send(Message::Text(json(&ServerMsg::Joined {
             color: color_str.to_string(),
             fen: fen0,
-        })?))
-        .await?;
+        })))
+        .await
+        .is_err()
+    {
+        return;
+    }
 
     // Fan-out: room broadcasts → this socket.
     let mut rx = tx.subscribe();
     let mut forward = tokio::spawn(async move {
         while let Ok(out) = rx.recv().await {
-            if write.send(Message::Text(out)).await.is_err() {
+            if sink.send(Message::Text(out)).await.is_err() {
                 break;
             }
         }
     });
 
-    // Push the current position to everyone (syncs both seats / a rejoin).
+    // Push current position to everyone.
     broadcast_state(&rooms, &room_code).await;
 
-    // Handle this client's messages until it disconnects.
     loop {
         tokio::select! {
             _ = &mut forward => break,
-            incoming = read.next() => {
+            incoming = stream.next() => {
                 let msg = match incoming {
                     Some(Ok(m)) => m,
                     _ => break,
@@ -161,23 +187,18 @@ async fn handle(stream: TcpStream, rooms: Rooms) -> Result<(), Box<dyn std::erro
                             {
                                 let mut map = rooms.lock().await;
                                 if let Some(rs) = map.get_mut(&room_code) {
-                                    // Ignore illegal/out-of-turn moves (client validates too).
                                     let _ = rs.room.apply_move(color, &uci);
                                 }
                             }
                             broadcast_state(&rooms, &room_code).await;
                         }
                         Ok(ClientMsg::Glass { summary }) => {
-                            // Relay the assistance event to both players (glass-box).
                             let map = rooms.lock().await;
                             if let Some(rs) = map.get(&room_code) {
-                                let _ = rs.tx.send(
-                                    serde_json::to_string(&ServerMsg::Glass {
-                                        side: color_str.to_string(),
-                                        summary,
-                                    })
-                                    .unwrap_or_default(),
-                                );
+                                let _ = rs.tx.send(json(&ServerMsg::Glass {
+                                    side: color_str.to_string(),
+                                    summary,
+                                }));
                             }
                         }
                         Ok(ClientMsg::Reset) => {
@@ -204,7 +225,6 @@ async fn handle(stream: TcpStream, rooms: Rooms) -> Result<(), Box<dyn std::erro
         }
     }
     forward.abort();
-    Ok(())
 }
 
 async fn broadcast_state(rooms: &Rooms, code: &str) {
@@ -218,8 +238,10 @@ async fn broadcast_state(rooms: &Rooms, code: &str) {
             white_elo: rs.room.white_elo,
             black_elo: rs.room.black_elo,
         };
-        if let Ok(json) = serde_json::to_string(&msg) {
-            let _ = rs.tx.send(json);
-        }
+        let _ = rs.tx.send(json(&msg));
     }
+}
+
+fn json<T: Serialize>(v: &T) -> String {
+    serde_json::to_string(v).unwrap_or_default()
 }

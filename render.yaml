@@ -1,0 +1,15 @@
+# Render.com Blueprint — free, no-card WebSocket host for the Glassboard server.
+# Deploy: render.com → New → Blueprint → connect the glassboard repo → Apply.
+# Render builds the Dockerfile, sets $PORT (the server reads it), and gives a
+# public https/wss URL: https://playglassboard.onrender.com
+#
+# Free plan note: the instance sleeps after ~15 min idle and cold-starts
+# (~30-60s) on the next connection.
+
+services:
+  - type: web
+    name: playglassboard
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true

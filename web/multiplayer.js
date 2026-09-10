@@ -38,12 +38,16 @@ const isWhitePiece = (c) => c !== "." && c === c.toUpperCase();
 // On the deployed (https) site, default to the Fly server; locally, the LAN server.
 const defaultServer = () =>
   location.protocol === "https:"
-    ? "wss://playglassboard.fly.dev"
+    ? "wss://playglassboard.onrender.com"
     : `ws://${location.hostname || "localhost"}:9001`;
 
 async function main() {
   await init();
-  serverEl.value = defaultServer();
+  // Allow a shareable link to pre-fill the server + room, e.g.
+  //   multiplayer.html?server=wss://xxx.trycloudflare.com&room=test
+  const params = new URLSearchParams(location.search);
+  serverEl.value = params.get("server") || defaultServer();
+  if (params.get("room")) roomEl.value = params.get("room");
   el("connect").addEventListener("click", connect);
   renderBoardEmpty();
 }

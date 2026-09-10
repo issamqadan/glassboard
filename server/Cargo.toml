@@ -6,8 +6,8 @@ description = "Glassboard multiplayer server: engine-validated rooms over WebSoc
 
 [dependencies]
 glassboard-engine = { path = "../core/engine" }
+axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync"] }
-tokio-tungstenite = "0.21"
 futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
