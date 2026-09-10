@@ -1,0 +1,21 @@
+# Fly.io config for the Glassboard multiplayer server.
+# 1) Change `app` to a globally-unique name (or run `fly apps create <name>`).
+# 2) From the repo root:  fly deploy
+# 3) Use  wss://<name>.fly.dev  as the "Server" in the web app's Online page.
+
+app = "glassboard-mp"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  GLASSBOARD_ADDR = "0.0.0.0:8080"
+
+# Handles HTTP + WebSocket upgrade and terminates TLS (so clients use wss://).
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0

@@ -8,6 +8,19 @@ How to put the current web app online, behind an invite gate, for early testers.
 > multiplayer server (a later milestone); the two-window hotseat only syncs on
 > one machine.
 
+## Client on GitHub Pages (fastest — no new account)
+
+The static app auto-deploys via `.github/workflows/pages.yml`:
+
+1. Repo → **Settings** → **Pages** → **Source** = **GitHub Actions**.
+2. Push to `main` (or run the "Deploy to GitHub Pages" workflow from the Actions
+   tab). The Action builds the WASM and publishes `web/`.
+3. Live at `https://<user>.github.io/glassboard/`.
+
+For multiplayer over the internet you also need the server (Fly.io, below); paste
+its `wss://…` URL into the Online page's **Server** field. (Cloudflare Pages in
+§1 is an alternative that also supports invite-only gating via Access.)
+
 ## 0. Build the static bundle
 
 ```sh
@@ -81,17 +94,30 @@ fail fast without them) — the manual path in §1 works regardless.
      and set the **Server** field to `ws://<your-LAN-ip>:9001`
      (find your IP with `ipconfig getifaddr en0`).
 
-## Multiplayer server on a free host (for play over the internet)
+## Multiplayer server on Fly.io (free, gives `wss://`)
 
-The static site can live on Pages/Netlify, but the WebSocket **server** needs a
-real server host. Free options that give a URL + TLS (`wss://`): **Fly.io**
-(`*.fly.dev`), Railway, Render.
+The WebSocket **server** needs a real server host (static hosts can't run it).
+The repo already includes `Dockerfile` + `fly.toml` — Fly builds remotely, so no
+local Docker is needed.
 
-Outline (Fly.io): install `flyctl` → `fly auth signup` → deploy the `server/`
-crate → get `wss://<name>.fly.dev` → paste that into the web app's **Server**
-field. Because the server depends on the workspace (`../core/engine`), the
-reliable build is a small **Dockerfile** — ask me to generate the `Dockerfile`
-+ `fly.toml` when you're ready to deploy the server, and I'll wire it up.
+1. Install flyctl and sign in:
+   ```sh
+   curl -L https://fly.io/install.sh | sh
+   fly auth signup          # or: fly auth login
+   ```
+2. Pick a globally-unique app name — edit `app = "..."` in `fly.toml`
+   (e.g. `glassboard-<yourname>`).
+3. Deploy from the repo root:
+   ```sh
+   fly deploy
+   ```
+   (First deploy may prompt to create the app / allocate IPs — accept.)
+4. You'll get `https://<name>.fly.dev`. In the web app's **Online** page, set the
+   **Server** field to `wss://<name>.fly.dev`.
+
+Free-tier note: `auto_stop_machines` lets the server sleep when idle and wake on
+the next connection (a few seconds' cold start) — fine for early testing.
+Railway / Render work similarly for a `*.up.railway.app` / `*.onrender.com` URL.
 
 ## Notes
 

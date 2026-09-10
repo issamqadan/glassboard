@@ -1,0 +1,6 @@
+# Keep the Docker build context small and fast.
+**/target
+web/pkg
+node_modules
+.git
+.github

@@ -72,11 +72,14 @@ native), Python/PyTorch training (later), thin web shell first.
 
 ## Next session — resume here
 
-1. **Deploy the multiplayer server to a free host** (Fly.io → `wss://…`) for
-   internet play. Server + client are built and work locally / same-Wi-Fi now
-   (`server/`, `web/multiplayer.html`); this step = generate a Dockerfile +
-   fly.toml and deploy. Then: sync glass-box history to late joiners, reconnect
-   handling, and a game-over rematch button.
+1. **Go live for internet testing** — all deploy files are in place:
+   - Client → **GitHub Pages**: enable in repo Settings → Pages → Source =
+     "GitHub Actions" (`.github/workflows/pages.yml`); URL
+     `<user>.github.io/glassboard/`.
+   - Server → **Fly.io**: `Dockerfile` + `fly.toml` ready — edit the app name,
+     `fly deploy`, then put `wss://<name>.fly.dev` in the Online page's Server
+     field. See docs/DEPLOY.md.
+   Follow-ups: glass-box history for late joiners, reconnect handling, rematch.
 2. **M4 — neural eval + calibration**: train a net (Python/PyTorch), infer in
    Rust; the `assist-calibrate` skill replaces the seed `recommended_level`
    thresholds with a *measured* effective-Elo mapping.

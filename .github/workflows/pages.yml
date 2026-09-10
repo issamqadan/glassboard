@@ -1,0 +1,68 @@
+name: Deploy to GitHub Pages
+
+# Builds the WASM core and publishes the static web app to GitHub Pages.
+# One-time setup: repo Settings → Pages → Source = "GitHub Actions".
+# Then every push to main redeploys. Live URL: https://<user>.github.io/glassboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "core/**"
+      - "web/**"
+      - "scripts/build-web.sh"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (wasm target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('core/**/Cargo.toml') }}
+
+      - name: Install wasm-pack (prebuilt)
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: latest
+
+      - name: Build web bundle
+        run: ./scripts/build-web.sh
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
