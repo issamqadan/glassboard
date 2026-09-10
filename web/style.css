@@ -170,6 +170,8 @@ button {
   line-height: 1;
   position: relative;
   z-index: 1;
+  /* Render chess glyphs as text (respecting color), never as color emoji. */
+  font-variant-emoji: text;
 }
 /* Solid glyphs for both colors, distinguished by fill + outline so pieces
    stay crisp on light and dark squares alike. */

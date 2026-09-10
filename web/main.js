@@ -7,7 +7,9 @@ import init, { Game } from "./pkg/glassboard_wasm.js";
 
 // Solid glyphs keyed by piece kind; color is decided in CSS by side, so both
 // colors share the same crisp shape and stay legible on any square.
-const GLYPH = { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" };
+// Trailing ︎ forces text-style (not emoji) rendering so White pieces stay
+// white on mobile browsers instead of all showing as dark emoji.
+const GLYPH = { p: "♟︎", n: "♞︎", b: "♝︎", r: "♜︎", q: "♛︎", k: "♚︎" };
 const FILES = "abcdefgh";
 
 const boardEl = document.getElementById("board");

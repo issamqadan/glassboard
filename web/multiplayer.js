@@ -6,7 +6,8 @@
 
 import init, { Game } from "./pkg/glassboard_wasm.js";
 
-const GLYPH = { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" };
+// ︎ forces text-style (not emoji) glyphs so colors render on mobile.
+const GLYPH = { p: "♟︎", n: "♞︎", b: "♝︎", r: "♜︎", q: "♛︎", k: "♚︎" };
 const FILES = "abcdefgh";
 const DEPTH = 3;
 
