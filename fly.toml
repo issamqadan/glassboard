@@ -3,7 +3,7 @@
 # 2) From the repo root:  fly deploy
 # 3) Use  wss://<name>.fly.dev  as the "Server" in the web app's Online page.
 
-app = "glassboard-mp"
+app = "playglassboard"
 primary_region = "iad"
 
 [build]

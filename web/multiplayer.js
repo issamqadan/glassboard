@@ -35,7 +35,11 @@ let lastGlassFen = null;
 
 const idx = (file, rank) => rank * 8 + file;
 const isWhitePiece = (c) => c !== "." && c === c.toUpperCase();
-const defaultServer = () => `ws://${location.hostname || "localhost"}:9001`;
+// On the deployed (https) site, default to the Fly server; locally, the LAN server.
+const defaultServer = () =>
+  location.protocol === "https:"
+    ? "wss://playglassboard.fly.dev"
+    : `ws://${location.hostname || "localhost"}:9001`;
 
 async function main() {
   await init();
