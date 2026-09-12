@@ -1,7 +1,7 @@
 # Status — where Glassboard stands
 
 > Running context log so any session can pick up instantly. Newest at top.
-> **Last updated:** 2026-09-06
+> **Last updated:** 2026-09-12
 
 **Name/domain (parked 2026-09-06):** keeping **Glassboard** for now; a final
 naming pass is deferred (ChatGPT floated descriptive "ChessLevel/LevelChess"
@@ -18,6 +18,13 @@ a first-class, transparent, adjustable handicap between unequal players. See
 
 Repo: https://github.com/issamqadan/glassboard · Stack: Rust core (→ WASM +
 native), Python/PyTorch training (later), thin web shell first.
+
+**🟢 LIVE (2026-09-12, tag `v0.1.0`):** free online, no card, no domain.
+- Client → GitHub Pages: https://issamqadan.github.io/glassboard/
+  (one-player `/`, hotseat `/twoplayer.html`, online `/multiplayer.html`)
+- Server → Render (axum, free tier): https://playglassboard.onrender.com
+  (health/root prints the "connect via WebSocket" line — that's the backend, not
+  the game). Free tier sleeps after ~15 min idle → ~30-60s cold start.
 
 ## Done
 
@@ -66,20 +73,28 @@ native), Python/PyTorch training (later), thin web shell first.
   `multiplayer.js` connect over WebSocket. Works locally and across the same
   Wi-Fi with **no host or domain**. Internet play needs the server deployed to a
   free host (Fly.io) — see docs/DEPLOY.md.
+- ✅ **Deployed LIVE, free (2026-09-12)**: client on GitHub Pages, server on
+  **Render** (axum rewrite: HTTP health on `/` + reads host `PORT`). Online
+  multiplayer works over the internet with no card and no domain. First playable
+  public MVP — tagged **v0.1.0**.
 
 **Tests:** 26 green — 7 perft, 5 tactics, 6 assist, 5 WASM API, 3 server room
 (`cd core && cargo test`; deep perft: `cargo test --release -- --ignored`).
 
 ## Next session — resume here
 
-1. **Go live for internet testing** — all deploy files are in place:
-   - Client → **GitHub Pages**: enable in repo Settings → Pages → Source =
-     "GitHub Actions" (`.github/workflows/pages.yml`); URL
-     `<user>.github.io/glassboard/`.
-   - Server → **Fly.io**: `Dockerfile` + `fly.toml` ready — edit the app name,
-     `fly deploy`, then put `wss://<name>.fly.dev` in the Online page's Server
-     field. See docs/DEPLOY.md.
-   Follow-ups: glass-box history for late joiners, reconnect handling, rematch.
+1. **Glass-box "visible to both" for the whole game** (top priority — a vision
+   non-negotiable). Server should store each room's glass-box events and replay
+   the full history to a joining player, then keep relaying live. Observed on the
+   live site: White's assistance didn't appear for a Black player who joined
+   later (broadcasts only reach who's connected at the time).
+2. **Clarify per-side handicap in the UI**: the stronger-rated side correctly
+   shows OFF (only the weaker side is assisted) — make the copy clearer so it
+   doesn't read as a bug. Consider showing both sides' rung.
+3. **Multiplayer polish**: rematch button, promotion picker (currently a
+   `prompt`), reconnect handling, and a friendlier "server waking up…" state for
+   the free-tier cold start.
+4. **M4 — neural eval + calibration**: make the handicap a *measured* number.
 2. **M4 — neural eval + calibration**: train a net (Python/PyTorch), infer in
    Rust; the `assist-calibrate` skill replaces the seed `recommended_level`
    thresholds with a *measured* effective-Elo mapping.
