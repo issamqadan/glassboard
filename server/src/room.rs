@@ -5,6 +5,13 @@
 
 use engine::*;
 
+/// One transparent assistance record, kept so late joiners see the full history.
+#[derive(Clone)]
+pub struct GlassEntry {
+    pub side: String,
+    pub summary: String,
+}
+
 /// A single two-player game room.
 pub struct Room {
     pub board: Board,
@@ -13,6 +20,8 @@ pub struct Room {
     pub white_elo: i32,
     pub black_elo: i32,
     pub last_uci: Option<String>,
+    /// Full glass-box history for this game (replayed to anyone who joins).
+    pub glass: Vec<GlassEntry>,
 }
 
 impl Default for Room {
@@ -30,7 +39,16 @@ impl Room {
             white_elo: 1500,
             black_elo: 1500,
             last_uci: None,
+            glass: Vec::new(),
         }
+    }
+
+    /// Record a piece of assistance shown to `side` (for the glass-box history).
+    pub fn push_glass(&mut self, side: &str, summary: &str) {
+        self.glass.push(GlassEntry {
+            side: side.to_string(),
+            summary: summary.to_string(),
+        });
     }
 
     /// Seat a joining player: first gets White, second Black, third is refused.
@@ -60,6 +78,7 @@ impl Room {
     pub fn reset(&mut self) {
         self.board = Board::startpos();
         self.last_uci = None;
+        self.glass.clear();
     }
 
     /// Apply `who`'s move given in coordinate notation. Rejects out-of-turn or
@@ -170,5 +189,17 @@ mod tests {
     #[test]
     fn starts_ongoing() {
         assert_eq!(Room::new().status(), "ongoing");
+    }
+
+    #[test]
+    fn glass_log_accumulates_and_resets() {
+        let mut r = Room::new();
+        assert!(r.glass.is_empty());
+        r.push_glass("white", "Suggestion: 3 candidate move(s) shown.");
+        r.push_glass("black", "Guided: recommended e2e4.");
+        assert_eq!(r.glass.len(), 2);
+        assert_eq!(r.glass[0].side, "white");
+        r.reset();
+        assert!(r.glass.is_empty(), "reset clears the glass log");
     }
 }

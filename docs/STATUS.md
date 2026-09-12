@@ -77,24 +77,25 @@ native), Python/PyTorch training (later), thin web shell first.
   **Render** (axum rewrite: HTTP health on `/` + reads host `PORT`). Online
   multiplayer works over the internet with no card and no domain. First playable
   public MVP — tagged **v0.1.0**.
+- ✅ **Glass-box "visible to both", full game (2026-09-12)**: the server stores
+  each room's glass-box history and replays it to anyone who joins, then keeps
+  relaying live. Fixes the observed "a late-joining Black didn't see White's
+  earlier help." (Room now has a `glass` log; 4 server tests.)
 
-**Tests:** 26 green — 7 perft, 5 tactics, 6 assist, 5 WASM API, 3 server room
+**Tests:** 27 green — 7 perft, 5 tactics, 6 assist, 5 WASM API, 4 server room
 (`cd core && cargo test`; deep perft: `cargo test --release -- --ignored`).
 
 ## Next session — resume here
 
-1. **Glass-box "visible to both" for the whole game** (top priority — a vision
-   non-negotiable). Server should store each room's glass-box events and replay
-   the full history to a joining player, then keep relaying live. Observed on the
-   live site: White's assistance didn't appear for a Black player who joined
-   later (broadcasts only reach who's connected at the time).
-2. **Clarify per-side handicap in the UI**: the stronger-rated side correctly
+1. **Clarify per-side handicap in the UI**: the stronger-rated side correctly
    shows OFF (only the weaker side is assisted) — make the copy clearer so it
    doesn't read as a bug. Consider showing both sides' rung.
-3. **Multiplayer polish**: rematch button, promotion picker (currently a
+2. **Multiplayer polish**: rematch button, promotion picker (currently a
    `prompt`), reconnect handling, and a friendlier "server waking up…" state for
    the free-tier cold start.
-4. **M4 — neural eval + calibration**: make the handicap a *measured* number.
+3. **M4 — neural eval + calibration**: make the handicap a *measured* number.
+
+Done recently: glass-box "visible to both" full-game history (2026-09-12).
 2. **M4 — neural eval + calibration**: train a net (Python/PyTorch), infer in
    Rust; the `assist-calibrate` skill replaces the seed `recommended_level`
    thresholds with a *measured* effective-Elo mapping.

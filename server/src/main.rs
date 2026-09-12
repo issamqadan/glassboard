@@ -120,7 +120,7 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
     };
 
     // Seat the player and grab the room broadcast handle.
-    let (color, tx) = {
+    let (color, tx, glass_history) = {
         let mut map = rooms.lock().await;
         let rs = map.entry(room_code.clone()).or_insert_with(|| {
             let (tx, _) = broadcast::channel(64);
@@ -130,7 +130,7 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
             }
         });
         match rs.room.join(elo) {
-            Some(c) => (c, rs.tx.clone()),
+            Some(c) => (c, rs.tx.clone(), rs.room.glass.clone()),
             None => {
                 let _ = sink.send(Message::Text(json(&ServerMsg::Full))).await;
                 return;
@@ -158,6 +158,21 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
         .is_err()
     {
         return;
+    }
+
+    // Replay the glass-box history so a late joiner sees all prior assistance
+    // (the "visible to both players" rule, for the whole game).
+    for e in &glass_history {
+        if sink
+            .send(Message::Text(json(&ServerMsg::Glass {
+                side: e.side.clone(),
+                summary: e.summary.clone(),
+            })))
+            .await
+            .is_err()
+        {
+            return;
+        }
     }
 
     // Fan-out: room broadcasts → this socket.
@@ -193,8 +208,9 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
                             broadcast_state(&rooms, &room_code).await;
                         }
                         Ok(ClientMsg::Glass { summary }) => {
-                            let map = rooms.lock().await;
-                            if let Some(rs) = map.get(&room_code) {
+                            let mut map = rooms.lock().await;
+                            if let Some(rs) = map.get_mut(&room_code) {
+                                rs.room.push_glass(color_str, &summary);
                                 let _ = rs.tx.send(json(&ServerMsg::Glass {
                                     side: color_str.to_string(),
                                     summary,
