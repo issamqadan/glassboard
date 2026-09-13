@@ -55,7 +55,9 @@ async function main() {
   const host = params.get("host") ? decodeURIComponent(params.get("host")) : null;
   const he = params.get("he") ? parseInt(params.get("he"), 10) : null;
   const mine = params.get("mine");
+  const isJoiner = host && !mine;
   const set = (id, txt) => { const e = el(id); if (e) e.textContent = txt; };
+  const joinBtn = el("connect");
 
   if (mine) {
     set("mcEyebrow", "Your game");
@@ -66,14 +68,28 @@ async function main() {
     set("mcEyebrow", "You’re invited");
     set("mcTitle", `Play ${host}`);
     set("mcSub", he
-      ? `${host} is rated ${he}. Read how it works, set your rating, and join — you’ll play Black.`
-      : `Read how it works, set your rating, and join — you’ll play Black.`);
+      ? `${host} is rated ${he}. Read how it works, then enter your own rating to join — you’ll play Black.`
+      : `Read how it works, then enter your own rating to join — you’ll play Black.`);
   }
 
+  // The joiner must set their own score — it isn't known yet. Start empty; the
+  // Join button stays disabled until they enter a valid rating.
+  if (isJoiner) { eloEl.value = ""; eloEl.placeholder = "your rating, e.g. 1400"; }
+
+  const refreshJoin = () => {
+    const v = parseInt(eloEl.value, 10);
+    const ok = !isJoiner || (v >= 100 && v <= 3200);
+    joinBtn.disabled = !ok;
+    joinBtn.style.opacity = ok ? "" : "0.45";
+    joinBtn.style.cursor = ok ? "" : "not-allowed";
+  };
   const updateHandi = () => {
+    refreshJoin();
     const h = el("mcHandi"); if (!h) return;
     if (mine || he == null) { h.textContent = ""; return; }
-    const gap = he - (parseInt(eloEl.value, 10) || 0);
+    const v = parseInt(eloEl.value, 10);
+    if (!(v >= 100)) { h.innerHTML = `<span style="color:#7f92ab">Enter your rating to see your handicap.</span>`; return; }
+    const gap = he - v;
     h.innerHTML = gap <= 0
       ? "You’re the stronger side — <b>no assistance</b>."
       : `You’ll get <b>${tierName(gap)}</b> assistance.`;
@@ -81,7 +97,7 @@ async function main() {
   updateHandi();
   eloEl.addEventListener("input", updateHandi);
 
-  el("connect").addEventListener("click", connect);
+  joinBtn.addEventListener("click", connect);
   renderBoardEmpty();
 }
 
