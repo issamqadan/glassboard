@@ -50,6 +50,18 @@ const defaultServer = () =>
     ? "wss://playglassboard.onrender.com"
     : `ws://${location.hostname || "localhost"}:9001`;
 
+// Device identity shared with the portal (localStorage). Stable id → stable seat.
+function currentPlayer() {
+  let m = null;
+  try { m = JSON.parse(localStorage.getItem("gb_me")); } catch {}
+  const name = (el("pname") && el("pname").value.trim()) || (m && m.name) || "Player";
+  const rating = parseInt(el("elo").value, 10) || (m && m.rating) || 1200;
+  const id = (m && m.id) || ("p" + Math.random().toString(36).slice(2, 9));
+  m = { id, name, rating };
+  localStorage.setItem("gb_me", JSON.stringify(m));
+  return m;
+}
+
 async function main() {
   await init();
   // Allow a shareable link to pre-fill the server + room, e.g.
@@ -65,6 +77,10 @@ async function main() {
   const isJoiner = host && !mine;
   const set = (id, txt) => { const e = el(id); if (e) e.textContent = txt; };
   const joinBtn = el("connect");
+
+  // Prefill your name from the saved identity (portal users have one).
+  const pn = el("pname");
+  if (pn) { try { const m = JSON.parse(localStorage.getItem("gb_me")); if (m && m.name) pn.value = m.name; } catch {} }
 
   if (mine) {
     set("mcEyebrow", "Your game");
@@ -120,7 +136,8 @@ function connect() {
   const url = serverEl.value.trim() || defaultServer();
   ws = new WebSocket(url);
   ws.onopen = () => {
-    ws.send(JSON.stringify({ t: "join", room: roomEl.value.trim() || "test", elo: parseInt(eloEl.value, 10) }));
+    const p = currentPlayer();
+    ws.send(JSON.stringify({ t: "join", room: roomEl.value.trim() || "test", elo: p.rating, pid: p.id, name: p.name }));
     statusEl.textContent = "Connected — joining room…";
   };
   ws.onmessage = (ev) => onMessage(JSON.parse(ev.data));

@@ -208,6 +208,7 @@
     const loadGames = () => { try { return JSON.parse(localStorage.getItem('gb_games')) || []; } catch { return []; } };
     const saveGames = g => localStorage.setItem('gb_games', JSON.stringify(g));
     let me = loadMe();
+    const SERVER_HTTP = 'https://playglassboard.onrender.com';
 
     // ---- identity ----
     function openIdentity() {
@@ -249,9 +250,42 @@
       const id = Math.random().toString(36).slice(2, 6) + Math.random().toString(36).slice(2, 5);
       const g = { id, oppName, myRating: you, status: 'waiting', created: Date.now() };
       const games = loadGames(); games.unshift(g); saveGames(games);
+      registerGame(g);
       renderGames(); closeCreate();
       copy(gameLink(g), 'Game created — invite link copied');
     }
+
+    // Register the game with the server so the host holds White and we can be
+    // notified when the opponent joins.
+    function registerGame(g) {
+      if (!me) return;
+      fetch(SERVER_HTTP + '/games', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: g.id, pid: me.id, name: me.name, rating: g.myRating })
+      }).catch(() => {});
+    }
+    // Poll the server for our games' status → notify when someone joins.
+    async function pollGames() {
+      if (!me) return;
+      const games = loadGames(); if (!games.length) return;
+      let remote;
+      try { remote = await (await fetch(SERVER_HTTP + '/games?player=' + encodeURIComponent(me.id))).json(); }
+      catch { return; }
+      const byId = {}; (remote || []).forEach(r => byId[r.id] = r);
+      let changed = false;
+      for (const g of games) {
+        const r = byId[g.id];
+        if (r && r.status === 'active' && g.status !== 'active') {
+          g.status = 'active';
+          if (r.opp_name) g.oppName = r.opp_name;
+          if (r.opp_rating) g.oppRating = r.opp_rating;
+          if (!g.notified) { g.notified = true; toast((r.opp_name || 'Your opponent') + ' joined', 'Game ready — Enter to play.'); }
+          changed = true;
+        }
+      }
+      if (changed) { saveGames(games); renderGames(); }
+    }
+    setInterval(pollGames, 6000);
 
     // ---- games list ----
     function renderGames() {
@@ -261,16 +295,24 @@
       if (!games.length) { el.innerHTML = '<div class="empty">No games yet. Hit <b>New game</b> to create one and share the link.</div>'; return; }
       el.innerHTML = games.map((g, i) => {
         const link = gameLink(g);
-        return `<div class="game" style="--stripe:var(--warn)">
+        const active = g.status === 'active';
+        const t = active && g.oppRating ? tierFor(g.myRating - g.oppRating) : null;
+        const statusHtml = active
+          ? `<div class="status" style="color:var(--good);background:rgba(69,200,110,0.12)"><span class="sd" style="background:var(--good);box-shadow:0 0 8px var(--good)"></span> Ready — opponent joined</div>`
+          : `<div class="status waiting"><span class="sd"></span> Waiting to join</div>`;
+        const sub = active && t
+          ? `You ${g.myRating} · ${escapeHtml(g.oppName)} ${g.oppRating} · <span class="handicap-chip">handicap <span class="tier">${t.name}</span></span>`
+          : `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">set when they join</span></span>`;
+        return `<div class="game" style="--stripe:${active ? 'var(--good)' : 'var(--warn)'}">
           <div class="g-row">
             <div class="g-ava">${initials(g.oppName)}</div>
             <div class="g-main"><div class="g-name">${escapeHtml(g.oppName)}</div>
-              <div class="g-sub">You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">set when they join</span></span></div></div>
-            <div class="status waiting"><span class="sd"></span> Waiting to join</div>
+              <div class="g-sub">${sub}</div></div>
+            ${statusHtml}
           </div>
-          <div class="invite-link"><span>${link}</span><button onclick="copy('${link}')">Copy</button></div>
+          ${active ? '' : `<div class="invite-link"><span>${link}</span><button onclick="copy('${link}')">Copy</button></div>`}
           <div class="g-actions">
-            <button class="enter" onclick="enterGame(${i})">Enter game →</button>
+            <button class="enter" onclick="enterGame(${i})">${active ? 'Play now →' : 'Enter game →'}</button>
             <button class="del" onclick="removeGame(${i})">Delete</button>
           </div>
         </div>`;

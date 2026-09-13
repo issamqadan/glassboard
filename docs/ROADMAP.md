@@ -111,6 +111,14 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-13** — **P1: server game registry + join notification.** The server
+  (axum) now persists games in memory with **identity-based seating** (host→White,
+  guest→Black, keyed by player id, stable across reconnects) and exposes
+  `POST /games` + `GET /games?player=` (with CORS). The game page sends the player
+  id + name; the portal **registers each created game** and **polls** → fires a
+  "X joined — game ready" toast and flips the card to **Ready** with the computed
+  handicap. Closes P1's notification spec (#3). 5 server tests; endpoints
+  curl-verified. **Pending user testing.**
 - **2026-09-13** — **P1 polish 2 (join clarity):** the join match card now shows
   **both scores and explains the assistance from the gap** (e.g. "You 1400 vs
   Issam 1870 · gap 470 → you get **Coaching**: threats and the opponent's plan,

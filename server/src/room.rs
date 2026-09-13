@@ -122,6 +122,63 @@ impl Room {
     }
 }
 
+/// A seated player's identity (for the lobby / registry).
+#[derive(Clone)]
+pub struct Player {
+    pub id: String,
+    pub name: String,
+    pub rating: i32,
+}
+
+/// Identity-based seating for a game: host takes White, guest takes Black.
+/// Seats are keyed by player id, so a player keeps their colour across
+/// disconnects/reconnects, and a third distinct player is refused.
+#[derive(Default)]
+pub struct Seats {
+    pub host: Option<Player>,
+    pub guest: Option<Player>,
+}
+
+impl Seats {
+    /// Seat `p`, returning the assigned colour (or `None` if the game is full).
+    pub fn seat(&mut self, p: Player) -> Option<Color> {
+        match &self.host {
+            None => {
+                self.host = Some(p);
+                return Some(Color::White);
+            }
+            Some(h) if h.id == p.id => {
+                self.host = Some(p);
+                return Some(Color::White);
+            }
+            _ => {}
+        }
+        match &self.guest {
+            None => {
+                self.guest = Some(p);
+                return Some(Color::Black);
+            }
+            Some(g) if g.id == p.id => {
+                self.guest = Some(p);
+                return Some(Color::Black);
+            }
+            _ => {}
+        }
+        None
+    }
+
+    /// "open" (nobody), "waiting" (host only), or "active" (both seated).
+    pub fn status(&self) -> &'static str {
+        if self.guest.is_some() {
+            "active"
+        } else if self.host.is_some() {
+            "waiting"
+        } else {
+            "open"
+        }
+    }
+}
+
 /// Parse a coordinate move (e2e4, e7e8q) into a legal `Move` for `b`, or `None`.
 pub fn parse_uci(b: &Board, uci: &str) -> Option<Move> {
     if uci.len() < 4 {
@@ -189,6 +246,28 @@ mod tests {
     #[test]
     fn starts_ongoing() {
         assert_eq!(Room::new().status(), "ongoing");
+    }
+
+    fn p(id: &str, rating: i32) -> Player {
+        Player { id: id.into(), name: id.to_uppercase(), rating }
+    }
+
+    #[test]
+    fn seating_is_identity_based() {
+        let mut s = Seats::default();
+        assert_eq!(s.status(), "open");
+        assert_eq!(s.seat(p("a", 1800)), Some(Color::White));
+        assert_eq!(s.status(), "waiting");
+        // host reconnects → keeps White (rating can update)
+        assert_eq!(s.seat(p("a", 1810)), Some(Color::White));
+        assert_eq!(s.seat(p("b", 1200)), Some(Color::Black));
+        assert_eq!(s.status(), "active");
+        // guest reconnects → keeps Black
+        assert_eq!(s.seat(p("b", 1205)), Some(Color::Black));
+        assert_eq!(s.host.as_ref().unwrap().rating, 1810);
+        assert_eq!(s.guest.as_ref().unwrap().rating, 1205);
+        // a third distinct player is refused
+        assert_eq!(s.seat(p("c", 1500)), None);
     }
 
     #[test]

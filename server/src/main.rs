@@ -1,45 +1,60 @@
-//! Glassboard multiplayer server (M5).
+//! Glassboard multiplayer server (M5 + lobby registry).
 //!
-//! A minimal WebSocket relay with room codes, built on axum so it also answers
-//! plain HTTP GET `/` (a health check for hosts) and binds the `PORT` a host
-//! assigns. Two players join the same room (first = White, second = Black); the
-//! server validates every move against the engine (see `room.rs`) and broadcasts
-//! the resulting position — plus the glass-box — to both.
+//! WebSocket game play plus a small HTTP lobby API, on axum. Games persist in
+//! memory with **identity-based seating** (host → White, guest → Black, keyed by
+//! player id) so a player keeps their colour across reconnects and the lobby can
+//! report status. Bind address: `PORT` → `GLASSBOARD_ADDR` → `0.0.0.0:9001`.
 //!
-//! Bind address: `PORT` (host-provided) → `GLASSBOARD_ADDR` → `0.0.0.0:9001`.
+//! HTTP:
+//!   GET  /                      health / WebSocket upgrade
+//!   POST /games  {id,pid,name,rating}   pre-register a game (host takes White)
+//!   GET  /games?player=<pid>            list a player's games + status
 //!
-//! Protocol (JSON text frames):
-//!   client → server:  {"t":"join","room":"ABCD","elo":1200} | {"t":"move","uci":"e2e4"}
-//!                     | {"t":"glass","summary":"..."} | {"t":"reset"}
-//!   server → client:  {"t":"joined","color":"white","fen":...} | {"t":"full"}
-//!                     | {"t":"state",...} | {"t":"glass","side":...,"summary":...}
+//! WebSocket (JSON text frames):
+//!   client → server:  {"t":"join","room":"ID","elo":1200,"pid":"..","name":".."}
+//!                     | {"t":"move","uci":"e2e4"} | {"t":"glass","summary":".."} | {"t":"reset"}
+//!   server → client:  {"t":"joined","color":"white","fen":..} | {"t":"full"}
+//!                     | {"t":"state",..} | {"t":"glass",..}
 
 mod room;
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        Query, State,
     },
     response::IntoResponse,
     routing::get,
-    Router,
+    Json, Router,
 };
 use engine::Color;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, Mutex};
+use tower_http::cors::CorsLayer;
 
-use room::Room;
+use room::{Player, Room, Seats};
 
 struct RoomState {
     room: Room,
     tx: broadcast::Sender<String>,
+    seats: Seats,
 }
 type Rooms = Arc<Mutex<HashMap<String, RoomState>>>;
+
+static NEXT_ANON: AtomicU64 = AtomicU64::new(1);
+
+fn new_room_state() -> RoomState {
+    RoomState {
+        room: Room::new(),
+        tx: broadcast::channel(64).0,
+        seats: Seats::default(),
+    }
+}
 
 #[derive(Deserialize)]
 #[serde(tag = "t", rename_all = "lowercase")]
@@ -48,6 +63,10 @@ enum ClientMsg {
         room: String,
         #[serde(default)]
         elo: i32,
+        #[serde(default)]
+        pid: String,
+        #[serde(default)]
+        name: String,
     },
     Move {
         uci: String,
@@ -83,7 +102,11 @@ enum ServerMsg {
 #[tokio::main]
 async fn main() {
     let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
-    let app = Router::new().route("/", get(root)).with_state(rooms);
+    let app = Router::new()
+        .route("/", get(root))
+        .route("/games", get(list_games).post(create_game))
+        .layer(CorsLayer::permissive())
+        .with_state(rooms);
 
     let addr = std::env::var("PORT")
         .ok()
@@ -94,11 +117,81 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .expect("failed to bind");
-    println!("Glassboard multiplayer server listening on {addr}");
+    println!("Glassboard server listening on {addr}");
     axum::serve(listener, app).await.expect("server error");
 }
 
-/// A WebSocket upgrade runs the game; a plain GET is a health check.
+// ---------------- HTTP lobby API ----------------
+
+#[derive(Deserialize)]
+struct CreateReq {
+    id: String,
+    #[serde(default)]
+    pid: String,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    rating: i32,
+}
+
+#[derive(Serialize)]
+struct GameSummary {
+    id: String,
+    status: String,
+    color: String,
+    my_rating: i32,
+    opp_name: Option<String>,
+    opp_rating: Option<i32>,
+}
+
+/// Pre-register a game so the host holds White before sharing the invite link.
+async fn create_game(State(rooms): State<Rooms>, Json(b): Json<CreateReq>) -> Json<serde_json::Value> {
+    let mut map = rooms.lock().await;
+    let rs = map.entry(b.id.clone()).or_insert_with(new_room_state);
+    if rs.seats.host.is_none() {
+        rs.seats.host = Some(Player {
+            id: b.pid.clone(),
+            name: b.name.clone(),
+            rating: b.rating,
+        });
+        rs.room.white_elo = b.rating;
+    }
+    Json(serde_json::json!({ "id": b.id, "status": rs.seats.status() }))
+}
+
+/// List the games a player is in, with status (for the lobby / notifications).
+async fn list_games(
+    State(rooms): State<Rooms>,
+    Query(q): Query<HashMap<String, String>>,
+) -> Json<Vec<GameSummary>> {
+    let player = q.get("player").cloned().unwrap_or_default();
+    let map = rooms.lock().await;
+    let mut out = Vec::new();
+    for (id, rs) in map.iter() {
+        let host_is = rs.seats.host.as_ref().map(|h| h.id == player).unwrap_or(false);
+        let guest_is = rs.seats.guest.as_ref().map(|g| g.id == player).unwrap_or(false);
+        if !host_is && !guest_is {
+            continue;
+        }
+        let (color, me, opp) = if host_is {
+            ("white", &rs.seats.host, &rs.seats.guest)
+        } else {
+            ("black", &rs.seats.guest, &rs.seats.host)
+        };
+        out.push(GameSummary {
+            id: id.clone(),
+            status: rs.seats.status().to_string(),
+            color: color.to_string(),
+            my_rating: me.as_ref().map(|p| p.rating).unwrap_or(0),
+            opp_name: opp.as_ref().map(|p| p.name.clone()),
+            opp_rating: opp.as_ref().map(|p| p.rating),
+        });
+    }
+    Json(out)
+}
+
+// ---------------- WebSocket game ----------------
+
 async fn root(ws: Option<WebSocketUpgrade>, State(rooms): State<Rooms>) -> axum::response::Response {
     match ws {
         Some(ws) => ws.on_upgrade(move |socket| handle(socket, rooms)),
@@ -114,23 +207,47 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
         Some(Ok(Message::Text(t))) => t,
         _ => return,
     };
-    let (room_code, elo) = match serde_json::from_str::<ClientMsg>(&first) {
-        Ok(ClientMsg::Join { room, elo }) => (room, elo),
+    let (room_code, player) = match serde_json::from_str::<ClientMsg>(&first) {
+        Ok(ClientMsg::Join {
+            room,
+            elo,
+            pid,
+            name,
+        }) => {
+            let id = if pid.is_empty() {
+                format!("anon{}", NEXT_ANON.fetch_add(1, Ordering::Relaxed))
+            } else {
+                pid
+            };
+            let name = if name.trim().is_empty() {
+                "Player".to_string()
+            } else {
+                name
+            };
+            (
+                room,
+                Player {
+                    id,
+                    name,
+                    rating: elo.max(1),
+                },
+            )
+        }
         _ => return,
     };
 
-    // Seat the player and grab the room broadcast handle.
+    // Seat by identity; grab the room broadcast handle + glass history.
     let (color, tx, glass_history) = {
         let mut map = rooms.lock().await;
-        let rs = map.entry(room_code.clone()).or_insert_with(|| {
-            let (tx, _) = broadcast::channel(64);
-            RoomState {
-                room: Room::new(),
-                tx,
+        let rs = map.entry(room_code.clone()).or_insert_with(new_room_state);
+        match rs.seats.seat(player.clone()) {
+            Some(c) => {
+                match c {
+                    Color::White => rs.room.white_elo = player.rating,
+                    Color::Black => rs.room.black_elo = player.rating,
+                }
+                (c, rs.tx.clone(), rs.room.glass.clone())
             }
-        });
-        match rs.room.join(elo) {
-            Some(c) => (c, rs.tx.clone(), rs.room.glass.clone()),
             None => {
                 let _ = sink.send(Message::Text(json(&ServerMsg::Full))).await;
                 return;
@@ -160,8 +277,7 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
         return;
     }
 
-    // Replay the glass-box history so a late joiner sees all prior assistance
-    // (the "visible to both players" rule, for the whole game).
+    // Replay the glass-box history so late joiners see all prior assistance.
     for e in &glass_history {
         if sink
             .send(Message::Text(json(&ServerMsg::Glass {
@@ -185,7 +301,6 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
         }
     });
 
-    // Push current position to everyone.
     broadcast_state(&rooms, &room_code).await;
 
     loop {
@@ -233,13 +348,8 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
         }
     }
 
-    // Free the seat so the player can rejoin.
-    {
-        let mut map = rooms.lock().await;
-        if let Some(rs) = map.get_mut(&room_code) {
-            rs.room.leave(color);
-        }
-    }
+    // Identity-based seating: keep the seat on disconnect so the player can
+    // reconnect with the same colour (and the game stays in the lobby).
     forward.abort();
 }
 
