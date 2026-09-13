@@ -181,11 +181,8 @@
     <div class="modal">
       <div class="modal-head"><div><span class="eyebrow" style="color:var(--accent)">Create a game</span><h3>Set the match</h3><p class="lede">You play as White. Share the link — whoever opens it joins as Black.</p></div><button class="closebtn" onclick="closeCreate()">✕</button></div>
       <div class="field"><label>Opponent’s name (optional)</label><input id="cOppName" placeholder="e.g. Maya"></div>
-      <div class="two">
-        <div class="field"><label>Your rating</label><input id="cYou" type="number" min="400" max="3000"></div>
-        <div class="field"><label>Their rating (approx.)</label><input id="cOpp" type="number" min="400" max="3000" value="1200"></div>
-      </div>
-      <div class="rung-readout"><span class="rung-badge" id="cBadge">Off</span><span class="txt" id="cText"></span></div>
+      <div class="field"><label>Your rating</label><input id="cYou" type="number" min="400" max="3000"></div>
+      <div class="rung-readout"><span class="rung-badge" style="background:rgba(92,201,236,0.14);color:var(--accent);border-color:rgba(92,201,236,0.35)">Auto</span><span class="txt">Your opponent enters their rating when they join, after reading how it works — then Glassboard sets the handicap for the weaker side. <b style="color:var(--text)">You don’t guess their level.</b></span></div>
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="createGame()">Create game &amp; copy invite link</button>
     </div>
   </div>
@@ -236,22 +233,10 @@
     function openCreate() {
       if (!me) { openIdentity(); return; }
       document.getElementById('cYou').value = me.rating;
-      document.getElementById('cOpp').value = me.rating > 900 ? me.rating - 400 : me.rating + 400;
       document.getElementById('cOppName').value = '';
-      previewRung();
       document.getElementById('createOverlay').classList.add('open');
     }
     function closeCreate() { document.getElementById('createOverlay').classList.remove('open'); }
-    function previewRung() {
-      const you = +document.getElementById('cYou').value, opp = +document.getElementById('cOpp').value;
-      const t = tierFor(you - opp);
-      document.getElementById('cBadge').textContent = t.name;
-      const weaker = opp < you ? (document.getElementById('cOppName').value.trim() || 'they') : 'you';
-      document.getElementById('cText').innerHTML = t.name === 'Off' ? 'An even match — no assistance either way.' : `The weaker side (<b>${weaker}</b>) gets <b>${t.name}</b> help.`;
-    }
-    document.getElementById('cYou').addEventListener('input', previewRung);
-    document.getElementById('cOpp').addEventListener('input', previewRung);
-    document.getElementById('cOppName').addEventListener('input', previewRung);
 
     function gameLink(g) {
       const base = location.href.replace(/portal\.html.*$/, '').replace(/[^/]*$/, '');
@@ -260,10 +245,9 @@
     function createGame() {
       const oppName = document.getElementById('cOppName').value.trim() || 'Open invite';
       const you = Math.max(400, Math.min(3000, +document.getElementById('cYou').value || me.rating));
-      const opp = Math.max(400, Math.min(3000, +document.getElementById('cOpp').value || 1200));
       me.rating = you; saveMe(me); renderMe();
       const id = Math.random().toString(36).slice(2, 6) + Math.random().toString(36).slice(2, 5);
-      const g = { id, oppName, myRating: you, oppRating: opp, status: 'waiting', created: Date.now() };
+      const g = { id, oppName, myRating: you, status: 'waiting', created: Date.now() };
       const games = loadGames(); games.unshift(g); saveGames(games);
       renderGames(); closeCreate();
       copy(gameLink(g), 'Game created — invite link copied');
@@ -276,13 +260,12 @@
       document.getElementById('gamesCount').textContent = games.length ? '· ' + games.length : '';
       if (!games.length) { el.innerHTML = '<div class="empty">No games yet. Hit <b>New game</b> to create one and share the link.</div>'; return; }
       el.innerHTML = games.map((g, i) => {
-        const t = tierFor(g.myRating - g.oppRating);
         const link = gameLink(g);
         return `<div class="game" style="--stripe:var(--warn)">
           <div class="g-row">
             <div class="g-ava">${initials(g.oppName)}</div>
             <div class="g-main"><div class="g-name">${escapeHtml(g.oppName)}</div>
-              <div class="g-sub">You ${g.myRating} · them ~${g.oppRating} · <span class="handicap-chip">handicap <span class="tier">${t.name}</span></span></div></div>
+              <div class="g-sub">You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">set when they join</span></span></div></div>
             <div class="status waiting"><span class="sd"></span> Waiting to join</div>
           </div>
           <div class="invite-link"><span>${link}</span><button onclick="copy('${link}')">Copy</button></div>

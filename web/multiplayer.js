@@ -10,6 +10,8 @@ import init, { Game } from "./pkg/glassboard_wasm.js";
 const GLYPH = { p: "♟︎", n: "♞︎", b: "♝︎", r: "♜︎", q: "♛︎", k: "♚︎" };
 const FILES = "abcdefgh";
 const DEPTH = 3;
+const RUNGS = [[100, "Off"], [300, "Awareness"], [500, "Coaching"], [800, "Strategy"], [1200, "Guided"], [Infinity, "Autopilot"]];
+const tierName = (gap) => { const g = Math.abs(gap); for (const [m, n] of RUNGS) if (g < m) return n; return "Autopilot"; };
 
 const el = (id) => document.getElementById(id);
 const boardEl = el("board");
@@ -49,12 +51,36 @@ async function main() {
   serverEl.value = params.get("server") || defaultServer();
   if (params.get("room")) roomEl.value = params.get("room");
   if (params.get("elo")) eloEl.value = params.get("elo");
-  const host = params.get("host"), mine = params.get("mine");
+
+  const host = params.get("host") ? decodeURIComponent(params.get("host")) : null;
+  const he = params.get("he") ? parseInt(params.get("he"), 10) : null;
+  const mine = params.get("mine");
+  const set = (id, txt) => { const e = el(id); if (e) e.textContent = txt; };
+
   if (mine) {
-    statusEl.textContent = `Your game · room “${roomEl.value}”. Click Connect, then share your invite link and wait for your opponent to join.`;
+    set("mcEyebrow", "Your game");
+    set("mcTitle", "Waiting for your opponent");
+    set("mcSub", `Room “${roomEl.value}”. Join to enter as White, then share your invite link — whoever opens it joins as Black.`);
+    const intro = el("mcIntro"); if (intro) intro.style.display = "none";
   } else if (host) {
-    statusEl.textContent = `You’re invited to play ${decodeURIComponent(host)}. Set your rating and click Connect — you’ll play Black.`;
+    set("mcEyebrow", "You’re invited");
+    set("mcTitle", `Play ${host}`);
+    set("mcSub", he
+      ? `${host} is rated ${he}. Read how it works, set your rating, and join — you’ll play Black.`
+      : `Read how it works, set your rating, and join — you’ll play Black.`);
   }
+
+  const updateHandi = () => {
+    const h = el("mcHandi"); if (!h) return;
+    if (mine || he == null) { h.textContent = ""; return; }
+    const gap = he - (parseInt(eloEl.value, 10) || 0);
+    h.innerHTML = gap <= 0
+      ? "You’re the stronger side — <b>no assistance</b>."
+      : `You’ll get <b>${tierName(gap)}</b> assistance.`;
+  };
+  updateHandi();
+  eloEl.addEventListener("input", updateHandi);
+
   el("connect").addEventListener("click", connect);
   renderBoardEmpty();
 }
@@ -75,12 +101,15 @@ function connect() {
 
 function onMessage(msg) {
   switch (msg.t) {
-    case "joined":
+    case "joined": {
       myColor = msg.color;
       game = Game.fromFen(msg.fen);
+      const mc = document.getElementById("matchCard");
+      if (mc) mc.style.display = "none"; // context card done its job — focus the board
       statusEl.textContent = `Joined as ${myColor}. Waiting for the other player…`;
       renderBoard();
       break;
+    }
     case "full":
       statusEl.textContent = "Room is full — two players are already connected.";
       break;

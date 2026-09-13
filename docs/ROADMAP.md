@@ -111,6 +111,13 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-13** — **P1 polish (invite arrival + create):** the invite link now
+  opens a **context-rich match card** on the game page — who invited you, their
+  rating, a "how it works" intro, your rating → **live handicap preview**, and a
+  **Join game** button (server/room tucked under "Advanced"). Create no longer
+  asks the initiator to guess the opponent's rating — the **joiner enters their
+  own rating while reading the intro** (the natural moment). Future: opponent
+  rating becomes a lookup for registered players.
 - **2026-09-13** — **P1 (Lobby) first cut** shipped: `web/portal.html` — device
   identity (name + rating in localStorage, no account), **create game → shareable
   invite link**, **My games** list, handicap preview, assistance ladder. The game

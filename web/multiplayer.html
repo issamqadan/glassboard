@@ -13,14 +13,26 @@
         <p class="tagline">Chess, in the open — play a friend, with a transparent handicap.</p>
       </header>
 
-      <div class="ratings">
-        <label>Server <input id="server" type="text" style="width: 200px" /></label>
-        <label>Room <input id="room" type="text" value="test" style="width: 90px" /></label>
-        <label>Your Elo <input id="elo" type="number" value="1200" min="100" max="3200" /></label>
-        <button id="connect">Connect</button>
+      <div class="match-card" id="matchCard">
+        <span class="mc-eyebrow" id="mcEyebrow">Join a game</span>
+        <h2 class="mc-title" id="mcTitle">Online game</h2>
+        <div class="mc-sub" id="mcSub">Read how it works, set your rating, and join.</div>
+        <div class="mc-intro" id="mcIntro">
+          <b>How it works:</b> Glassboard sizes a transparent handicap to the gap between you two. The weaker player gets assistance — from safety warnings up to a full strategy to follow — and <b>your opponent sees every bit of it</b>. As you improve, the help falls away.
+        </div>
+        <div class="mc-controls">
+          <label class="mc-field">Your rating <input id="elo" type="number" value="1200" min="100" max="3200" /></label>
+          <span class="mc-handi" id="mcHandi"></span>
+          <button id="connect" class="mc-join">Join game →</button>
+        </div>
+        <details class="mc-adv">
+          <summary>Advanced (server &amp; room)</summary>
+          <label>Server <input id="server" type="text" /></label>
+          <label>Room <input id="room" type="text" value="test" /></label>
+        </details>
       </div>
 
-      <div id="status" class="status">Enter a room code and connect. Share the room code + server address with your opponent.</div>
+      <div id="status" class="status"></div>
 
       <div class="layout">
         <div id="board" class="board" aria-label="chess board"></div>
