@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Glassboard</title>
+  <style>
+    /* Glassboard portal — committed dark "glass-box" world */
+    :root {
+      --bg: #080b12; --bg-2: #0c111b; --panel: #111827;
+      --glass: rgba(255,255,255,0.045); --glass-hi: rgba(255,255,255,0.07);
+      --line: #1d2740; --line-2: #2b3856;
+      --text: #eaf0fb; --muted: #93a2c0; --faint: #5d6c8c;
+      --accent: #5cc9ec; --accent-2: #7ee0d6; --accent-ink: #04222d; --gold: #e0be79;
+      --good: #45c86e; --warn: #e6a94c; --urgent: #f26d7a;
+      --radius: 16px; --shadow: 0 24px 60px -24px rgba(0,0,0,0.8);
+      --mono: ui-monospace,"SF Mono",Menlo,monospace;
+      --sans: ui-sans-serif,system-ui,-apple-system,"SF Pro Display","Segoe UI",Roboto,sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: var(--sans); color: var(--text); line-height: 1.5;
+      -webkit-font-smoothing: antialiased; min-height: 100vh;
+      background: radial-gradient(1200px 700px at 85% -10%, rgba(92,201,236,0.10), transparent 60%),
+                  radial-gradient(900px 600px at -5% 110%, rgba(126,224,214,0.06), transparent 55%), var(--bg);
+      background-attachment: fixed;
+    }
+    body::before { content:""; position:fixed; inset:0; z-index:0;
+      background-image: linear-gradient(rgba(255,255,255,0.018) 1px,transparent 1px), linear-gradient(90deg,rgba(255,255,255,0.018) 1px,transparent 1px);
+      background-size:46px 46px; mask-image: radial-gradient(circle at 50% 30%,#000,transparent 78%); pointer-events:none; }
+    .wrap { position:relative; z-index:1; max-width:960px; margin:0 auto; padding:0 22px; }
+    a { color:inherit; text-decoration:none; }
+    button { font-family:inherit; cursor:pointer; }
+    :focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:8px; }
+    .eyebrow { font-size:0.68rem; text-transform:uppercase; letter-spacing:0.16em; color:var(--faint); font-weight:650; }
+    .tnum { font-variant-numeric:tabular-nums; font-family:var(--mono); }
+
+    header.top { position:sticky; top:0; z-index:40; border-bottom:1px solid var(--line);
+      backdrop-filter:blur(18px) saturate(140%); -webkit-backdrop-filter:blur(18px) saturate(140%);
+      background:linear-gradient(180deg,rgba(8,11,18,0.85),rgba(8,11,18,0.55)); }
+    .top .wrap { display:flex; align-items:center; gap:16px; height:64px; }
+    .brand { display:flex; align-items:center; gap:11px; font-weight:700; letter-spacing:-0.01em; font-size:1.06rem; }
+    .brand .mark { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; color:var(--accent-ink); font-size:17px;
+      background:linear-gradient(150deg,var(--accent),#3a8fb3); box-shadow:0 6px 18px -6px rgba(92,201,236,0.7), inset 0 0 0 1px rgba(255,255,255,0.25); }
+    .brand small { color:var(--faint); font-weight:500; font-size:0.72rem; margin-left:2px; }
+    .spacer { flex:1; }
+    .mechip { display:flex; align-items:center; gap:9px; padding:6px 8px 6px 12px; border:1px solid var(--line); border-radius:999px; background:var(--glass); color:var(--muted); font-size:0.84rem; }
+    .mechip:hover { border-color:var(--line-2); color:var(--text); }
+    .mechip .av { width:26px; height:26px; border-radius:50%; display:grid; place-items:center; font-weight:700; font-size:0.72rem; color:#06121a; background:linear-gradient(140deg,var(--accent-2),var(--accent)); }
+    .mechip b { color:var(--text); font-weight:600; }
+
+    main { padding:40px 0 90px; }
+    .hero { margin-bottom:40px; }
+    .hero h1 { font-size:clamp(2rem,4.6vw,3.1rem); line-height:1.03; letter-spacing:-0.03em; font-weight:750; margin:14px 0 12px; text-wrap:balance; }
+    .hero h1 .thin { color:var(--muted); font-weight:400; }
+    .hero p { color:var(--muted); font-size:1.02rem; max-width:52ch; margin:0 0 24px; }
+    .cta-row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+
+    .btn { display:inline-flex; align-items:center; gap:9px; font-weight:620; font-size:0.96rem; padding:13px 20px; border-radius:12px; border:1px solid transparent; transition:transform .14s,box-shadow .2s,background .2s; }
+    .btn:active { transform:translateY(1px) scale(0.99); }
+    .btn-primary { background:linear-gradient(140deg,var(--accent),#3a97bd); color:var(--accent-ink); box-shadow:0 12px 30px -12px rgba(92,201,236,0.75), inset 0 0 0 1px rgba(255,255,255,0.28); }
+    .btn-primary:hover { transform:translateY(-1px); box-shadow:0 16px 40px -12px rgba(92,201,236,0.9), inset 0 0 0 1px rgba(255,255,255,0.4); }
+    .btn-ghost { background:var(--glass); color:var(--text); border-color:var(--line-2); }
+    .btn-ghost:hover { background:var(--glass-hi); border-color:var(--accent); }
+    .link-quiet { color:var(--muted); font-size:0.9rem; }
+    .link-quiet:hover { color:var(--accent); }
+
+    .section-head { display:flex; align-items:baseline; justify-content:space-between; margin:0 2px 16px; }
+    .section-head h2 { font-size:1.16rem; font-weight:680; letter-spacing:-0.01em; margin:0; }
+    .section-head .count { color:var(--faint); font-size:0.86rem; }
+
+    .games { display:flex; flex-direction:column; gap:12px; }
+    .game { padding:16px 18px; border-radius:var(--radius); border:1px solid var(--line); position:relative; overflow:hidden;
+      background:linear-gradient(165deg,var(--glass-hi),var(--glass)); }
+    .game::after { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--stripe,var(--warn)); }
+    .g-row { display:flex; align-items:center; gap:14px; }
+    .g-ava { width:44px; height:44px; border-radius:12px; display:grid; place-items:center; font-weight:700; color:#0b1119; background:linear-gradient(145deg,#c7d3ea,#93a2c0); flex-shrink:0; }
+    .g-main { flex:1; min-width:0; }
+    .g-name { font-weight:620; font-size:1rem; }
+    .g-sub { font-size:0.78rem; color:var(--faint); margin-top:2px; }
+    .status { display:inline-flex; align-items:center; gap:6px; font-size:0.72rem; font-weight:620; padding:5px 10px; border-radius:999px; }
+    .status .sd { width:7px; height:7px; border-radius:50%; }
+    .status.waiting { color:var(--warn); background:rgba(230,169,76,0.12); } .status.waiting .sd { background:var(--warn); }
+    .handicap-chip { font-size:0.74rem; color:var(--muted); } .handicap-chip .tier { color:var(--gold); font-weight:650; }
+    .invite-link { display:flex; align-items:center; gap:8px; margin-top:14px; padding:9px 10px 9px 13px; background:var(--bg-2); border:1px solid var(--line); border-radius:10px; font-family:var(--mono); font-size:0.76rem; color:var(--muted); }
+    .invite-link span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+    .invite-link button, .g-actions button { background:var(--glass); border:1px solid var(--line-2); color:var(--text); border-radius:8px; padding:7px 12px; font-size:0.76rem; font-weight:600; }
+    .invite-link button:hover, .g-actions button:hover { border-color:var(--accent); color:var(--accent); }
+    .g-actions { display:flex; gap:8px; margin-top:12px; }
+    .g-actions .enter { background:linear-gradient(140deg,var(--accent),#3a97bd); color:var(--accent-ink); border:0; }
+    .g-actions .del { margin-left:auto; color:var(--faint); border-color:var(--line); }
+    .g-actions .del:hover { color:var(--urgent); border-color:var(--urgent); }
+    .empty { text-align:center; padding:40px 20px; border:1px dashed var(--line-2); border-radius:var(--radius); color:var(--faint); }
+
+    .ladder { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-top:8px; }
+    .rung { padding:14px 13px; border-radius:12px; border:1px solid var(--line); background:var(--bg-2); position:relative; overflow:hidden; }
+    .rung::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--rc,var(--line-2)); }
+    .rung .lvl { font-family:var(--mono); font-size:0.66rem; color:var(--faint); }
+    .rung .rn { font-size:0.9rem; font-weight:640; margin-top:3px; }
+    .rung .rd { font-size:0.74rem; color:var(--faint); margin-top:5px; line-height:1.42; }
+    .intro-lede { color:var(--muted); max-width:66ch; margin:0 2px 18px; font-size:0.96rem; } .intro-lede b { color:var(--text); font-weight:600; }
+
+    .overlay { position:fixed; inset:0; z-index:60; display:none; place-items:center; padding:20px; background:rgba(4,7,12,0.66); backdrop-filter:blur(6px); }
+    .overlay.open { display:grid; }
+    .modal { width:min(480px,100%); max-height:92vh; overflow-y:auto; border-radius:22px; padding:26px; border:1px solid var(--line-2); box-shadow:var(--shadow);
+      background:linear-gradient(165deg,#131c2e,#0d1320); animation:pop .3s cubic-bezier(0.2,0.8,0.2,1) both; }
+    @keyframes pop { from{opacity:0;transform:translateY(16px) scale(0.98)} to{opacity:1;transform:none} }
+    .modal-head { display:flex; justify-content:space-between; align-items:flex-start; }
+    .modal h3 { font-size:1.3rem; font-weight:700; letter-spacing:-0.02em; margin:6px 0 4px; }
+    .modal .lede { color:var(--muted); font-size:0.9rem; margin:0 0 20px; }
+    .closebtn { background:var(--glass); border:1px solid var(--line); color:var(--muted); width:34px; height:34px; border-radius:10px; }
+    .closebtn:hover { color:var(--text); border-color:var(--line-2); }
+    .field { margin-bottom:16px; } .field > label { display:block; font-size:0.78rem; color:var(--muted); margin-bottom:8px; font-weight:550; }
+    .field input { width:100%; padding:12px 14px; border-radius:11px; background:var(--bg-2); border:1px solid var(--line); color:var(--text); font-family:inherit; font-size:0.94rem; }
+    .field input:focus { border-color:var(--accent); }
+    .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .rung-readout { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:11px; background:var(--bg-2); border:1px solid var(--line); margin-bottom:18px; }
+    .rung-badge { font-size:0.72rem; font-weight:700; padding:6px 11px; border-radius:999px; background:rgba(224,190,121,0.14); color:var(--gold); border:1px solid rgba(224,190,121,0.35); white-space:nowrap; }
+    .rung-readout .txt { font-size:0.82rem; color:var(--muted); } .rung-readout .txt b { color:var(--text); }
+
+    .toasts { position:fixed; right:22px; bottom:22px; z-index:80; display:flex; flex-direction:column; gap:12px; align-items:flex-end; }
+    .toast { display:flex; align-items:center; gap:12px; padding:13px 16px; min-width:280px; max-width:380px; border-radius:14px; border:1px solid var(--line-2);
+      background:linear-gradient(160deg,#16243a,#101827); box-shadow:0 20px 44px -18px rgba(0,0,0,0.85); animation:slidein .4s cubic-bezier(0.2,0.8,0.2,1) both; }
+    @keyframes slidein { from{opacity:0;transform:translateX(30px)} to{opacity:1;transform:none} }
+    .toast .tava { width:34px; height:34px; border-radius:10px; display:grid; place-items:center; color:#04222d; background:linear-gradient(145deg,var(--accent),#3a97bd); flex-shrink:0; }
+    .toast b { display:block; font-size:0.88rem; } .toast span { font-size:0.78rem; color:var(--muted); }
+
+    .footlinks { margin-top:56px; padding-top:22px; border-top:1px solid var(--line); display:flex; gap:20px; flex-wrap:wrap; color:var(--faint); font-size:0.9rem; }
+    .footlinks a:hover { color:var(--accent); }
+    @media (max-width:760px) { .ladder { grid-template-columns:1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <div class="brand"><span class="mark">♞</span> Glassboard <small>Chess, in the open</small></div>
+      <span class="spacer"></span>
+      <button class="mechip" id="meChip" onclick="openIdentity()"><span class="av" id="meAv">—</span> <span>You: <b id="meName">—</b> · <span class="tnum" id="meRating">—</span></span></button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <span class="eyebrow">New match</span>
+      <h1>Different levels.<br><span class="thin">One game.</span></h1>
+      <p>Invite anyone — a grandmaster or a first-timer. Glassboard sizes a transparent handicap to the gap, so both of you get a real game. Create one and share the link.</p>
+      <div class="cta-row">
+        <button class="btn btn-primary" onclick="openCreate()">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> New game
+        </button>
+        <a class="link-quiet" href="./index.html">Play the AI →</a>
+      </div>
+    </section>
+
+    <div class="section-head"><h2>Your games</h2><span class="count" id="gamesCount"></span></div>
+    <div class="games" id="games"></div>
+
+    <div class="section-head" style="margin-top:44px"><h2>How the handicap works</h2><span class="count">Off → Autopilot</span></div>
+    <p class="intro-lede">The wider the rating gap, the higher the assistance rung the weaker player receives — and the opponent sees exactly what help is given, every move. As the assisted player improves, the assistance falls away.</p>
+    <div class="ladder" id="ladder"></div>
+
+    <div class="footlinks">
+      <a href="./index.html">🤖 Play the AI</a>
+      <a href="./twoplayer.html">👥 Two players (same screen)</a>
+      <a href="https://github.com/issamqadan/glassboard" target="_blank" rel="noopener">Built in the open ↗</a>
+    </div>
+  </main>
+
+  <!-- identity -->
+  <div class="overlay" id="idOverlay">
+    <div class="modal">
+      <div class="modal-head"><div><span class="eyebrow" style="color:var(--accent)">Your player</span><h3>Who’s playing?</h3><p class="lede">Just a name and your rough chess rating — no account needed.</p></div></div>
+      <div class="field"><label>Display name</label><input id="idName" placeholder="e.g. Issam" maxlength="24"></div>
+      <div class="field"><label>Your rating <span style="color:var(--faint)">(a rough guess is fine — beginners ~800, club ~1500, expert ~2000+)</span></label><input id="idRating" type="number" min="400" max="3000" value="1200"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveIdentity()">Save</button>
+    </div>
+  </div>
+
+  <!-- create -->
+  <div class="overlay" id="createOverlay" onclick="if(event.target===this)closeCreate()">
+    <div class="modal">
+      <div class="modal-head"><div><span class="eyebrow" style="color:var(--accent)">Create a game</span><h3>Set the match</h3><p class="lede">You play as White. Share the link — whoever opens it joins as Black.</p></div><button class="closebtn" onclick="closeCreate()">✕</button></div>
+      <div class="field"><label>Opponent’s name (optional)</label><input id="cOppName" placeholder="e.g. Maya"></div>
+      <div class="two">
+        <div class="field"><label>Your rating</label><input id="cYou" type="number" min="400" max="3000"></div>
+        <div class="field"><label>Their rating (approx.)</label><input id="cOpp" type="number" min="400" max="3000" value="1200"></div>
+      </div>
+      <div class="rung-readout"><span class="rung-badge" id="cBadge">Off</span><span class="txt" id="cText"></span></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="createGame()">Create game &amp; copy invite link</button>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+
+  <script>
+    const TIERS = [
+      { max:100, name:'Off',        text:'An even match — no assistance.' },
+      { max:300, name:'Awareness',  text:'Safety signals — hanging pieces & checks.' },
+      { max:500, name:'Coaching',   text:'Threats and the opponent’s plan, explained.' },
+      { max:800, name:'Strategy',   text:'A named strategy to follow.' },
+      { max:1200,name:'Guided',     text:'A plan with progress + the move to play.' },
+      { max:1e9, name:'Autopilot',  text:'The co-pilot executes the plan.' },
+    ];
+    const SHORT = ['Even — no help','Safety: threats & checks','Reads the opponent’s plan','A strategy to follow','Plan + the move to play','Executes the plan'];
+    const tierFor = g => TIERS.find(t => Math.abs(g) < t.max);
+    const initials = n => (n||'?').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase() || '?';
+
+    // ---- storage ----
+    const loadMe = () => { try { return JSON.parse(localStorage.getItem('gb_me')); } catch { return null; } };
+    const saveMe = m => localStorage.setItem('gb_me', JSON.stringify(m));
+    const loadGames = () => { try { return JSON.parse(localStorage.getItem('gb_games')) || []; } catch { return []; } };
+    const saveGames = g => localStorage.setItem('gb_games', JSON.stringify(g));
+    let me = loadMe();
+
+    // ---- identity ----
+    function openIdentity() {
+      if (me) { document.getElementById('idName').value = me.name; document.getElementById('idRating').value = me.rating; }
+      document.getElementById('idOverlay').classList.add('open');
+    }
+    function saveIdentity() {
+      const name = document.getElementById('idName').value.trim() || 'Player';
+      const rating = Math.max(400, Math.min(3000, parseInt(document.getElementById('idRating').value, 10) || 1200));
+      me = { id: me?.id || ('p' + Math.random().toString(36).slice(2, 9)), name, rating };
+      saveMe(me);
+      document.getElementById('idOverlay').classList.remove('open');
+      renderMe();
+    }
+    function renderMe() {
+      if (!me) return;
+      document.getElementById('meName').textContent = me.name;
+      document.getElementById('meRating').textContent = me.rating;
+      document.getElementById('meAv').textContent = initials(me.name);
+    }
+
+    // ---- create ----
+    function openCreate() {
+      if (!me) { openIdentity(); return; }
+      document.getElementById('cYou').value = me.rating;
+      document.getElementById('cOpp').value = me.rating > 900 ? me.rating - 400 : me.rating + 400;
+      document.getElementById('cOppName').value = '';
+      previewRung();
+      document.getElementById('createOverlay').classList.add('open');
+    }
+    function closeCreate() { document.getElementById('createOverlay').classList.remove('open'); }
+    function previewRung() {
+      const you = +document.getElementById('cYou').value, opp = +document.getElementById('cOpp').value;
+      const t = tierFor(you - opp);
+      document.getElementById('cBadge').textContent = t.name;
+      const weaker = opp < you ? (document.getElementById('cOppName').value.trim() || 'they') : 'you';
+      document.getElementById('cText').innerHTML = t.name === 'Off' ? 'An even match — no assistance either way.' : `The weaker side (<b>${weaker}</b>) gets <b>${t.name}</b> help.`;
+    }
+    document.getElementById('cYou').addEventListener('input', previewRung);
+    document.getElementById('cOpp').addEventListener('input', previewRung);
+    document.getElementById('cOppName').addEventListener('input', previewRung);
+
+    function gameLink(g) {
+      const base = location.href.replace(/portal\.html.*$/, '').replace(/[^/]*$/, '');
+      return base + 'multiplayer.html?room=' + g.id + '&host=' + encodeURIComponent(me.name) + '&he=' + me.rating;
+    }
+    function createGame() {
+      const oppName = document.getElementById('cOppName').value.trim() || 'Open invite';
+      const you = Math.max(400, Math.min(3000, +document.getElementById('cYou').value || me.rating));
+      const opp = Math.max(400, Math.min(3000, +document.getElementById('cOpp').value || 1200));
+      me.rating = you; saveMe(me); renderMe();
+      const id = Math.random().toString(36).slice(2, 6) + Math.random().toString(36).slice(2, 5);
+      const g = { id, oppName, myRating: you, oppRating: opp, status: 'waiting', created: Date.now() };
+      const games = loadGames(); games.unshift(g); saveGames(games);
+      renderGames(); closeCreate();
+      copy(gameLink(g), 'Game created — invite link copied');
+    }
+
+    // ---- games list ----
+    function renderGames() {
+      const games = loadGames();
+      const el = document.getElementById('games');
+      document.getElementById('gamesCount').textContent = games.length ? '· ' + games.length : '';
+      if (!games.length) { el.innerHTML = '<div class="empty">No games yet. Hit <b>New game</b> to create one and share the link.</div>'; return; }
+      el.innerHTML = games.map((g, i) => {
+        const t = tierFor(g.myRating - g.oppRating);
+        const link = gameLink(g);
+        return `<div class="game" style="--stripe:var(--warn)">
+          <div class="g-row">
+            <div class="g-ava">${initials(g.oppName)}</div>
+            <div class="g-main"><div class="g-name">${escapeHtml(g.oppName)}</div>
+              <div class="g-sub">You ${g.myRating} · them ~${g.oppRating} · <span class="handicap-chip">handicap <span class="tier">${t.name}</span></span></div></div>
+            <div class="status waiting"><span class="sd"></span> Waiting to join</div>
+          </div>
+          <div class="invite-link"><span>${link}</span><button onclick="copy('${link}')">Copy</button></div>
+          <div class="g-actions">
+            <button class="enter" onclick="enterGame(${i})">Enter game →</button>
+            <button class="del" onclick="removeGame(${i})">Delete</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+    function enterGame(i) {
+      const g = loadGames()[i]; if (!g) return;
+      location.href = 'multiplayer.html?room=' + g.id + '&elo=' + g.myRating + '&host=' + encodeURIComponent(me.name) + '&mine=1';
+    }
+    function removeGame(i) {
+      const games = loadGames(); games.splice(i, 1); saveGames(games); renderGames();
+    }
+
+    function copy(link, msg) {
+      if (navigator.clipboard) navigator.clipboard.writeText(link).catch(() => {});
+      toast('Copied', msg || 'Invite link copied to clipboard');
+    }
+    function toast(title, sub) {
+      const el = document.createElement('div'); el.className = 'toast';
+      el.innerHTML = `<div class="tava"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#04222d" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg></div><div><b>${title}</b><span>${sub}</span></div>`;
+      document.getElementById('toasts').appendChild(el);
+      setTimeout(() => el.remove(), 4600);
+    }
+    function escapeHtml(s){ return (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+    function renderLadder() {
+      const colors = ['var(--line-2)','#5c6f8c','#6f86ac','var(--accent)','#8fd0e0','var(--gold)'];
+      document.getElementById('ladder').innerHTML = TIERS.map((t, i) =>
+        `<div class="rung" style="--rc:${colors[i]}"><div class="lvl">Level ${i}</div><div class="rn">${t.name}</div><div class="rd">${SHORT[i]}</div></div>`).join('');
+    }
+
+    // ---- init ----
+    renderLadder(); renderGames();
+    if (me) renderMe(); else openIdentity();
+  </script>
+</body>
+</html>

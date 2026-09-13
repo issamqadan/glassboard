@@ -48,6 +48,13 @@ async function main() {
   const params = new URLSearchParams(location.search);
   serverEl.value = params.get("server") || defaultServer();
   if (params.get("room")) roomEl.value = params.get("room");
+  if (params.get("elo")) eloEl.value = params.get("elo");
+  const host = params.get("host"), mine = params.get("mine");
+  if (mine) {
+    statusEl.textContent = `Your game · room “${roomEl.value}”. Click Connect, then share your invite link and wait for your opponent to join.`;
+  } else if (host) {
+    statusEl.textContent = `You’re invited to play ${decodeURIComponent(host)}. Set your rating and click Connect — you’ll play Black.`;
+  }
   el("connect").addEventListener("click", connect);
   renderBoardEmpty();
 }

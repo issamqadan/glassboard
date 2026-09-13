@@ -111,6 +111,14 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-13** — **P1 (Lobby) first cut** shipped: `web/portal.html` — device
+  identity (name + rating in localStorage, no account), **create game → shareable
+  invite link**, **My games** list, handicap preview, assistance ladder. The game
+  page (`multiplayer.html`) reads invite params (room, host, rating) and shows a
+  "you're invited / your game" state. Linked from the AI page. Wired to the live
+  Render server. **Still to do in P1:** server-side game registry so the initiator
+  is notified across the portal when someone joins (currently the join shows in
+  the game room). Then P2 persistence (Neon).
 - **2026-09-13** — Roadmap created. Captured: player portal (create/invite/notify/dashboard
   + intro + what's-new), strategy-level assistance model (evolved spectrum + strategy layer),
   calibration mission, device-identity + Neon architecture, 4-phase build plan. Design concept
