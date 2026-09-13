@@ -93,10 +93,13 @@ the calibration mission, and a 4-phase build plan. Design concept published
 
 ## Next session — resume here
 
-0. **▶ Phase 1 — Lobby real** (per [ROADMAP.md](ROADMAP.md)): device identity +
-   create/invite/join/notify on the existing WS server, with the published design
-   concept as the real frontend. Then P2 persistence (Neon), P3 strategy layer,
-   P4 calibration.
+0. **▶ Phase 1 — Lobby** (per [ROADMAP.md](ROADMAP.md)). **Shipped so far:**
+   `web/portal.html` — device identity, create game → invite link, "Your games";
+   and a context-rich **join match card** in `multiplayer.html` (both scores +
+   explained assistance; joiner sets their own rating). **⏸ Pending: user testing
+   — feedback next session.** **Next:** server-side game registry so the initiator
+   is notified across the portal when someone joins. Then P2 persistence (Neon),
+   P3 strategy layer, P4 calibration.
 1. **Clarify per-side handicap in the UI**: the stronger-rated side correctly
    shows OFF (only the weaker side is assisted) — make the copy clearer so it
    doesn't read as a bug. Consider showing both sides' rung.

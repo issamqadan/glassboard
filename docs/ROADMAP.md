@@ -111,6 +111,13 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-13** — **P1 polish 2 (join clarity):** the join match card now shows
+  **both scores and explains the assistance from the gap** (e.g. "You 1400 vs
+  Issam 1870 · gap 470 → you get **Coaching**: threats and the opponent's plan,
+  explained. Shown to Issam too."). The joiner must set their **own** rating
+  (empty + required; Join disabled until valid). Handles even/stronger-side/host
+  states. **Pending: user testing** (feedback next session), then the server-side
+  game registry (cross-portal join notification) to close P1.
 - **2026-09-13** — **P1 polish (invite arrival + create):** the invite link now
   opens a **context-rich match card** on the game page — who invited you, their
   rating, a "how it works" intro, your rating → **live handicap preview**, and a
