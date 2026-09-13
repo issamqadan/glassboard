@@ -320,8 +320,8 @@ button {
 .mc-controls { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
 .mc-field { font-size: 0.78rem; color: #b9c6da; display: flex; flex-direction: column; gap: 7px; }
 .mc-field input { width: 120px; }
-.mc-handi { font-size: 0.9rem; color: #b9c6da; padding-bottom: 9px; }
-.mc-handi b { color: #e0be79; font-weight: 650; }
+.mc-handi { margin-top: 14px; font-size: 0.92rem; color: #b9c6da; line-height: 1.55; }
+.mc-handi b { color: #e7ecf3; font-weight: 600; }
 .mc-join {
   margin-left: auto; border: 0; border-radius: 11px; padding: 12px 22px; font-weight: 650; font-size: 0.96rem;
   color: #06121a; background: linear-gradient(140deg, #9fd0ff, #6aa8e6); cursor: pointer; transition: filter 0.15s, transform 0.14s;

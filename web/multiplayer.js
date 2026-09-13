@@ -10,8 +10,15 @@ import init, { Game } from "./pkg/glassboard_wasm.js";
 const GLYPH = { p: "♟︎", n: "♞︎", b: "♝︎", r: "♜︎", q: "♛︎", k: "♚︎" };
 const FILES = "abcdefgh";
 const DEPTH = 3;
-const RUNGS = [[100, "Off"], [300, "Awareness"], [500, "Coaching"], [800, "Strategy"], [1200, "Guided"], [Infinity, "Autopilot"]];
-const tierName = (gap) => { const g = Math.abs(gap); for (const [m, n] of RUNGS) if (g < m) return n; return "Autopilot"; };
+const RUNGS = [
+  [100, "Off", "an even match — no assistance"],
+  [300, "Awareness", "safety signals — hanging pieces & checks"],
+  [500, "Coaching", "threats and the opponent’s plan, explained"],
+  [800, "Strategy", "a named strategy to follow"],
+  [1200, "Guided", "a plan with progress + the move to play"],
+  [Infinity, "Autopilot", "the co-pilot executes the plan"],
+];
+const tierFor = (gap) => { const g = Math.abs(gap); for (const r of RUNGS) if (g < r[0]) return r; return RUNGS[RUNGS.length - 1]; };
 
 const el = (id) => document.getElementById(id);
 const boardEl = el("board");
@@ -86,13 +93,20 @@ async function main() {
   const updateHandi = () => {
     refreshJoin();
     const h = el("mcHandi"); if (!h) return;
-    if (mine || he == null) { h.textContent = ""; return; }
+    if (mine) { h.innerHTML = `<span style="color:#7f92ab">The handicap is set once your opponent joins and enters their rating.</span>`; return; }
+    if (he == null) { h.textContent = ""; return; }
     const v = parseInt(eloEl.value, 10);
-    if (!(v >= 100)) { h.innerHTML = `<span style="color:#7f92ab">Enter your rating to see your handicap.</span>`; return; }
-    const gap = he - v;
-    h.innerHTML = gap <= 0
-      ? "You’re the stronger side — <b>no assistance</b>."
-      : `You’ll get <b>${tierName(gap)}</b> assistance.`;
+    if (!(v >= 100)) { h.innerHTML = `<span style="color:#7f92ab">Enter your rating to see the matchup and your assistance.</span>`; return; }
+    const [, name, desc] = tierFor(he - v);
+    const gap = Math.abs(he - v);
+    const scores = `<b>You ${v}</b> vs <b>${host} ${he}</b>`;
+    if (name === "Off") {
+      h.innerHTML = `${scores} · <b>even match</b> — no assistance for either side.`;
+    } else if (v < he) {
+      h.innerHTML = `${scores} · gap ${gap} → you get <b style="color:#e0be79">${name}</b>: ${desc}. <span style="color:#7f92ab">Shown to ${host} too.</span>`;
+    } else {
+      h.innerHTML = `${scores} · gap ${gap} → <b>${host}</b> gets <b style="color:#e0be79">${name}</b>: ${desc}. You play unassisted.`;
+    }
   };
   updateHandi();
   eloEl.addEventListener("input", updateHandi);
