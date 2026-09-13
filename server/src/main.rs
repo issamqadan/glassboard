@@ -92,6 +92,8 @@ enum ServerMsg {
         last: Option<String>,
         white_elo: i32,
         black_elo: i32,
+        white_name: String,
+        black_name: String,
     },
     Glass {
         side: String,
@@ -363,6 +365,8 @@ async fn broadcast_state(rooms: &Rooms, code: &str) {
             last: rs.room.last_uci.clone(),
             white_elo: rs.room.white_elo,
             black_elo: rs.room.black_elo,
+            white_name: rs.seats.host.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
+            black_name: rs.seats.guest.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
         };
         let _ = rs.tx.send(json(&msg));
     }

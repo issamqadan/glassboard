@@ -41,6 +41,8 @@ let hanging = [];
 let assistData = null;
 let lastMove = null;
 let lastGlassFen = null;
+let hostName = null;
+let myName = null;
 
 const idx = (file, rank) => rank * 8 + file;
 const isWhitePiece = (c) => c !== "." && c === c.toUpperCase();
@@ -79,6 +81,7 @@ async function main() {
   const host = params.get("host") ? decodeURIComponent(params.get("host")) : null;
   const he = params.get("he") ? parseInt(params.get("he"), 10) : null;
   const mine = params.get("mine");
+  hostName = host;
   const isJoiner = host && !mine;
   const set = (id, txt) => { const e = el(id); if (e) e.textContent = txt; };
   const joinBtn = el("connect");
@@ -142,6 +145,7 @@ function connect() {
   ws = new WebSocket(url);
   ws.onopen = () => {
     const p = currentPlayer();
+    myName = p.name;
     ws.send(JSON.stringify({ t: "join", room: roomEl.value.trim() || "test", elo: p.rating, pid: p.id, name: p.name }));
     statusEl.textContent = "Connected — joining room…";
   };
@@ -204,9 +208,32 @@ const oppElo = () => (myColor === "white" ? state.black_elo : state.white_elo);
 
 function paint() {
   renderBoard();
+  renderPlayers();
   renderAssist();
   renderGlass();
   renderStatus();
+}
+
+function renderPlayers() {
+  const el = document.getElementById("players");
+  if (!el || !state || !myColor) return;
+  el.hidden = false;
+  const wName = state.white_name || (myColor === "white" ? (myName || "You") : (hostName || "White"));
+  const bName = state.black_name || (myColor === "black" ? (myName || "You") : "Opponent");
+  const w = { name: wName, elo: state.white_elo, color: "white" };
+  const b = { name: bName, elo: state.black_elo, color: "black" };
+  const you = myColor === "white" ? w : b;
+  const opp = myColor === "white" ? b : w;
+  const oppSeated = myColor === "white" ? !!state.black_name : !!state.white_name;
+  const yourTurn = state.status === "ongoing" && state.turn === myColor;
+  const turnHtml = state.status === "ongoing" ? `<span class="turn">${yourTurn ? "Your move" : "Their move"}</span>` : "";
+  el.innerHTML =
+    `<div class="pl"><span class="dot ${you.color}"></span> You · <b>${escapeHtml(you.name)}</b> <span class="tnum">${you.elo}</span></div>` +
+    `<div class="vs">vs</div>` +
+    (oppSeated
+      ? `<div class="pl"><span class="dot ${opp.color}"></span> <b>${escapeHtml(opp.name)}</b> <span class="tnum">${opp.elo}</span></div>`
+      : `<div class="pl"><span class="waiting-dot"></span> Waiting for opponent…</div>`) +
+    turnHtml;
 }
 
 function orientedSquares() {

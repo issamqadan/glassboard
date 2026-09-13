@@ -293,7 +293,7 @@
       }
       if (changed) { saveGames(games); renderGames(); }
     }
-    setInterval(pollGames, 6000);
+    setInterval(pollGames, 4000);
 
     // ---- games list ----
     function renderGames() {
@@ -354,7 +354,7 @@
 
     // ---- init ----
     renderLadder(); renderGames();
-    if (me) renderMe(); else openIdentity();
+    if (me) { renderMe(); pollGames(); } else openIdentity();
   </script>
 </body>
 </html>
