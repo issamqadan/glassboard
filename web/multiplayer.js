@@ -50,16 +50,21 @@ const defaultServer = () =>
     ? "wss://playglassboard.onrender.com"
     : `ws://${location.hostname || "localhost"}:9001`;
 
-// Device identity shared with the portal (localStorage). Stable id → stable seat.
+// Per-TAB player id (sessionStorage): two windows of the same browser are
+// distinct players; a reload within a tab keeps the same id (stable seat).
+function playerId() {
+  let id = sessionStorage.getItem("gb_pid");
+  if (!id) { id = "p" + Math.random().toString(36).slice(2, 10); sessionStorage.setItem("gb_pid", id); }
+  return id;
+}
+// Name/rating are shared with the portal (localStorage); the id is per-tab.
 function currentPlayer() {
   let m = null;
   try { m = JSON.parse(localStorage.getItem("gb_me")); } catch {}
   const name = (el("pname") && el("pname").value.trim()) || (m && m.name) || "Player";
   const rating = parseInt(el("elo").value, 10) || (m && m.rating) || 1200;
-  const id = (m && m.id) || ("p" + Math.random().toString(36).slice(2, 9));
-  m = { id, name, rating };
-  localStorage.setItem("gb_me", JSON.stringify(m));
-  return m;
+  localStorage.setItem("gb_me", JSON.stringify({ name, rating }));
+  return { id: playerId(), name, rating };
 }
 
 async function main() {

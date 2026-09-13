@@ -205,9 +205,17 @@
     // ---- storage ----
     const loadMe = () => { try { return JSON.parse(localStorage.getItem('gb_me')); } catch { return null; } };
     const saveMe = m => localStorage.setItem('gb_me', JSON.stringify(m));
+    // Per-TAB player id (sessionStorage) so two windows of the same browser are
+    // distinct players. Real games use different devices/browsers anyway.
+    function playerId() {
+      let id = sessionStorage.getItem('gb_pid');
+      if (!id) { id = 'p' + Math.random().toString(36).slice(2, 10); sessionStorage.setItem('gb_pid', id); }
+      return id;
+    }
     const loadGames = () => { try { return JSON.parse(localStorage.getItem('gb_games')) || []; } catch { return []; } };
     const saveGames = g => localStorage.setItem('gb_games', JSON.stringify(g));
     let me = loadMe();
+    if (me) me.id = playerId();
     const SERVER_HTTP = 'https://playglassboard.onrender.com';
 
     // ---- identity ----
@@ -218,7 +226,7 @@
     function saveIdentity() {
       const name = document.getElementById('idName').value.trim() || 'Player';
       const rating = Math.max(400, Math.min(3000, parseInt(document.getElementById('idRating').value, 10) || 1200));
-      me = { id: me?.id || ('p' + Math.random().toString(36).slice(2, 9)), name, rating };
+      me = { id: playerId(), name, rating };
       saveMe(me);
       document.getElementById('idOverlay').classList.remove('open');
       renderMe();
