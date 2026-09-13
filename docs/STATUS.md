@@ -26,6 +26,12 @@ native), Python/PyTorch training (later), thin web shell first.
   (health/root prints the "connect via WebSocket" line — that's the backend, not
   the game). Free tier sleeps after ~15 min idle → ~30-60s cold start.
 
+**📋 Alpha/beta plan (living):** [ROADMAP.md](ROADMAP.md) — the player portal
+(create/invite/notify/dashboard + intro + what's-new), **strategy-level
+assistance** (opponent-intent reads, named plans, plan-progress, move-in-plan),
+the calibration mission, and a 4-phase build plan. Design concept published
+2026-09-13.
+
 ## Done
 
 - ✅ **Vision, name, governing docs** — VISION.md, CLAUDE.md, ARCHITECTURE.md;
@@ -87,6 +93,10 @@ native), Python/PyTorch training (later), thin web shell first.
 
 ## Next session — resume here
 
+0. **▶ Phase 1 — Lobby real** (per [ROADMAP.md](ROADMAP.md)): device identity +
+   create/invite/join/notify on the existing WS server, with the published design
+   concept as the real frontend. Then P2 persistence (Neon), P3 strategy layer,
+   P4 calibration.
 1. **Clarify per-side handicap in the UI**: the stronger-rated side correctly
    shows OFF (only the weaker side is assisted) — make the copy clearer so it
    doesn't read as a bug. Consider showing both sides' rung.
