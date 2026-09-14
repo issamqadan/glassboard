@@ -68,6 +68,8 @@
     .section-head { display:flex; align-items:baseline; justify-content:space-between; margin:0 2px 16px; }
     .section-head h2 { font-size:1.16rem; font-weight:680; letter-spacing:-0.01em; margin:0; }
     .section-head .count { color:var(--faint); font-size:0.86rem; }
+    .clear-all { background:none; border:0; color:var(--faint); font-size:0.8rem; cursor:pointer; padding:2px 4px; }
+    .clear-all:hover { color:#f0808a; text-decoration:underline; }
 
     .games { display:flex; flex-direction:column; gap:12px; }
     .game { padding:16px 18px; border-radius:var(--radius); border:1px solid var(--line); position:relative; overflow:hidden;
@@ -167,7 +169,7 @@
       </div>
     </section>
 
-    <div class="section-head"><h2>Your games</h2><span class="count" id="gamesCount"></span></div>
+    <div class="section-head"><h2>Your games</h2><span style="display:flex;align-items:center;gap:12px"><span class="count" id="gamesCount"></span><button class="clear-all" id="clearAll" onclick="clearAllGames()" hidden>Clear all</button></span></div>
     <div class="games" id="games"></div>
 
     <div class="section-head" style="margin-top:44px"><h2>How the handicap works</h2><span class="count">Off → Autopilot</span></div>
@@ -231,11 +233,17 @@
     // ---- storage ----
     const loadMe = () => { try { return JSON.parse(localStorage.getItem('gb_me')); } catch { return null; } };
     const saveMe = m => localStorage.setItem('gb_me', JSON.stringify(m));
-    // Per-TAB player id (sessionStorage) so two windows of the same browser are
-    // distinct players. Real games use different devices/browsers anyway.
+    // Stable per-DEVICE player id (localStorage): one browser = one player, across
+    // tabs and reloads, so games don't multiply per session. Add ?test=1 to the
+    // URL for a per-tab id (to test two players in one browser).
     function playerId() {
-      let id = sessionStorage.getItem('gb_pid');
-      if (!id) { id = 'p' + Math.random().toString(36).slice(2, 10); sessionStorage.setItem('gb_pid', id); }
+      if (new URLSearchParams(location.search).get('test')) {
+        let t = sessionStorage.getItem('gb_pid_test');
+        if (!t) { t = 't' + Math.random().toString(36).slice(2, 10); sessionStorage.setItem('gb_pid_test', t); }
+        return t;
+      }
+      let id = localStorage.getItem('gb_pid');
+      if (!id) { id = 'p' + Math.random().toString(36).slice(2, 10); localStorage.setItem('gb_pid', id); }
       return id;
     }
     function setInput(id, v) { const e = document.getElementById(id); if (e) { e.value = v; e.dispatchEvent(new Event('input')); } }
@@ -355,6 +363,7 @@
       const games = loadGames();
       const el = document.getElementById('games');
       document.getElementById('gamesCount').textContent = games.length ? '· ' + games.length : '';
+      const ca = document.getElementById('clearAll'); if (ca) ca.hidden = !games.length;
       if (!games.length) { el.innerHTML = '<div class="empty">No games yet. Hit <b>New game</b> to create one and share the link.</div>'; return; }
       el.innerHTML = games.map((g, i) => {
         const link = gameLink(g);
@@ -395,6 +404,11 @@
     }
     function removeGame(i) {
       const games = loadGames(); games.splice(i, 1); saveGames(games); renderGames();
+    }
+    function clearAllGames() {
+      const games = loadGames(); if (!games.length) return;
+      if (!confirm('Remove all ' + games.length + ' game(s) from your list? This clears your lobby only — it won’t interrupt anyone mid-game.')) return;
+      saveGames([]); renderGames();
     }
 
     function copy(link, msg) {

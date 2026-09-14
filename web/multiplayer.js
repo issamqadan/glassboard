@@ -52,11 +52,17 @@ const defaultServer = () =>
     ? "wss://playglassboard.onrender.com"
     : `ws://${location.hostname || "localhost"}:9001`;
 
-// Per-TAB player id (sessionStorage): two windows of the same browser are
-// distinct players; a reload within a tab keeps the same id (stable seat).
+// Stable per-DEVICE player id (localStorage): one browser = one player across
+// tabs/reloads. Add ?test=1 to the URL for a per-tab id, to run two players in
+// one browser. Must match the portal's playerId() so seating is consistent.
 function playerId() {
-  let id = sessionStorage.getItem("gb_pid");
-  if (!id) { id = "p" + Math.random().toString(36).slice(2, 10); sessionStorage.setItem("gb_pid", id); }
+  if (new URLSearchParams(location.search).get("test")) {
+    let t = sessionStorage.getItem("gb_pid_test");
+    if (!t) { t = "t" + Math.random().toString(36).slice(2, 10); sessionStorage.setItem("gb_pid_test", t); }
+    return t;
+  }
+  let id = localStorage.getItem("gb_pid");
+  if (!id) { id = "p" + Math.random().toString(36).slice(2, 10); localStorage.setItem("gb_pid", id); }
   return id;
 }
 // Name/rating are shared with the portal (localStorage); the id is per-tab.
