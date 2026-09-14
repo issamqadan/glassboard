@@ -186,8 +186,9 @@
   <!-- identity -->
   <div class="overlay" id="idOverlay">
     <div class="modal">
-      <div class="modal-head"><div><span class="eyebrow" style="color:var(--accent)">Your player</span><h3>Who’s playing?</h3><p class="lede">Just a name and your rough chess rating — no account needed.</p></div></div>
-      <div class="field"><label>Display name</label><input id="idName" placeholder="e.g. Issam" maxlength="24"></div>
+      <div class="modal-head"><div><span class="eyebrow" style="color:var(--accent)">Your player</span><h3>Sign in or create a player</h3><p class="lede">Pick a name and a 4-digit PIN. Use the same two on any device to keep your games and rating together.</p></div></div>
+      <div class="field"><label>Player name</label><input id="idName" placeholder="e.g. Issam" maxlength="24" autocomplete="off"></div>
+      <div class="field"><label>4-digit PIN <span style="color:var(--faint)">(so only you can use this name)</span></label><input id="idPin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off" style="letter-spacing:0.35em"></div>
       <div class="field">
         <label>How well do you play chess? <span style="color:var(--faint)">(tap one — or type your rating)</span></label>
         <div class="lvl-chips">
@@ -199,7 +200,8 @@
         </div>
         <input id="idRating" type="number" min="400" max="3000" placeholder="rating (e.g. 1200)" style="margin-top:10px">
       </div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveIdentity()">Save</button>
+      <div id="idError" style="color:#f0808a;font-size:0.84rem;min-height:1.1em;margin-bottom:8px"></div>
+      <button class="btn btn-primary" id="idSave" style="width:100%;justify-content:center" onclick="saveIdentity()">Continue</button>
     </div>
   </div>
 
@@ -256,15 +258,36 @@
     // ---- identity ----
     function openIdentity() {
       if (me) { document.getElementById('idName').value = me.name; document.getElementById('idRating').value = me.rating; }
+      const pin = document.getElementById('idPin'); if (pin) pin.value = '';
+      const err = document.getElementById('idError'); if (err) err.textContent = '';
       document.getElementById('idOverlay').classList.add('open');
     }
-    function saveIdentity() {
-      const name = document.getElementById('idName').value.trim() || 'Player';
+    async function saveIdentity() {
+      const name = document.getElementById('idName').value.trim();
+      const pin = document.getElementById('idPin').value.trim();
       const rating = Math.max(400, Math.min(3000, parseInt(document.getElementById('idRating').value, 10) || 1200));
-      me = { id: playerId(), name, rating };
+      const err = document.getElementById('idError'); err.textContent = '';
+      if (!name) { err.textContent = 'Enter a player name.'; return; }
+      if (!/^\d{4}$/.test(pin)) { err.textContent = 'PIN must be exactly 4 digits.'; return; }
+      const btn = document.getElementById('idSave'); const label = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Saving…';
+      let res, data;
+      try {
+        res = await fetch(SERVER_HTTP + '/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, pin, rating }) });
+        data = await res.json();
+      } catch {
+        err.textContent = 'Could not reach the server — it may be waking up. Try again in a moment.';
+        btn.disabled = false; btn.textContent = label; return;
+      }
+      if (!res.ok) { err.textContent = (data && data.error) || 'Could not sign in.'; btn.disabled = false; btn.textContent = label; return; }
+      // Success: a stable, cross-device identity. Use the server id as our pid.
+      localStorage.setItem('gb_pid', data.id);
+      me = { id: data.id, name: data.name, rating: data.rating };
       saveMe(me);
       document.getElementById('idOverlay').classList.remove('open');
-      renderMe();
+      btn.disabled = false; btn.textContent = label;
+      toast(data.returning ? 'Welcome back, ' + data.name : 'Player created — ' + data.name, data.returning ? 'Signed in on this device.' : 'Your name + PIN work on any device.');
+      renderMe(); pollGames();
     }
     function renderMe() {
       if (!me) return;

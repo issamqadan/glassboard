@@ -25,10 +25,11 @@ use std::sync::Arc;
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        Query, State,
+        FromRef, Query, State,
     },
+    http::StatusCode,
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use engine::Color;
@@ -45,6 +46,34 @@ struct RoomState {
     seats: Seats,
 }
 type Rooms = Arc<Mutex<HashMap<String, RoomState>>>;
+
+/// A registered player. `key` in the map is the username lowercased.
+#[derive(Clone)]
+struct Account {
+    id: String,
+    name: String,
+    pin: String,
+    rating: i32,
+}
+/// In-memory account registry. NOTE: Render's free tier wipes memory when the
+/// server sleeps — swap this for Postgres (Neon) to make accounts durable.
+type Players = Arc<Mutex<HashMap<String, Account>>>;
+
+#[derive(Clone)]
+struct AppState {
+    rooms: Rooms,
+    players: Players,
+}
+impl FromRef<AppState> for Rooms {
+    fn from_ref(s: &AppState) -> Rooms {
+        s.rooms.clone()
+    }
+}
+impl FromRef<AppState> for Players {
+    fn from_ref(s: &AppState) -> Players {
+        s.players.clone()
+    }
+}
 
 static NEXT_ANON: AtomicU64 = AtomicU64::new(1);
 
@@ -104,11 +133,13 @@ enum ServerMsg {
 #[tokio::main]
 async fn main() {
     let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
+    let players: Players = Arc::new(Mutex::new(HashMap::new()));
     let app = Router::new()
         .route("/", get(root))
         .route("/games", get(list_games).post(create_game))
+        .route("/account", post(account))
         .layer(CorsLayer::permissive())
-        .with_state(rooms);
+        .with_state(AppState { rooms, players });
 
     let addr = std::env::var("PORT")
         .ok()
@@ -196,6 +227,43 @@ async fn list_games(
         });
     }
     Json(out)
+}
+
+#[derive(Deserialize)]
+struct AccountReq {
+    name: String,
+    pin: String,
+    #[serde(default)]
+    rating: i32,
+}
+
+/// Claim a username with a PIN, or sign back in with the same pair. Returns a
+/// stable player id so the same account is one identity across devices.
+async fn account(State(players): State<Players>, Json(req): Json<AccountReq>) -> impl IntoResponse {
+    let name = req.name.trim().to_string();
+    let pin = req.pin.trim().to_string();
+    if name.is_empty() || name.chars().count() > 24 {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":"Enter a name (1–24 characters)."})));
+    }
+    if pin.len() != 4 || !pin.chars().all(|c| c.is_ascii_digit()) {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":"PIN must be exactly 4 digits."})));
+    }
+    let key = name.to_lowercase();
+    let mut map = players.lock().await;
+    if let Some(acc) = map.get(&key) {
+        if acc.pin != pin {
+            return (StatusCode::CONFLICT, Json(serde_json::json!({"error":"That name is taken — wrong PIN."})));
+        }
+        return (StatusCode::OK, Json(serde_json::json!({
+            "id": acc.id, "name": acc.name, "rating": acc.rating, "returning": true
+        })));
+    }
+    let rating = if (100..=3200).contains(&req.rating) { req.rating } else { 1200 };
+    let id = format!("u_{}", key);
+    map.insert(key, Account { id: id.clone(), name: name.clone(), pin, rating });
+    (StatusCode::CREATED, Json(serde_json::json!({
+        "id": id, "name": name, "rating": rating, "returning": false
+    })))
 }
 
 // ---------------- WebSocket game ----------------
