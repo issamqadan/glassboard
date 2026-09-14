@@ -79,7 +79,7 @@ function renderBoard() {
       const sq = document.createElement("div");
       sq.className = "sq " + ((file + rank) % 2 === 1 ? "light" : "dark");
       if (selected === i) sq.classList.add("selected");
-      if (legalTargets.includes(i)) sq.classList.add("target");
+      if (legalTargets.includes(i)) { sq.classList.add("target"); if (s[i] !== ".") sq.classList.add("capture"); }
       if (hanging.includes(i)) sq.classList.add("hanging");
       if (lastMove && (lastMove.from === i || lastMove.to === i)) sq.classList.add("lastmove");
 
@@ -91,7 +91,8 @@ function renderBoard() {
       if (c !== ".") {
         const span = document.createElement("span");
         span.className = "piece " + (isWhitePiece(c) ? "white" : "black");
-        span.textContent = GLYPH[c.toLowerCase()];
+        if (typeof pieceSVG === "function") span.innerHTML = pieceSVG(c);
+        else span.textContent = GLYPH[c.toLowerCase()];
         sq.appendChild(span);
       }
       sq.addEventListener("click", () => onSquareClick(i));

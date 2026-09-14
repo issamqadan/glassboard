@@ -73,10 +73,11 @@
     .sq.sel::before { content:""; position:absolute; inset:0; box-shadow: inset 0 0 0 3px var(--accent); }
     .sq.tgt::after { content:""; position:absolute; width:30%; height:30%; border-radius:50%; background: rgba(92,201,236,0.75); box-shadow:0 0 8px rgba(92,201,236,0.6); }
     .sq.tgt.cap::after { width:82%; height:82%; border-radius:50%; background:none; box-shadow: inset 0 0 0 4px rgba(92,201,236,0.7); }
-    .pc { font-size: clamp(20px, 7vw, 36px); line-height: 1; z-index: 1;
-      font-family: "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols2", "Arial Unicode MS", "DejaVu Sans", sans-serif; font-variant-emoji: text; }
-    .pc.w { color: #f6f9fe; -webkit-text-stroke: 1.3px #23324a; }
-    .pc.b { color: #141a26; -webkit-text-stroke: 1.1px rgba(240,244,250,0.5); }
+    .pc { width: 84%; height: 84%; display: flex; align-items: center; justify-content: center; line-height: 1; z-index: 1; filter: drop-shadow(0 1.5px 2px rgba(0,0,0,0.3));
+      font-size: clamp(20px, 7vw, 36px); font-family: "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols2", "Arial Unicode MS", "DejaVu Sans", sans-serif; font-variant-emoji: text; }
+    .pc .pc-svg { width: 100%; height: 100%; fill: var(--pf); stroke: var(--ps); stroke-width: 1.1; stroke-linejoin: round; stroke-linecap: round; }
+    .pc.w { --pf: #f2f6fc; --ps: #26334c; color: #f6f9fe; -webkit-text-stroke: 1.3px #23324a; }
+    .pc.b { --pf: #232c3e; --ps: #a6b6d2; color: #141a26; -webkit-text-stroke: 1.1px rgba(240,244,250,0.5); }
     .prompt { margin: 16px auto 4px; font-size: 1.02rem; max-width: 40ch; min-height: 1.4em; }
     .prompt b { color: var(--accent); }
     .feedback { min-height: 1.6em; font-size: 0.95rem; margin-top: 6px; font-weight: 600; }
@@ -153,6 +154,7 @@
     </section>
   </main>
 
+  <script src="./pieces.js"></script>
   <script>
     const GLY = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
     const FILES = "abcdefgh";
@@ -197,7 +199,7 @@
           c.className = "sq " + (((f + r) % 2 === 1) ? "lt" : "dk");
           if (sel === i) c.classList.add("sel");
           if (tg.includes(i)) { c.classList.add("tgt"); if (map[i]) c.classList.add("cap"); }
-          const p = map[i]; if (p) { const s = document.createElement("span"); s.className = "pc " + (isW(p) ? "w" : "b"); s.textContent = GLY[p.toLowerCase()] + "︎"; c.appendChild(s); }
+          const p = map[i]; if (p) { const s = document.createElement("span"); s.className = "pc " + (isW(p) ? "w" : "b"); if (typeof pieceSVG === "function") s.innerHTML = pieceSVG(p); else s.textContent = GLY[p.toLowerCase()] + "︎"; c.appendChild(s); }
           c.onclick = () => click(i); el.appendChild(c);
         }
       }

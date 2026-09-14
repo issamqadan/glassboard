@@ -1,13 +1,26 @@
 :root {
-  --light: #e9edf2;
-  --dark: #6f8bab;
-  --sel: #f6d36b;
-  --tgt: rgba(40, 180, 99, 0.55);
-  --hang: #e5484d;
+  --light: #e6ecf5;
+  --dark: #647d9e;
+  --sel: #f2c96a;
+  --tgt: rgba(20, 28, 46, 0.32);
+  --hang: #e5556a;
   --panel: #17203200;
   --card: #16203400;
   --line: #2a3a58;
   --accent: #9fc0ff;
+  /* piece two-tone */
+  --pf-w: #f2f6fc;
+  --ps-w: #26334c;
+  --pf-b: #232c3e;
+  --ps-b: #a6b6d2;
+  /* board surface + state tokens — a future theme overrides only these */
+  --board-radius: 12px;
+  --board-frame: rgba(255, 255, 255, 0.08);
+  --board-vignette: rgba(5, 9, 16, 0.28);
+  --sel-glow: rgba(242, 201, 106, 0.5);
+  --lastmove: rgba(242, 201, 106, 0.28);
+  --hang-glow: rgba(229, 85, 106, 0.55);
+  --board-drop: rgba(0, 0, 0, 0.72);
 }
 
 * {
@@ -100,9 +113,19 @@ button {
   aspect-ratio: 1 / 1;
   width: min(480px, 92vw);
   flex: 0 0 auto;
-  border-radius: 8px;
+  position: relative;
+  border-radius: var(--board-radius);
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 28px 60px -24px var(--board-drop), 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+/* Framed edge + gentle inner vignette for depth, over the squares. */
+.board::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--board-radius);
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px var(--board-frame), inset 0 0 30px var(--board-vignette);
 }
 
 .sq {
@@ -120,25 +143,38 @@ button {
   background: var(--dark);
 }
 .sq.selected {
-  box-shadow: inset 0 0 0 4px var(--sel);
+  box-shadow: inset 0 0 0 3px var(--sel), inset 0 0 16px -2px var(--sel-glow);
 }
 .sq.hanging {
-  box-shadow: inset 0 0 0 4px var(--hang);
+  box-shadow: inset 0 0 0 3px var(--hang), inset 0 0 14px -3px var(--hang-glow);
 }
+/* Empty legal target — a soft dot. */
 .sq.target::after {
   content: "";
   position: absolute;
-  width: 32%;
-  height: 32%;
+  width: 30%;
+  height: 30%;
   border-radius: 50%;
   background: var(--tgt);
   z-index: 2;
+  animation: dot-in 0.14s ease;
+}
+/* Capturable target — a ring hugging the piece instead of a dot. */
+.sq.target.capture::after {
+  width: 84%;
+  height: 84%;
+  background: none;
+  box-shadow: inset 0 0 0 4px var(--tgt);
+}
+@keyframes dot-in {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 .sq.lastmove::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(246, 211, 107, 0.38);
+  background: var(--lastmove);
   pointer-events: none;
 }
 
@@ -166,27 +202,53 @@ button {
 }
 
 .piece {
-  font-size: clamp(24px, 6.6vw, 46px);
-  line-height: 1;
+  width: 84%;
+  height: 84%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   position: relative;
   z-index: 1;
-  /* Force a TEXT symbol font (which honors `color`) ahead of any OS emoji font,
-     so white pieces render white instead of being swapped for a dark color-emoji. */
+  filter: drop-shadow(0 2px 2.5px rgba(0, 0, 0, 0.32));
+  /* Fallback glyph styling if the SVG set fails to load. */
+  font-size: clamp(22px, 6vw, 42px);
+  line-height: 1;
   font-family: "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols2",
     "Arial Unicode MS", "DejaVu Sans", sans-serif;
   font-variant-emoji: text;
 }
-/* Solid glyphs for both colors, distinguished by fill + outline so pieces
-   stay crisp on light and dark squares alike. */
+.piece .pc-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  fill: var(--pf);
+  stroke: var(--ps);
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
 .piece.white {
-  color: #f7fafc;
-  -webkit-text-stroke: 1.4px #263042;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --pf: var(--pf-w);
+  --ps: var(--ps-w);
+  color: #f7fafc; /* fallback */
+  -webkit-text-stroke: 1.3px #263042;
 }
 .piece.black {
-  color: #121722;
-  -webkit-text-stroke: 1.2px rgba(233, 237, 242, 0.55);
-  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.12);
+  --pf: var(--pf-b);
+  --ps: var(--ps-b);
+  color: #141a26; /* fallback */
+  -webkit-text-stroke: 1.1px rgba(233, 237, 242, 0.5);
+}
+/* Gentle pop on the piece that just moved. */
+@keyframes place {
+  from { transform: scale(0.72); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+.sq.lastmove .piece {
+  animation: place 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sq.lastmove .piece, .sq.target::after { animation: none; }
 }
 
 .panels {

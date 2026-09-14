@@ -80,8 +80,10 @@
     .mini { display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); width:100%; height:100%; }
     .mc { display:grid; place-items:center; }
     .mc.l { background:#b3bed2; } .mc.d { background:#61708c; }
-    .mp { font-size:10px; line-height:1; font-family:"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols2","Arial Unicode MS","DejaVu Sans",sans-serif; font-variant-emoji:text; }
-    .mp.w { color:#f6f9fe; -webkit-text-stroke:0.5px #23324a; } .mp.b { color:#141a26; -webkit-text-stroke:0.4px rgba(240,244,250,0.5); }
+    .mp { width:86%; height:86%; display:flex; align-items:center; justify-content:center; font-size:10px; line-height:1; font-family:"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols2","Arial Unicode MS","DejaVu Sans",sans-serif; font-variant-emoji:text; }
+    .mp .pc-svg { width:100%; height:100%; fill:var(--pf); stroke:var(--ps); stroke-width:1.3; stroke-linejoin:round; stroke-linecap:round; }
+    .mp.w { --pf:#f2f6fc; --ps:#26334c; color:#f6f9fe; -webkit-text-stroke:0.5px #23324a; }
+    .mp.b { --pf:#232c3e; --ps:#a6b6d2; color:#141a26; -webkit-text-stroke:0.4px rgba(240,244,250,0.5); }
     .g-turn { font-size:0.74rem; font-weight:640; margin-top:7px; }
     .g-turn.you { color:var(--good); } .g-turn.them { color:var(--faint); }
     .g-main { flex:1; min-width:0; }
@@ -212,6 +214,7 @@
 
   <div class="toasts" id="toasts"></div>
 
+  <script src="./pieces.js"></script>
   <script>
     const TIERS = [
       { max:100, name:'Off',        text:'An even match — no assistance.' },
@@ -340,7 +343,8 @@
       for (const [r, f] of order) {
         const dark = (f + r) % 2 === 1;
         const c = grid[r] && grid[r][f];
-        cells += `<div class="mc ${dark ? 'd' : 'l'}">${c ? `<span class="mp ${c === c.toUpperCase() ? 'w' : 'b'}">${MINI_GLYPH[c.toLowerCase()]}︎</span>` : ''}</div>`;
+        const pc = c ? (typeof pieceSVG === 'function' ? pieceSVG(c) : MINI_GLYPH[c.toLowerCase()] + '︎') : '';
+        cells += `<div class="mc ${dark ? 'd' : 'l'}">${c ? `<span class="mp ${c === c.toUpperCase() ? 'w' : 'b'}">${pc}</span>` : ''}</div>`;
       }
       return `<div class="mini">${cells}</div>`;
     }
