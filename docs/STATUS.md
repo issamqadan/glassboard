@@ -1,7 +1,7 @@
 # Status — where Glassboard stands
 
 > Running context log so any session can pick up instantly. Newest at top.
-> **Last updated:** 2026-09-15 · tag `v0.2.0`
+> **Last updated:** 2026-09-15 · tag `v0.2.1`
 
 **Name/domain (parked 2026-09-06):** keeping **Glassboard** for now; a final
 naming pass is deferred (ChatGPT floated descriptive "ChessLevel/LevelChess"
@@ -60,6 +60,10 @@ the calibration mission, and a 4-phase build plan. Design concept published
   **draws the picked plan on the board** and relays it to the opponent
   (glass-box). Preview: `web/strategy.html`. **Shows when you're the assisted
   side (gap ≥ 500) on your turn.**
+- ✅ **Force-assist testing toggle** (`v0.2.1`): `setAssistOverride` (bindings) +
+  a "force" checkbox / `?assist=<rung>` in `multiplayer.html` to turn assistance
+  on for the stronger side too — feel the strategy UX from either seat.
+  Transparent (glass-boxed); a testing aid, **not** the fair default.
 
 ## Done (earlier)
 
