@@ -112,6 +112,16 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-15** — **P3 strategy layer LIVE (layers 1–2).** Shipped the
+  context-aware strategy engine (`core/assist/strategy.rs`): phase detection +
+  a named-plan library scored by board-state fit (Win the loose piece, Develop &
+  Castle, Seize the Centre, Attack the King, Simplify, Push the Passed Pawn),
+  each with a visual plan (arrows+rings), step tracker, concrete move, + an
+  opponent-intent read. Exposed via WASM; wired into the live game as a Strategy
+  panel that draws the chosen plan on the board (oriented overlay) and relays it
+  to the opponent (glass-box). Preview page (`strategy.html`) proved the UX.
+  **Remaining P3/beyond:** layer-3 personalization (needs game-logging to Neon),
+  richer named-plan library, LLM phrasing, AI-page wiring.
 - **2026-09-15** — **Durable accounts LIVE on Neon.** `DATABASE_URL` set on Render;
   server boots `Accounts: Postgres (durable)`. Verified end-to-end against
   production: register (201) → sign back in returning:true (200, read from
