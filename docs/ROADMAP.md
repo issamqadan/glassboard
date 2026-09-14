@@ -112,6 +112,13 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-15** — **Neon-ready durable accounts + richer lobby.** Server has a
+  storage layer: Postgres (Neon) when `DATABASE_URL` is set (auto-creates the
+  `players` table), else in-memory — so `/account` becomes durable + cross-device
+  once Neon is connected (sqlx, rustls TLS, runtime queries; Dockerfile updated
+  for TLS + CA certs). Games now carry a `started` timestamp; lobby cards show
+  opponent name+rating, whose move, and "started N ago". **Pending: user sets
+  `DATABASE_URL` on Render to activate durability** (games persistence still TODO).
 - **2026-09-15** — **Registration (in-memory) + more fixes.** Beginner tutorial
   now covers all six pieces + the goal. Lobby shows games you **joined** (not just
   created) by merging the server's game list. Shipped **name + 4-digit PIN
