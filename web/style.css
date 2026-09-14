@@ -96,10 +96,10 @@ button {
 .board {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
   aspect-ratio: 1 / 1;
-  flex: 1 1 380px;
-  max-width: 480px;
-  min-width: 300px;
+  width: min(480px, 92vw);
+  flex: 0 0 auto;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
@@ -166,11 +166,14 @@ button {
 }
 
 .piece {
-  font-size: clamp(26px, 7.5vw, 50px);
+  font-size: clamp(24px, 6.6vw, 46px);
   line-height: 1;
   position: relative;
   z-index: 1;
-  /* Render chess glyphs as text (respecting color), never as color emoji. */
+  /* Force a TEXT symbol font (which honors `color`) ahead of any OS emoji font,
+     so white pieces render white instead of being swapped for a dark color-emoji. */
+  font-family: "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols2",
+    "Arial Unicode MS", "DejaVu Sans", sans-serif;
   font-variant-emoji: text;
 }
 /* Solid glyphs for both colors, distinguished by fill + outline so pieces

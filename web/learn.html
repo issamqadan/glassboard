@@ -3,187 +3,316 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Glassboard — How it works & learn chess</title>
+  <title>Glassboard — Find your level</title>
   <style>
     :root {
-      --bg: #080b12; --bg-2: #0c111b; --glass: rgba(255,255,255,0.045); --glass-hi: rgba(255,255,255,0.07);
+      --bg: #080b12; --bg-2: #0c111b; --glass: rgba(255,255,255,0.05); --glass-hi: rgba(255,255,255,0.08);
       --line: #1d2740; --line-2: #2b3856; --text: #eaf0fb; --muted: #93a2c0; --faint: #5d6c8c;
-      --accent: #5cc9ec; --accent-2: #7ee0d6; --accent-ink: #04222d; --gold: #e0be79;
-      --mono: ui-monospace, "SF Mono", Menlo, monospace;
+      --accent: #5cc9ec; --accent-2: #7ee0d6; --ink: #04222d; --gold: #e0be79;
+      --good: #45c86e; --bad: #f26d7a;
+      --lt: #b3bed2; --dk: #61708c;
       --sans: ui-sans-serif, system-ui, -apple-system, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, monospace;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: var(--sans); color: var(--text); line-height: 1.6; min-height: 100vh;
-      background: radial-gradient(1100px 650px at 85% -10%, rgba(92,201,236,0.09), transparent 60%), var(--bg); }
-    .wrap { max-width: 820px; margin: 0 auto; padding: 0 22px 90px; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    header.top { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--line);
-      backdrop-filter: blur(18px); background: rgba(8,11,18,0.8); }
-    .top .wrap { display: flex; align-items: center; gap: 14px; height: 60px; padding-bottom: 0; }
+    body { margin: 0; font-family: var(--sans); color: var(--text); min-height: 100vh; line-height: 1.55;
+      -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; align-items: center;
+      background: radial-gradient(1100px 640px at 50% -12%, rgba(92,201,236,0.12), transparent 62%), var(--bg); }
+    body::before { content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+      background-image: linear-gradient(rgba(255,255,255,0.02) 1px,transparent 1px), linear-gradient(90deg,rgba(255,255,255,0.02) 1px,transparent 1px);
+      background-size: 48px 48px; mask-image: radial-gradient(circle at 50% 20%,#000,transparent 76%); }
+    .top { position: sticky; top: 0; z-index: 5; width: 100%; display: flex; align-items: center; gap: 12px;
+      padding: 14px 22px; border-bottom: 1px solid var(--line); backdrop-filter: blur(16px); background: rgba(8,11,18,0.7); }
     .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
-    .brand .mark { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--accent-ink);
+    .brand .mark { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--ink);
       background: linear-gradient(150deg, var(--accent), #3a8fb3); font-size: 16px; }
-    .spacer { flex: 1; }
-    .backlink { font-size: 0.9rem; }
-    h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); letter-spacing: -0.02em; margin: 34px 0 6px; text-wrap: balance; }
-    .lede { color: var(--muted); font-size: 1.05rem; margin: 0 0 24px; }
-    .tabs { display: inline-flex; padding: 4px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; gap: 4px; margin-bottom: 26px; }
-    .tabs button { background: none; border: 0; color: var(--muted); font: inherit; font-weight: 560; font-size: 0.92rem; padding: 9px 16px; border-radius: 9px; cursor: pointer; }
-    .tabs button.active { background: var(--glass-hi); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
-    section.panel { display: none; animation: rise 0.4s ease both; }
-    section.panel.active { display: block; }
-    @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-    h2 { font-size: 1.3rem; letter-spacing: -0.01em; margin: 30px 0 10px; }
-    h2:first-child { margin-top: 0; }
-    p { color: #c6d1e4; }
-    p b, li b { color: var(--text); }
-    .card { border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; background: var(--glass); margin: 14px 0; }
-    .eyebrow { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--accent); font-weight: 650; }
-    /* assistance ladder */
-    .ladder { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }
-    .rung { padding: 13px; border-radius: 11px; border: 1px solid var(--line); background: var(--bg-2); position: relative; overflow: hidden; }
-    .rung::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--rc); }
-    .rung .rn { font-weight: 640; font-size: 0.92rem; }
-    .rung .rd { font-size: 0.76rem; color: var(--faint); margin-top: 4px; }
-    /* piece cards */
-    .piece-row { display: flex; gap: 18px; align-items: center; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: var(--glass); margin: 12px 0; }
-    .mini { display: grid; grid-template-columns: repeat(7, 1fr); width: 154px; height: 154px; flex-shrink: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--line-2); }
-    .mc { position: relative; display: grid; place-items: center; }
-    .mc.l { background: #b3bed2; } .mc.d { background: #61708c; }
-    .mc.t::after { content: ""; position: absolute; width: 34%; height: 34%; border-radius: 50%; background: rgba(92,201,236,0.85); box-shadow: 0 0 8px rgba(92,201,236,0.6); }
-    .mc .pg { font-size: 20px; color: #10151d; -webkit-text-stroke: 1px rgba(240,244,250,0.5); z-index: 1; }
-    .piece-info h3 { margin: 0 0 4px; font-size: 1.1rem; display: flex; align-items: center; gap: 9px; }
-    .piece-info h3 .big { font-size: 1.5rem; color: #eef3fb; -webkit-text-stroke: 1px #23324a; }
-    .piece-info p { margin: 0; font-size: 0.92rem; color: #b9c6da; }
-    ul.clean { padding-left: 18px; color: #c6d1e4; }
-    ul.clean li { margin: 7px 0; }
-    .cta { display: inline-flex; align-items: center; gap: 9px; margin-top: 26px; font-weight: 620; padding: 13px 22px; border-radius: 12px;
-      background: linear-gradient(140deg, var(--accent), #3a97bd); color: var(--accent-ink); }
-    .cta:hover { text-decoration: none; filter: brightness(1.06); }
-    @media (max-width: 620px) { .ladder { grid-template-columns: 1fr; } .piece-row { flex-direction: column; align-items: flex-start; } }
+    .top .sp { flex: 1; }
+    .top a { color: var(--muted); font-size: 0.86rem; text-decoration: none; } .top a:hover { color: var(--accent); }
+    main { position: relative; z-index: 1; width: 100%; max-width: 560px; padding: 26px 22px 80px; text-align: center; flex: 1; }
+
+    /* progress dots */
+    .dots { display: flex; gap: 7px; justify-content: center; margin-bottom: 26px; }
+    .dots i { width: 26px; height: 4px; border-radius: 3px; background: var(--line-2); transition: background .3s; }
+    .dots i.on { background: var(--accent); }
+
+    .step { display: none; animation: rise .45s cubic-bezier(.2,.7,.2,1) both; }
+    .step.on { display: block; }
+    @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+    h1 { font-size: clamp(1.7rem, 5vw, 2.4rem); letter-spacing: -0.025em; margin: 12px 0 10px; text-wrap: balance; }
+    .eyebrow { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.18em; color: var(--accent); font-weight: 650; }
+    p.lede { color: var(--muted); font-size: 1.05rem; margin: 0 auto 26px; max-width: 42ch; }
+
+    .btn { display: inline-flex; align-items: center; gap: 9px; font-weight: 640; font-size: 1rem; padding: 15px 26px; border: 0; border-radius: 13px; cursor: pointer;
+      color: var(--ink); background: linear-gradient(140deg, var(--accent), #3a97bd); box-shadow: 0 14px 34px -14px rgba(92,201,236,0.8), inset 0 0 0 1px rgba(255,255,255,0.28); transition: transform .14s, box-shadow .2s; }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 20px 44px -14px rgba(92,201,236,0.95), inset 0 0 0 1px rgba(255,255,255,0.4); }
+    .btn:active { transform: translateY(0) scale(.99); }
+    .btn.ghost { background: var(--glass); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+    .btn.ghost:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+    .link { background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; margin-top: 16px; }
+    .link:hover { color: var(--accent); }
+
+    /* choice cards */
+    .cards { display: grid; gap: 12px; margin-top: 8px; }
+    .choice { text-align: left; display: flex; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 16px;
+      background: linear-gradient(160deg, var(--glass-hi), var(--glass)); cursor: pointer; transition: transform .14s, border-color .2s; color: inherit; }
+    .choice:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .choice .ic { font-size: 30px; line-height: 1; }
+    .choice h3 { margin: 0 0 3px; font-size: 1.06rem; }
+    .choice p { margin: 0; color: var(--muted); font-size: 0.86rem; }
+
+    /* board */
+    .board-wrap { max-width: 380px; margin: 0 auto; }
+    .board { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); aspect-ratio: 1/1; border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--line-2); box-shadow: 0 20px 48px -20px rgba(0,0,0,0.8); }
+    .board.flash-good { animation: fg .5s; } .board.flash-bad { animation: fb .45s; }
+    @keyframes fg { 0%,100%{box-shadow:0 20px 48px -20px rgba(0,0,0,0.8)} 40%{box-shadow:0 0 0 3px var(--good),0 20px 48px -20px rgba(0,0,0,0.8)} }
+    @keyframes fb { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-7px)} 40%{transform:translateX(7px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+    .sq { position: relative; display: grid; place-items: center; cursor: pointer; }
+    .sq.lt { background: var(--lt); } .sq.dk { background: var(--dk); }
+    .sq.sel::before { content:""; position:absolute; inset:0; box-shadow: inset 0 0 0 3px var(--accent); }
+    .sq.tgt::after { content:""; position:absolute; width:30%; height:30%; border-radius:50%; background: rgba(92,201,236,0.75); box-shadow:0 0 8px rgba(92,201,236,0.6); }
+    .sq.tgt.cap::after { width:82%; height:82%; border-radius:50%; background:none; box-shadow: inset 0 0 0 4px rgba(92,201,236,0.7); }
+    .pc { font-size: clamp(20px, 7vw, 36px); line-height: 1; z-index: 1;
+      font-family: "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols2", "Arial Unicode MS", "DejaVu Sans", sans-serif; font-variant-emoji: text; }
+    .pc.w { color: #f6f9fe; -webkit-text-stroke: 1.3px #23324a; }
+    .pc.b { color: #141a26; -webkit-text-stroke: 1.1px rgba(240,244,250,0.5); }
+    .prompt { margin: 16px auto 4px; font-size: 1.02rem; max-width: 40ch; min-height: 1.4em; }
+    .prompt b { color: var(--accent); }
+    .feedback { min-height: 1.6em; font-size: 0.95rem; margin-top: 6px; font-weight: 600; }
+    .feedback.good { color: var(--good); } .feedback.bad { color: var(--bad); }
+    .task-meta { display: flex; align-items: center; justify-content: space-between; max-width: 380px; margin: 0 auto 12px; color: var(--faint); font-size: 0.82rem; }
+
+    /* result */
+    .result-badge { width: 150px; height: 150px; margin: 8px auto 18px; border-radius: 50%; display: grid; place-items: center;
+      background: radial-gradient(circle at 50% 35%, rgba(92,201,236,0.25), rgba(92,201,236,0.05)); border: 1px solid var(--line-2); position: relative; }
+    .result-badge .num { font-size: 2.6rem; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+    .result-badge .lab { position: absolute; bottom: 26px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); }
+    .field { margin: 18px auto 0; max-width: 320px; text-align: left; }
+    .field label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 7px; }
+    .field input { width: 100%; padding: 13px 15px; border-radius: 12px; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); font: inherit; }
+    .field input:focus { border-color: var(--accent); outline: none; }
   </style>
 </head>
 <body>
   <header class="top">
-    <div class="wrap">
-      <span class="brand"><span class="mark">♞</span> Glassboard</span>
-      <span class="spacer"></span>
-      <a class="backlink" href="./portal.html">← Back to games</a>
-    </div>
+    <span class="brand"><span class="mark">♞</span> Glassboard</span>
+    <span class="sp"></span>
+    <a href="./portal.html">Skip →</a>
   </header>
 
-  <main class="wrap">
-    <h1>Welcome to Glassboard</h1>
-    <p class="lede">Two quick reads: how Glassboard makes an uneven match fair, and — if you’re new — how chess actually works.</p>
+  <main>
+    <div class="dots"><i class="on"></i><i></i><i></i></div>
 
-    <div class="tabs">
-      <button class="active" data-tab="how">How Glassboard works</button>
-      <button data-tab="chess">New to chess? Start here</button>
-    </div>
-
-    <!-- HOW GLASSBOARD WORKS -->
-    <section class="panel active" id="tab-how">
-      <h2>Chess where the help is in the open</h2>
-      <p>Normally, a strong player and a beginner can’t have a fun game — it’s over too fast. Glassboard fixes that with a <b>declared handicap</b>: the weaker player gets <b>AI assistance</b>, and the wider the gap in skill, the more help they get.</p>
-      <p>The one rule that makes it fair: <b>every bit of help is shown to your opponent, too.</b> Nothing is hidden. It’s not cheating — it’s an agreed, visible head-start, like strokes in golf.</p>
-
-      <div class="card">
-        <span class="eyebrow">The idea in three steps</span>
-        <ul class="clean">
-          <li><b>Set your levels.</b> Each player says how well they play (a tap is enough).</li>
-          <li><b>Glassboard sizes the help.</b> It gives the weaker side assistance matched to the gap.</li>
-          <li><b>Play in the open.</b> Both players see every hint — and as the weaker player improves, the help fades away.</li>
-        </ul>
-      </div>
-
-      <h2>The levels of assistance</h2>
-      <p>From a light nudge to a full plan — the bigger the skill gap, the higher the level:</p>
-      <div class="ladder" id="ladder"></div>
-      <p style="color:var(--faint);font-size:0.9rem">The goal isn’t to lean on the AI forever — it’s to need <b style="color:var(--text)">less</b> of it over time.</p>
-
-      <a class="cta" href="./portal.html">Got it — let’s play →</a>
+    <!-- WELCOME -->
+    <section class="step on" id="s-welcome">
+      <div style="font-size:48px;margin:14px 0 4px">♟︎♞♝♜♛♚</div>
+      <span class="eyebrow">Welcome</span>
+      <h1>Let's find your level</h1>
+      <p class="lede">A quick, hands-on check — you'll make a few moves on the board, and Glassboard figures out how much help to give you. Under a minute.</p>
+      <button class="btn" onclick="go('know')">Start →</button>
     </section>
 
-    <!-- LEARN CHESS -->
-    <section class="panel" id="tab-chess">
-      <h2>The goal of chess</h2>
-      <p>Two armies face off on an 8×8 board. Your aim is to trap the other player’s <b>King</b> so it can’t escape being captured — that’s <b>checkmate</b>, and it wins the game. You don’t need to memorize anything to start; Glassboard will help you.</p>
-      <p style="color:var(--faint);font-size:0.9rem">Below: each piece and how it moves. The <span style="color:var(--accent)">blue dots</span> show where a piece in the middle could go.</p>
-
-      <div id="pieces"></div>
-
-      <div class="card">
-        <span class="eyebrow">A few more things</span>
-        <ul class="clean">
-          <li><b>Check:</b> when a King is under attack. You must get it to safety immediately.</li>
-          <li><b>Checkmate:</b> a King in check with no way out — game over.</li>
-          <li><b>Promotion:</b> get a pawn to the far end and it turns into a Queen.</li>
-          <li><b>Taking turns:</b> White moves first, then players alternate.</li>
-        </ul>
+    <!-- HOW MUCH DO YOU KNOW -->
+    <section class="step" id="s-know">
+      <span class="eyebrow">Step 1</span>
+      <h1>How much chess do you know?</h1>
+      <div class="cards" style="margin-top:18px">
+        <button class="choice" onclick="pick('new')"><span class="ic">🌱</span><div><h3>I've never really played</h3><p>Show me the pieces and how they move.</p></div></button>
+        <button class="choice" onclick="pick('some')"><span class="ic">♟️</span><div><h3>I know the basics</h3><p>I know how the pieces move.</p></div></button>
+        <button class="choice" onclick="pick('play')"><span class="ic">♞</span><div><h3>I play regularly</h3><p>Let's see what you've got.</p></div></button>
       </div>
+    </section>
 
-      <a class="cta" href="./portal.html">Ready to try — let’s play →</a>
+    <!-- TUTORIAL (beginners) -->
+    <section class="step" id="s-tutorial">
+      <span class="eyebrow">Learn by doing</span>
+      <h1 id="tut-title">Meet the knight</h1>
+      <p class="prompt" id="tut-prompt"></p>
+      <div class="board-wrap"><div class="board" id="tut-board"></div></div>
+      <div class="feedback" id="tut-fb"></div>
+    </section>
+
+    <!-- ASSESSMENT -->
+    <section class="step" id="s-assess">
+      <div class="task-meta"><span id="task-n">Puzzle 1 of 3</span><button class="link" style="margin:0" onclick="showHint()">Need a hint?</button></div>
+      <p class="prompt" id="task-prompt"></p>
+      <div class="board-wrap"><div class="board" id="task-board"></div></div>
+      <div class="feedback" id="task-fb"></div>
+    </section>
+
+    <!-- RESULT -->
+    <section class="step" id="s-result">
+      <span class="eyebrow">Your level</span>
+      <div class="result-badge"><span class="num" id="res-num">1200</span><span class="lab" id="res-lab">Casual</span></div>
+      <h1 id="res-title" style="font-size:1.5rem">Nice — you're all set</h1>
+      <p class="lede" id="res-sub"></p>
+      <div class="field"><label>What should we call you?</label><input id="res-name" placeholder="e.g. Maya" maxlength="24"></div>
+      <div style="margin-top:20px"><button class="btn" onclick="finish()">Save &amp; play →</button></div>
+      <button class="link" onclick="restart()">Take it again</button>
     </section>
   </main>
 
   <script>
     const GLY = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
+    const FILES = "abcdefgh";
+    const idxToAlg = i => FILES[i % 8] + (((i / 8) | 0) + 1);
+    const algToIdx = a => FILES.indexOf(a[0]) + (parseInt(a[1], 10) - 1) * 8;
+    const isW = p => p === p.toUpperCase();
+    const fileOf = i => i % 8, rankOf = i => (i / 8) | 0;
 
-    // assistance ladder
-    const RUNGS = [
-      ["Off", "An even match — no help", "var(--line-2)"],
-      ["Awareness", "Warns of hanging pieces & checks", "#5c6f8c"],
-      ["Coaching", "Explains the threats in words", "#6f86ac"],
-      ["Strategy", "A named plan to follow", "var(--accent)"],
-      ["Guided", "A plan + the move to play", "#8fd0e0"],
-      ["Autopilot", "Plays the move for you", "var(--gold)"],
-    ];
-    document.getElementById("ladder").innerHTML = RUNGS.map(([n, d, c]) =>
-      `<div class="rung" style="--rc:${c}"><div class="rn">${n}</div><div class="rd">${d}</div></div>`).join("");
-
-    // piece move diagrams on a 7×7, piece in the centre (3,3)
-    const PIECES = [
-      { k: "k", name: "King", how: "Moves one square in any direction. It’s the piece you must protect — if it can’t escape capture, you lose." },
-      { k: "q", name: "Queen", how: "The most powerful piece: any number of squares in a straight line — across, up/down, or diagonally." },
-      { k: "r", name: "Rook", how: "Any number of squares in straight lines — across or up and down." },
-      { k: "b", name: "Bishop", how: "Any number of squares diagonally. Each bishop stays on one colour all game." },
-      { k: "n", name: "Knight", how: "Moves in an “L” — two squares, then one at a right angle. The only piece that can jump over others." },
-      { k: "p", name: "Pawn", how: "Steps forward one square (two on its first move) and captures one square diagonally forward. Reach the end → it becomes a Queen." },
-    ];
-    function targets(k) {
-      const C = 3, res = [], inb = (r, c) => r >= 0 && r < 7 && c >= 0 && c < 7;
-      const add = (r, c) => { if (inb(r, c)) res.push(r * 7 + c); };
-      const ray = (dr, dc) => { let r = C + dr, c = C + dc; while (inb(r, c)) { res.push(r * 7 + c); r += dr; c += dc; } };
-      if (k === "r" || k === "q") { ray(1, 0); ray(-1, 0); ray(0, 1); ray(0, -1); }
-      if (k === "b" || k === "q") { ray(1, 1); ray(1, -1); ray(-1, 1); ray(-1, -1); }
-      if (k === "k") [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([r,c]) => add(C+r, C+c));
-      if (k === "n") [[1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1],[-2,1],[-1,2]].forEach(([r,c]) => add(C+r, C+c));
-      if (k === "p") { add(C-1, C); add(C-2, C); add(C-1, C-1); add(C-1, C+1); }
-      return new Set(res);
+    function mapFromFen(fb) {
+      const map = {}, rows = fb.split("/");
+      for (let i = 0; i < 8; i++) { const rank = 7 - i; let file = 0; for (const ch of rows[i]) { if (/\d/.test(ch)) file += +ch; else { map[rank * 8 + file] = ch; file++; } } }
+      return map;
     }
-    function mini(k) {
-      const t = targets(k); let cells = "";
-      for (let r = 0; r < 7; r++) for (let c = 0; c < 7; c++) {
-        const i = r * 7 + c, dark = (r + c) % 2 === 1;
-        const center = r === 3 && c === 3;
-        cells += `<div class="mc ${dark ? "d" : "l"}${t.has(i) ? " t" : ""}">${center ? `<span class="pg">${GLY[k]}︎</span>` : ""}</div>`;
+    // pseudo-legal targets (no check logic — fine for a tutorial/assessment)
+    function movesFrom(map, from) {
+      const p = map[from]; if (!p) return [];
+      const kind = p.toLowerCase(), white = isW(p), f = fileOf(from), r = rankOf(from), res = [];
+      const inb = (ff, rr) => ff >= 0 && ff < 8 && rr >= 0 && rr < 8;
+      const at = (ff, rr) => map[rr * 8 + ff];
+      const enemy = q => q && isW(q) !== white;
+      const ray = (df, dr) => { let ff = f + df, rr = r + dr; while (inb(ff, rr)) { const q = at(ff, rr); if (!q) res.push(rr * 8 + ff); else { if (enemy(q)) res.push(rr * 8 + ff); break; } ff += df; rr += dr; } };
+      const step = (df, dr) => { const ff = f + df, rr = r + dr; if (inb(ff, rr)) { const q = at(ff, rr); if (!q || enemy(q)) res.push(rr * 8 + ff); } };
+      if (kind === "r" || kind === "q") { ray(1, 0); ray(-1, 0); ray(0, 1); ray(0, -1); }
+      if (kind === "b" || kind === "q") { ray(1, 1); ray(1, -1); ray(-1, 1); ray(-1, -1); }
+      if (kind === "n") [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]].forEach(([a, b]) => step(a, b));
+      if (kind === "k") [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([a, b]) => step(a, b));
+      if (kind === "p") {
+        const dir = white ? 1 : -1, start = white ? 1 : 6;
+        if (inb(f, r + dir) && !at(f, r + dir)) { res.push((r + dir) * 8 + f); if (r === start && !at(f, r + 2 * dir)) res.push((r + 2 * dir) * 8 + f); }
+        for (const df of [-1, 1]) if (inb(f + df, r + dir) && enemy(at(f + df, r + dir))) res.push((r + dir) * 8 + (f + df));
       }
-      return `<div class="mini">${cells}</div>`;
+      return res;
     }
-    document.getElementById("pieces").innerHTML = PIECES.map(p =>
-      `<div class="piece-row">${mini(p.k)}<div class="piece-info"><h3><span class="big">${GLY[p.k]}︎</span> ${p.name}</h3><p>${p.how}</p></div></div>`
-    ).join("");
+    // interactive board
+    function board(elId, map, opts) {
+      const el = document.getElementById(elId); let sel = null;
+      const canSel = i => { const p = map[i]; if (!p) return false; if (opts.only != null) return i === opts.only; if (opts.color) return (isW(p) ? "w" : "b") === opts.color; return true; };
+      function render() {
+        el.innerHTML = ""; const tg = sel != null ? movesFrom(map, sel) : [];
+        for (let r = 7; r >= 0; r--) for (let f = 0; f < 8; f++) {
+          const i = r * 8 + f, c = document.createElement("div");
+          c.className = "sq " + (((f + r) % 2 === 1) ? "lt" : "dk");
+          if (sel === i) c.classList.add("sel");
+          if (tg.includes(i)) { c.classList.add("tgt"); if (map[i]) c.classList.add("cap"); }
+          const p = map[i]; if (p) { const s = document.createElement("span"); s.className = "pc " + (isW(p) ? "w" : "b"); s.textContent = GLY[p.toLowerCase()] + "︎"; c.appendChild(s); }
+          c.onclick = () => click(i); el.appendChild(c);
+        }
+      }
+      function click(i) {
+        if (sel === null) { if (canSel(i)) { sel = i; render(); } return; }
+        if (i === sel) { sel = null; render(); return; }
+        if (movesFrom(map, sel).includes(i)) { const from = sel; sel = null; render(); opts.onMove(from, i, render); }
+        else if (canSel(i)) { sel = i; render(); }
+        else { sel = null; render(); }
+      }
+      render();
+      return { render, clearSel: () => { sel = null; render(); } };
+    }
+    const apply = (map, from, to) => { map[to] = map[from]; delete map[from]; };
+    const flash = (elId, ok) => { const b = document.getElementById(elId); b.classList.remove("flash-good", "flash-bad"); void b.offsetWidth; b.classList.add(ok ? "flash-good" : "flash-bad"); };
 
-    // tabs
-    document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
-      const t = b.dataset.tab;
-      document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
-      document.querySelectorAll(".panel").forEach(s => s.classList.toggle("active", s.id === "tab-" + t));
+    // ---------- flow ----------
+    let path = null, dotIndex = 0;
+    function setDots(n) { document.querySelectorAll(".dots i").forEach((d, k) => d.classList.toggle("on", k <= n)); }
+    function go(id) {
+      document.querySelectorAll(".step").forEach(s => s.classList.remove("on"));
+      document.getElementById("s-" + id).classList.add("on");
       window.scrollTo({ top: 0, behavior: "smooth" });
-    }));
-    // deep link: learn.html#chess opens the chess tab
-    if (location.hash === "#chess") document.querySelector('.tabs button[data-tab="chess"]').click();
+    }
+    function pick(p) { path = p; if (p === "new") { setDots(1); startTutorial(); } else { setDots(1); startAssess(); } }
+
+    // ---------- tutorial (beginners) ----------
+    const TUT = [
+      { title: "Meet the knight ♞", prompt: "The knight moves in an <b>L</b> — and it can jump over pieces. Tap it, then tap a blue square to move.", fen: "8/8/8/8/8/8/8/8", place: { 27: "N" } },
+      { title: "The rook ♜", prompt: "The rook moves in <b>straight lines</b> — as far as you like. Tap it and move it.", fen: "8/8/8/8/8/8/8/8", place: { 27: "R" } },
+      { title: "The pawn ♟", prompt: "Pawns step <b>forward</b> (two on the first move) and capture <b>diagonally</b>. Move it forward.", fen: "8/8/8/8/8/8/8/8", place: { 11: "P" } },
+    ];
+    let tutStep = 0;
+    function startTutorial() { tutStep = 0; go("tutorial"); loadTut(); }
+    function loadTut() {
+      const t = TUT[tutStep];
+      document.getElementById("tut-title").innerHTML = t.title;
+      document.getElementById("tut-prompt").innerHTML = t.prompt;
+      document.getElementById("tut-fb").textContent = "";
+      const map = mapFromFen(t.fen); Object.assign(map, t.place);
+      const only = +Object.keys(t.place)[0];
+      board("tut-board", map, {
+        only, onMove: (from, to, render) => {
+          apply(map, from, to); render(); flash("tut-board", true);
+          const fb = document.getElementById("tut-fb"); fb.className = "feedback good"; fb.textContent = "Nice move! 👏";
+          setTimeout(() => { tutStep++; if (tutStep < TUT.length) loadTut(); else finishTutorial(); }, 900);
+        }
+      });
+    }
+    function finishTutorial() {
+      // beginners: goal explainer, then a beginner level
+      estimate = 500;
+      showResult("You've got the idea!", "You just moved your first pieces. Glassboard will guide you the rest of the way — with help that's always shown to your opponent.");
+    }
+
+    // ---------- assessment ----------
+    const PUZZLES = [
+      { fen: "4k3/8/8/3q4/8/8/8/3RK3", prompt: "White to move. The black <b>queen</b> is undefended — capture it!", sol: ["d1", "d5"], hint: "Slide your rook straight up the d-file." },
+      { fen: "6k1/5ppp/8/8/8/8/8/R6K", prompt: "White to move. <b>Checkmate</b> the king in one move.", sol: ["a1", "a8"], hint: "The king is boxed in by its own pawns — attack the back rank." },
+      { fen: "3k4/8/8/8/7r/8/8/3Q2K1", prompt: "White to move. Find a <b>check that also wins the rook</b>.", sol: ["d1", "d4"], hint: "A queen can hit along a file and a rank at the same time." },
+    ];
+    let pz = 0, solved = 0, tries = 0, estimate = 1200;
+    function startAssess() { pz = 0; solved = 0; go("assess"); loadPuzzle(); }
+    function loadPuzzle() {
+      const p = PUZZLES[pz]; tries = 0;
+      document.getElementById("task-n").textContent = `Puzzle ${pz + 1} of ${PUZZLES.length}`;
+      document.getElementById("task-prompt").innerHTML = p.prompt;
+      document.getElementById("task-fb").textContent = "";
+      const map = mapFromFen(p.fen);
+      board("task-board", map, {
+        color: "w", onMove: (from, to, render) => {
+          const ok = idxToAlg(from) === p.sol[0] && idxToAlg(to) === p.sol[1];
+          const fb = document.getElementById("task-fb");
+          if (ok) {
+            apply(map, from, to); render(); flash("task-board", true);
+            if (tries === 0) solved++;
+            fb.className = "feedback good"; fb.textContent = "Correct! ✅";
+            setTimeout(() => { pz++; if (pz < PUZZLES.length) loadPuzzle(); else finishAssess(); }, 1000);
+          } else {
+            tries++; flash("task-board", false);
+            fb.className = "feedback bad";
+            fb.textContent = tries >= 2 ? "Not quite — tap “Need a hint?” or try once more." : "Not that one — have another look.";
+          }
+        }
+      });
+    }
+    function showHint() { const fb = document.getElementById("task-fb"); const p = PUZZLES[pz]; if (p) { fb.className = "feedback"; fb.style.color = "var(--muted)"; fb.textContent = "💡 " + p.hint; } }
+    function finishAssess() {
+      // 700 + 350 per solved-first-try; nudge up for the "I play regularly" path
+      estimate = 700 + solved * 350 + (path === "play" ? 150 : 0);
+      estimate = Math.max(500, Math.min(2400, Math.round(estimate / 50) * 50));
+      const msg = solved === 3 ? "Sharp — you found them all." : solved === 0 ? "No worries — Glassboard will do the heavy lifting." : `You solved ${solved} of 3.`;
+      showResult("Here's your level", msg + " You can always change it later.");
+    }
+
+    // ---------- result ----------
+    function bandOf(r) { return r < 700 ? "Beginner" : r < 1100 ? "Improver" : r < 1500 ? "Casual" : r < 1900 ? "Club player" : "Expert"; }
+    function showResult(title, sub) {
+      setDots(2);
+      document.getElementById("res-title").textContent = title;
+      document.getElementById("res-sub").textContent = sub;
+      document.getElementById("res-lab").textContent = bandOf(estimate);
+      try { const m = JSON.parse(localStorage.getItem("gb_me")); if (m && m.name) document.getElementById("res-name").value = m.name; } catch {}
+      go("result");
+      // count-up animation
+      const el = document.getElementById("res-num"); let cur = Math.max(300, estimate - 600);
+      const t = setInterval(() => { cur += 30; if (cur >= estimate) { cur = estimate; clearInterval(t); } el.textContent = cur; }, 22);
+    }
+    function finish() {
+      const name = document.getElementById("res-name").value.trim() || "Player";
+      const prev = (() => { try { return JSON.parse(localStorage.getItem("gb_me")) || {}; } catch { return {}; } })();
+      localStorage.setItem("gb_me", JSON.stringify({ name, rating: estimate }));
+      location.href = "./portal.html";
+    }
+    function restart() { setDots(0); go("welcome"); }
   </script>
 </body>
 </html>
