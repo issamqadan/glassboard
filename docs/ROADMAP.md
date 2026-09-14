@@ -112,6 +112,13 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-14** — **Onboarding pivot → interactive + board fixes.** The static
+  learn page felt like a manual; rebuilt `web/learn.html` as an interactive
+  **"Find your level"** flow — you make real moves and it *assesses skill from play*
+  (beginner piece tutorial, or 3 live puzzles → estimated rating, saved to identity).
+  Also fixed the game board: **squares now stay square** (explicit grid rows) and
+  **white pieces render white** (forced a text symbol-font ahead of OS emoji, which
+  was silently recoloring pieces). Shared `style.css` → fixes online/AI/2-player.
 - **2026-09-14** — **P1.5 (1,2,3,5 done).** Shipped: (1) tap-a-level assessment;
   (2) learn-to-play + (5) "How Glassboard works" onboarding (`web/learn.html`);
   and (3) **explained suggestions** — engine now renders **SAN** (`san.rs`:
