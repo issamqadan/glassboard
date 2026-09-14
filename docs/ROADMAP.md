@@ -112,6 +112,14 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-14** — **Beautiful board + theming.** Replaced Unicode glyphs with a
+  clean SVG piece set (`web/pieces.js`, two-tone via CSS vars), framed the board
+  with vignette/shadow, and added selected-glow / move-dots / capture-rings /
+  last-move wash / place animation — all **token-driven**. Added a **board-theme
+  switcher** (`web/theme.js`) with four skins (Glass/Walnut/Emerald/Midnight),
+  each just a `--light/--dark` token override; choice persists per device. Proves
+  the token architecture for future full theming. Also added **live board
+  previews** of active games in the lobby (server `/games` now returns fen+turn).
 - **2026-09-14** — **Onboarding pivot → interactive + board fixes.** The static
   learn page felt like a manual; rebuilt `web/learn.html` as an interactive
   **"Find your level"** flow — you make real moves and it *assesses skill from play*
