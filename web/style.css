@@ -23,6 +23,11 @@
   --board-drop: rgba(0, 0, 0, 0.72);
 }
 
+/* Board themes — each overrides only tokens (glass is the :root default). */
+:root[data-board="walnut"] { --light: #ead8b6; --dark: #a5763f; }
+:root[data-board="emerald"] { --light: #eef1d6; --dark: #6f8f57; }
+:root[data-board="midnight"] { --light: #7a8aa6; --dark: #3b4864; }
+
 * {
   box-sizing: border-box;
 }
@@ -437,3 +442,42 @@ button {
 .lvl-chips .lvl-lead { font-size: 0.82rem; color: #7f92ab; margin-right: 2px; }
 .lvl-chips button { background: rgba(255, 255, 255, 0.04); border: 1px solid #35507a; color: #b9c6da; border-radius: 999px; padding: 7px 13px; font-size: 0.82rem; cursor: pointer; }
 .lvl-chips button:hover { border-color: var(--accent); color: #e7ecf3; }
+
+/* ---- board theme switcher (injected by theme.js) ---- */
+.gb-theme {
+  position: fixed;
+  bottom: 14px;
+  right: 14px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  background: rgba(12, 17, 27, 0.82);
+  backdrop-filter: blur(10px);
+  border: 1px solid #2a3a58;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.gb-theme-lab {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: #8ea0b8;
+}
+.gb-swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid #33507a;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: none;
+}
+.gb-swatch span { display: block; }
+.gb-swatch span:first-child { background: var(--sw-l); }
+.gb-swatch span:last-child { background: var(--sw-d); }
+.gb-swatch.on { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.gb-swatch:hover { transform: translateY(-1px); }
