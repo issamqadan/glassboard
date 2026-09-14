@@ -73,8 +73,17 @@
     .game { padding:16px 18px; border-radius:var(--radius); border:1px solid var(--line); position:relative; overflow:hidden;
       background:linear-gradient(165deg,var(--glass-hi),var(--glass)); }
     .game::after { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--stripe,var(--warn)); }
-    .g-row { display:flex; align-items:center; gap:14px; }
+    .g-row { display:flex; align-items:flex-start; gap:14px; }
     .g-ava { width:44px; height:44px; border-radius:12px; display:grid; place-items:center; font-weight:700; color:#0b1119; background:linear-gradient(145deg,#c7d3ea,#93a2c0); flex-shrink:0; }
+    .g-preview { width:88px; height:88px; flex-shrink:0; border-radius:9px; overflow:hidden; border:1px solid var(--line-2); cursor:pointer; transition:transform .14s, box-shadow .2s; }
+    .g-preview:hover { transform:translateY(-2px); box-shadow:0 8px 22px -10px rgba(0,0,0,0.7), 0 0 0 1px var(--accent); }
+    .mini { display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); width:100%; height:100%; }
+    .mc { display:grid; place-items:center; }
+    .mc.l { background:#b3bed2; } .mc.d { background:#61708c; }
+    .mp { font-size:10px; line-height:1; font-family:"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols2","Arial Unicode MS","DejaVu Sans",sans-serif; font-variant-emoji:text; }
+    .mp.w { color:#f6f9fe; -webkit-text-stroke:0.5px #23324a; } .mp.b { color:#141a26; -webkit-text-stroke:0.4px rgba(240,244,250,0.5); }
+    .g-turn { font-size:0.74rem; font-weight:640; margin-top:7px; }
+    .g-turn.you { color:var(--good); } .g-turn.them { color:var(--faint); }
     .g-main { flex:1; min-width:0; }
     .g-name { font-weight:620; font-size:1rem; }
     .g-sub { font-size:0.78rem; color:var(--faint); margin-top:2px; }
@@ -298,10 +307,14 @@
       let changed = false;
       for (const g of games) {
         const r = byId[g.id];
-        if (r && r.status === 'active' && g.status !== 'active') {
+        if (!r) continue;
+        if (r.opp_name && g.oppName !== r.opp_name) { g.oppName = r.opp_name; changed = true; }
+        if (r.opp_rating && g.oppRating !== r.oppRating) { g.oppRating = r.opp_rating; changed = true; }
+        if (r.color && g.color !== r.color) { g.color = r.color; changed = true; }
+        if (r.fen && g.fen !== r.fen) { g.fen = r.fen; changed = true; }       // live preview
+        if (r.turn && g.turn !== r.turn) { g.turn = r.turn; changed = true; }
+        if (r.status === 'active' && g.status !== 'active') {
           g.status = 'active';
-          if (r.opp_name) g.oppName = r.opp_name;
-          if (r.opp_rating) g.oppRating = r.opp_rating;
           if (!g.notified) { g.notified = true; toast((r.opp_name || 'Your opponent') + ' joined', 'Game ready — Enter to play.'); }
           changed = true;
         }
@@ -309,6 +322,29 @@
       if (changed) { saveGames(games); renderGames(); }
     }
     setInterval(pollGames, 4000);
+
+    // ---- mini board preview (renders the live position from FEN) ----
+    const MINI_GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+    const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w';
+    function miniBoard(fen, color) {
+      const rows = (fen || START_FEN).split(' ')[0].split('/');   // rows[0] = rank 8
+      const grid = rows.map(row => {
+        const cells = [];
+        for (const ch of row) { if (/\d/.test(ch)) { for (let k = 0; k < +ch; k++) cells.push(null); } else cells.push(ch); }
+        return cells;
+      });
+      const order = [];
+      if (color === 'black') { for (let r = 7; r >= 0; r--) for (let f = 7; f >= 0; f--) order.push([r, f]); }
+      else { for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) order.push([r, f]); }
+      let cells = '';
+      for (const [r, f] of order) {
+        const dark = (f + r) % 2 === 1;
+        const c = grid[r] && grid[r][f];
+        cells += `<div class="mc ${dark ? 'd' : 'l'}">${c ? `<span class="mp ${c === c.toUpperCase() ? 'w' : 'b'}">${MINI_GLYPH[c.toLowerCase()]}︎</span>` : ''}</div>`;
+      }
+      return `<div class="mini">${cells}</div>`;
+    }
+    const firstName = n => (n || 'Opponent').split(' ')[0];
 
     // ---- games list ----
     function renderGames() {
@@ -319,23 +355,31 @@
       el.innerHTML = games.map((g, i) => {
         const link = gameLink(g);
         const active = g.status === 'active';
+        const myColor = g.color || 'white';
+        const yourTurn = active && g.turn && g.turn === myColor;
         const t = active && g.oppRating ? tierFor(g.myRating - g.oppRating) : null;
         const statusHtml = active
-          ? `<div class="status" style="color:var(--good);background:rgba(69,200,110,0.12)"><span class="sd" style="background:var(--good);box-shadow:0 0 8px var(--good)"></span> Ready — opponent joined</div>`
+          ? `<div class="status" style="color:var(--good);background:rgba(69,200,110,0.12)"><span class="sd" style="background:var(--good);box-shadow:0 0 8px var(--good)"></span> Live — opponent joined</div>`
           : `<div class="status waiting"><span class="sd"></span> Waiting to join</div>`;
         const sub = active && t
           ? `You ${g.myRating} · ${escapeHtml(g.oppName)} ${g.oppRating} · <span class="handicap-chip">handicap <span class="tier">${t.name}</span></span>`
           : `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">set when they join</span></span>`;
+        const turnHtml = active
+          ? `<div class="g-turn ${yourTurn ? 'you' : 'them'}">${yourTurn ? '● Your move' : '○ ' + escapeHtml(firstName(g.oppName)) + '’s move'}</div>`
+          : '';
         return `<div class="game" style="--stripe:${active ? 'var(--good)' : 'var(--warn)'}">
           <div class="g-row">
-            <div class="g-ava">${initials(g.oppName)}</div>
-            <div class="g-main"><div class="g-name">${escapeHtml(g.oppName)}</div>
-              <div class="g-sub">${sub}</div></div>
-            ${statusHtml}
+            <div class="g-preview" onclick="enterGame(${i})" title="Open game" role="button">${miniBoard(g.fen, myColor)}</div>
+            <div class="g-main">
+              <div class="g-name">${escapeHtml(g.oppName)}</div>
+              <div class="g-sub">${sub}</div>
+              ${statusHtml}
+              ${turnHtml}
+            </div>
           </div>
           ${active ? '' : `<div class="invite-link"><span>${link}</span><button onclick="copy('${link}')">Copy</button></div>`}
           <div class="g-actions">
-            <button class="enter" onclick="enterGame(${i})">${active ? 'Play now →' : 'Enter game →'}</button>
+            <button class="enter" onclick="enterGame(${i})">${active ? 'Resume game →' : 'Enter game →'}</button>
             <button class="del" onclick="removeGame(${i})">Delete</button>
           </div>
         </div>`;
