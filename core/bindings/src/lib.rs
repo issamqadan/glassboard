@@ -17,6 +17,8 @@ pub struct Game {
     human_elo: i32,
     engine_elo: i32,
     ply: u32,
+    /// Testing override: force a rung regardless of ratings (None = use ratings).
+    assist_override: Option<AssistLevel>,
 }
 
 #[wasm_bindgen]
@@ -30,6 +32,7 @@ impl Game {
             human_elo: 1200,
             engine_elo: 1700,
             ply: 0,
+            assist_override: None,
         }
     }
 
@@ -42,6 +45,7 @@ impl Game {
             human_elo: 1200,
             engine_elo: 1700,
             ply: 0,
+            assist_override: None,
         }
     }
 
@@ -169,17 +173,30 @@ impl Game {
         self.engine_elo = engine_elo;
     }
 
-    /// The handicap rung name for the assisted (White) side, given the ratings.
+    /// Testing override: force the assistance rung regardless of ratings (still
+    /// glass-boxed). Pass a rung name ("awareness".."autopilot", or "strategy" =
+    /// suggestion); "" or an unknown value clears it (back to rating-derived).
+    #[wasm_bindgen(js_name = setAssistOverride)]
+    pub fn set_assist_override(&mut self, level: &str) {
+        self.assist_override = level_from_name(level);
+    }
+
+    fn effective_level(&self) -> AssistLevel {
+        self.assist_override
+            .unwrap_or_else(|| recommended_level(self.engine_elo, self.human_elo))
+    }
+
+    /// The handicap rung name for the side to move, given ratings (or override).
     #[wasm_bindgen(js_name = assistLevel)]
     pub fn assist_level(&self) -> String {
-        level_name(recommended_level(self.engine_elo, self.human_elo)).to_string()
+        level_name(self.effective_level()).to_string()
     }
 
     /// Compute assistance for the side to move at the handicap rung, record it
     /// to the glass-box (transparent — unless the rung is Off), and return it as
     /// JSON: `{level,inCheck,hanging:[sq],messages:[str],candidates:[{from,to,uci,score}],recommended}`.
     pub fn assist(&mut self, depth: u32) -> String {
-        let level = recommended_level(self.engine_elo, self.human_elo);
+        let level = self.effective_level();
         let a = analyze(&self.board, level, depth);
         if level != AssistLevel::Off {
             self.glass.record(self.ply, self.board.side, &a, &self.board);
@@ -361,6 +378,18 @@ fn level_name(l: AssistLevel) -> &'static str {
         AssistLevel::Suggestion => "suggestion",
         AssistLevel::Guided => "guided",
         AssistLevel::Autopilot => "autopilot",
+    }
+}
+
+fn level_from_name(s: &str) -> Option<AssistLevel> {
+    match s.to_ascii_lowercase().as_str() {
+        "off" => Some(AssistLevel::Off),
+        "awareness" => Some(AssistLevel::Awareness),
+        "coaching" => Some(AssistLevel::Coaching),
+        "suggestion" | "strategy" => Some(AssistLevel::Suggestion),
+        "guided" => Some(AssistLevel::Guided),
+        "autopilot" => Some(AssistLevel::Autopilot),
+        _ => None,
     }
 }
 

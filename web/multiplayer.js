@@ -41,6 +41,7 @@ let hanging = [];
 let assistData = null;
 let pickedStrategyId = null;
 let lastStratRelay = null;
+let forceAssist = null; // testing: force an assist rung even when you're stronger
 let lastMove = null;
 let lastGlassFen = null;
 let hostName = null;
@@ -104,6 +105,19 @@ async function main() {
   // with their name + score filled in.
   const learnLink = el("learnLink");
   if (learnLink) learnLink.href = "./learn.html?next=" + encodeURIComponent(location.href);
+
+  // Testing toggle: force assistance on even for the stronger side, so we can
+  // experience the strategy UX from either seat. Transparent — still glass-boxed.
+  const forceLevel = params.get("assist") || "guided";
+  const fc = el("forceAssist");
+  if (fc) {
+    if (params.get("assist")) { fc.checked = true; forceAssist = forceLevel; }
+    fc.addEventListener("change", () => {
+      forceAssist = fc.checked ? forceLevel : null;
+      computeAssist();
+      paint();
+    });
+  }
 
   if (mine) {
     set("mcEyebrow", "Your game");
@@ -214,18 +228,24 @@ function onState(msg) {
   selected = null;
   legalTargets = [];
 
+  computeAssist();
+  paint();
+}
+
+// Compute this side-to-move's assistance for the current position (honoring the
+// testing override), and relay it to both glass-boxes once per position.
+function computeAssist() {
   assistData = null;
   hanging = [];
-  if (msg.status === "ongoing" && msg.turn === myColor) {
+  if (game && state && state.status === "ongoing" && state.turn === myColor) {
+    game.setAssistOverride(forceAssist || "");
     assistData = JSON.parse(game.assist(DEPTH));
     hanging = assistData.hanging;
-    // Relay this turn's assistance to both glass-boxes (once per position).
-    if (assistData.level !== "off" && msg.fen !== lastGlassFen) {
+    if (assistData.level !== "off" && state.fen !== lastGlassFen) {
       ws.send(JSON.stringify({ t: "glass", summary: summarize(assistData) }));
-      lastGlassFen = msg.fen;
+      lastGlassFen = state.fen;
     }
   }
-  paint();
 }
 
 const myElo = () => (myColor === "white" ? state.white_elo : state.black_elo);
