@@ -91,7 +91,7 @@ where an **LLM + chess knowledge** genuinely earns its place (server-side; key a
 |-------|-------|-------|
 | **P1 — Lobby real** | Device identity; create/invite/join/notify; the concept as the real frontend. Runs on the existing WS server. | Frontend build; small server additions |
 | **P1.5 — Onboarding & beginner-ready** (from real-game feedback 2026-09-14) | (1) friendly **level assessment** — "how well do you play?" → a rating — on both invite and join (a rating number means nothing to a non-player); (2) a **learn-to-play** intro for total beginners — piece names, how each piece moves, the goal; (3) **plain-language descriptions on every assistance suggestion** — readable move (SAN) + what it does ("Nf3 — develops a knight and guards e5"); (4) an **"How Glassboard works"** intro (the transparent handicap / assistance / glass-box). Unblocks inviting people who've never played. | engine SAN + heuristic move descriptions; UI/content |
-| **P2 — Persistence** | Neon Postgres; Active/Past dashboard; the calibration log (every game recorded). | DB + server API |
+| **P2 — Persistence + registration** | Neon Postgres; **lightweight registration** (claim a username + optional PIN → one durable identity + games list across devices); Active/Past dashboard; the calibration log (every game recorded). | DB + server API |
 | **P3 — Strategy layer** | Beyond single moves: **compound / multi-step strategies** the assisted player follows (named-plan library + heuristic plan detection + a plan-progress tracker), **opponent-intent reads** that *alert when an opponent's move signals an upcoming plan*, and natural-language articulation (LLM). In-game strategic assistance panel. | Strategy engine + LLM (server-side) |
 | **P4 — Calibration (M4)** | Neural eval for tunable strength; measure each rung's / plan's Elo value from alpha data; replace the seed handicap with a measured mapping. | Python/PyTorch + `assist-calibrate` |
 
@@ -112,6 +112,12 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-15** — **Identity: staged plan (both).** Fixed onboarding-from-invite
+  (return to the game with name+score, not the portal; name now required, no silent
+  "Player"). Quick win shipped: **device-stable player id** (localStorage → one
+  browser = one player across tabs; `?test=1` for two-in-one-browser testing) +
+  a **"Clear all" games** control. Real **registration deferred to P2** (rides on
+  Neon persistence — durable identity across devices).
 - **2026-09-14** — **Beautiful board + theming.** Replaced Unicode glyphs with a
   clean SVG piece set (`web/pieces.js`, two-tone via CSS vars), framed the board
   with vignette/shadow, and added selected-glow / move-dots / capture-rings /
