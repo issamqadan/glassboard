@@ -148,7 +148,7 @@
       <div class="result-badge"><span class="num" id="res-num">1200</span><span class="lab" id="res-lab">Casual</span></div>
       <h1 id="res-title" style="font-size:1.5rem">Nice — you're all set</h1>
       <p class="lede" id="res-sub"></p>
-      <div class="field"><label>What should we call you?</label><input id="res-name" placeholder="e.g. Maya" maxlength="24"></div>
+      <div class="field"><label>What should we call you?</label><input id="res-name" placeholder="e.g. Maya" maxlength="24" autocomplete="off" oninput="this.style.borderColor=''"></div>
       <div style="margin-top:20px"><button class="btn" onclick="finish()">Save &amp; play →</button></div>
       <button class="link" onclick="restart()">Take it again</button>
     </section>
@@ -318,7 +318,14 @@
       return null;
     }
     function finish() {
-      const name = document.getElementById("res-name").value.trim() || "Player";
+      const inp = document.getElementById("res-name");
+      const name = inp.value.trim();
+      if (!name) {                              // require a real name — never silently ship "Player"
+        inp.focus();
+        inp.style.borderColor = "var(--bad)";
+        inp.placeholder = "Please enter a name to continue";
+        return;
+      }
       localStorage.setItem("gb_me", JSON.stringify({ name, rating: estimate }));
       location.href = nextUrl() || "./portal.html";
     }
