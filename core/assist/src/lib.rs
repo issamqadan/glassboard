@@ -19,6 +19,8 @@
 
 use engine::*;
 
+pub mod strategy;
+
 /// The assistance spectrum. Higher rungs subsume lower ones. Ordering is by
 /// declaration, so `level >= AssistLevel::Suggestion` works as expected.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -66,6 +68,8 @@ pub struct Assistance {
     pub best: Option<Candidate>,
     /// The move to auto-play (autopilot only).
     pub autoplay: Option<Move>,
+    /// Context-fitted named strategies to choose from (suggestion+).
+    pub strategy: Option<strategy::StrategyRead>,
 }
 
 /// Analyze `b` for the assisted side at the given `level`, using engine search
@@ -98,20 +102,27 @@ pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
         }
     }
 
-    let candidates = if level >= AssistLevel::Suggestion {
+    let ranked = if level >= AssistLevel::Suggestion {
         rank_moves(b, depth)
-            .into_iter()
-            .take(3)
-            .map(|(mv, score)| Candidate {
-                uci: to_uci(mv),
-                san: san(b, mv),
-                note: describe(b, mv),
-                mv,
-                score,
-            })
-            .collect()
     } else {
         Vec::new()
+    };
+    let candidates: Vec<Candidate> = ranked
+        .iter()
+        .take(3)
+        .map(|&(mv, score)| Candidate {
+            uci: to_uci(mv),
+            san: san(b, mv),
+            note: describe(b, mv),
+            mv,
+            score,
+        })
+        .collect();
+
+    let strategy = if level >= AssistLevel::Suggestion && !ranked.is_empty() {
+        Some(strategy::strategize(b, &ranked))
+    } else {
+        None
     };
 
     let best = if level >= AssistLevel::Guided {
@@ -134,6 +145,7 @@ pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
         candidates,
         best,
         autoplay,
+        strategy,
     }
 }
 
@@ -305,7 +317,7 @@ fn kind_name(k: PieceKind) -> &'static str {
     }
 }
 
-fn to_uci(m: Move) -> String {
+pub(crate) fn to_uci(m: Move) -> String {
     let mut s = format!("{}{}", sq_to_algebraic(m.from), sq_to_algebraic(m.to));
     if let Some(k) = m.promo {
         s.push(match k {

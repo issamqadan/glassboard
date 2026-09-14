@@ -219,14 +219,77 @@ impl Game {
             .map(|c| json_str(&c.uci))
             .unwrap_or_else(|| "null".to_string());
 
+        let strategy = match &a.strategy {
+            Some(sr) => {
+                let strats = sr
+                    .strategies
+                    .iter()
+                    .map(|s| {
+                        let arrows = s
+                            .arrows
+                            .iter()
+                            .map(|ar| {
+                                format!(
+                                    "{{\"from\":{},\"to\":{},\"kind\":{}}}",
+                                    ar.from,
+                                    ar.to,
+                                    json_str(ar.kind.tag())
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join(",");
+                        let rings = s
+                            .rings
+                            .iter()
+                            .map(|r| r.to_string())
+                            .collect::<Vec<_>>()
+                            .join(",");
+                        let steps = s
+                            .steps
+                            .iter()
+                            .map(|st| format!("{{\"text\":{},\"done\":{}}}", json_str(&st.text), st.done))
+                            .collect::<Vec<_>>()
+                            .join(",");
+                        format!(
+                            "{{\"id\":{},\"name\":{},\"idea\":{},\"fit\":{},\"arrows\":[{}],\"rings\":[{}],\"steps\":[{}],\"moveUci\":{},\"moveSan\":{},\"moveNote\":{}}}",
+                            json_str(s.id),
+                            json_str(&s.name),
+                            json_str(&s.idea),
+                            s.fit,
+                            arrows,
+                            rings,
+                            steps,
+                            json_str(&s.move_uci),
+                            json_str(&s.move_san),
+                            json_str(&s.move_note)
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let opponent = sr
+                    .opponent
+                    .as_ref()
+                    .map(|o| json_str(o))
+                    .unwrap_or_else(|| "null".to_string());
+                format!(
+                    "{{\"phase\":{},\"opponent\":{},\"strategies\":[{}]}}",
+                    json_str(sr.phase),
+                    opponent,
+                    strats
+                )
+            }
+            None => "null".to_string(),
+        };
+
         format!(
-            "{{\"level\":{},\"inCheck\":{},\"hanging\":[{}],\"messages\":[{}],\"candidates\":[{}],\"recommended\":{}}}",
+            "{{\"level\":{},\"inCheck\":{},\"hanging\":[{}],\"messages\":[{}],\"candidates\":[{}],\"recommended\":{},\"strategy\":{}}}",
             json_str(level_name(level)),
             a.in_check,
             hanging,
             messages,
             candidates,
-            recommended
+            recommended,
+            strategy
         )
     }
 

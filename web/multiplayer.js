@@ -39,6 +39,8 @@ let selected = null;
 let legalTargets = [];
 let hanging = [];
 let assistData = null;
+let pickedStrategyId = null;
+let lastStratRelay = null;
 let lastMove = null;
 let lastGlassFen = null;
 let hostName = null;
@@ -234,6 +236,7 @@ const oppElo = () => (myColor === "white" ? state.black_elo : state.white_elo);
 function paint() {
   renderBoard();
   renderPlayers();
+  renderStrategy();
   renderAssist();
   renderGlass();
   renderStatus();
@@ -353,6 +356,99 @@ function renderAssist() {
     div.addEventListener("click", () => sendMove(c.from, c.to));
     assistEl.appendChild(div);
   });
+}
+
+// --- strategy layer ---------------------------------------------------------
+const STRAT_ICON = { win_material: "⚔", develop: "♞", center: "▦", attack_king: "⚔", simplify: "♟", passer: "⏫" };
+const STRAT_COLOR = { win_material: "#f2707e", develop: "#5cc9ec", center: "#7ee0d6", attack_king: "#f2707e", simplify: "#e0be79", passer: "#5cc9ec" };
+const PLAN_COLOR = { dev: "#5cc9ec", attack: "#f2707e", support: "#7ee0d6", castle: "#e0be79" };
+
+// square index → centre in the 800×800 overlay, respecting board orientation.
+function planCxy(sq) {
+  const f = sq % 8, r = Math.floor(sq / 8);
+  const col = myColor === "black" ? 7 - f : f;
+  const row = myColor === "black" ? r : 7 - r;
+  return { x: (col + 0.5) * 100, y: (row + 0.5) * 100 };
+}
+function planArrow(fromSq, toSq, color, i) {
+  const A = planCxy(fromSq), B = planCxy(toSq);
+  let dx = B.x - A.x, dy = B.y - A.y; const len = Math.hypot(dx, dy) || 1; const ux = dx / len, uy = dy / len;
+  const sx = A.x + ux * 32, sy = A.y + uy * 32, tx = B.x - ux * 30, ty = B.y - uy * 30;
+  const h = 30, w = 20, bx = tx - ux * h, by = ty - uy * h, px = -uy, py = ux;
+  const d = (i * 0.12).toFixed(2);
+  return `<g class="arrow" style="animation-delay:${d}s">` +
+    `<line x1="${sx}" y1="${sy}" x2="${bx}" y2="${by}" stroke="${color}" stroke-width="14" stroke-linecap="round" opacity="0.92"/>` +
+    `<polygon points="${tx},${ty} ${bx + px * w},${by + py * w} ${bx - px * w},${by - py * w}" fill="${color}"/></g>`;
+}
+function drawPlan(strat) {
+  const ov = document.getElementById("planOverlay");
+  if (!ov) return;
+  if (!strat) { ov.innerHTML = ""; return; }
+  const ringColor = PLAN_COLOR[(strat.arrows[0] || {}).kind] || "#e0be79";
+  let s = "";
+  (strat.rings || []).forEach((sq, i) => {
+    const C = planCxy(sq);
+    s += `<circle class="ring" cx="${C.x}" cy="${C.y}" r="44" fill="none" stroke="${ringColor}" stroke-width="6" opacity="0.75" style="animation-delay:${(i * 0.1).toFixed(2)}s"/>`;
+  });
+  (strat.arrows || []).forEach((a, i) => { s += planArrow(a.from, a.to, PLAN_COLOR[a.kind] || "#5cc9ec", i); });
+  ov.innerHTML = s;
+}
+
+function renderStrategy() {
+  const panel = document.getElementById("stratPanel");
+  const host = document.getElementById("strategy");
+  if (!panel || !host) return;
+  const sr = assistData && assistData.strategy;
+  if (!sr || !sr.strategies || !sr.strategies.length) {
+    panel.hidden = true; host.innerHTML = ""; drawPlan(null); return;
+  }
+  panel.hidden = false;
+  document.getElementById("stratPhase").textContent = sr.phase;
+  host.innerHTML = "";
+  if (sr.opponent) {
+    const o = document.createElement("div"); o.className = "opp-read";
+    o.innerHTML = `<span>👁</span><span>${escapeHtml(sr.opponent)}</span>`;
+    host.appendChild(o);
+  }
+  if (pickedStrategyId && !sr.strategies.some((s) => s.id === pickedStrategyId)) pickedStrategyId = null;
+  sr.strategies.forEach((s) => {
+    const card = document.createElement("div");
+    card.className = "scard" + (s.id === pickedStrategyId ? " on" : "");
+    card.style.setProperty("--sc", STRAT_COLOR[s.id] || "#5cc9ec");
+    card.innerHTML = `<span class="sic">${STRAT_ICON[s.id] || "◆"}</span>` +
+      `<div><div class="sname">${escapeHtml(s.name)}</div><div class="sidea">${escapeHtml(s.idea)}</div></div>`;
+    card.addEventListener("click", () => pickStrategy(s.id));
+    host.appendChild(card);
+  });
+  const picked = sr.strategies.find((s) => s.id === pickedStrategyId);
+  if (picked) {
+    const d = document.createElement("div"); d.className = "sdetail"; d.style.setProperty("--sc", STRAT_COLOR[picked.id] || "#5cc9ec");
+    const steps = picked.steps.map((st) => `<div class="step ${st.done ? "done" : ""}"><span class="sd">${st.done ? "✓" : "•"}</span><span>${escapeHtml(st.text)}</span></div>`).join("");
+    d.innerHTML = `<div class="steps">${steps}</div>` +
+      `<div class="snext">Next — <b>your move</b><span class="smove" title="Click to play">${escapeHtml(picked.moveSan || picked.moveUci)}</span>${escapeHtml(picked.moveNote)}</div>` +
+      `<div class="glassmini">🔍 This plan is shown to your opponent too.</div>`;
+    host.appendChild(d);
+    const mv = d.querySelector(".smove");
+    if (mv) { mv.style.cursor = "pointer"; mv.addEventListener("click", () => { const q = uciToSquares(picked.moveUci); if (q) sendMove(q.from, q.to); }); }
+    drawPlan(picked);
+  } else {
+    drawPlan(null);
+    const hint = document.createElement("div"); hint.className = "shint"; hint.textContent = "Pick a plan to see it on the board.";
+    host.appendChild(hint);
+  }
+}
+function pickStrategy(id) {
+  pickedStrategyId = id;
+  renderStrategy();
+  const sr = assistData && assistData.strategy;
+  const s = sr && sr.strategies.find((x) => x.id === id);
+  if (s && ws && ws.readyState === 1) {
+    const key = state.fen + "|" + id;
+    if (lastStratRelay !== key) {
+      ws.send(JSON.stringify({ t: "glass", summary: "📋 Plan: " + s.name }));
+      lastStratRelay = key;
+    }
+  }
 }
 
 function renderGlass() {
