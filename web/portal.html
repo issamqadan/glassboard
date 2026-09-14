@@ -88,6 +88,10 @@
     .mp.b { --pf:#232c3e; --ps:#a6b6d2; color:#141a26; -webkit-text-stroke:0.4px rgba(240,244,250,0.5); }
     .g-turn { font-size:0.74rem; font-weight:640; margin-top:7px; }
     .g-turn.you { color:var(--good); } .g-turn.them { color:var(--faint); }
+    .g-elo { color:var(--faint); font-weight:500; font-size:0.9em; font-variant-numeric:tabular-nums; }
+    .g-meta { font-size:0.75rem; color:var(--faint); margin-top:7px; }
+    .g-meta .mv-you { color:var(--good); font-weight:640; }
+    .g-meta .mv-them { color:var(--muted); font-weight:600; }
     .g-main { flex:1; min-width:0; }
     .g-name { font-weight:620; font-size:1rem; }
     .g-sub { font-size:0.78rem; color:var(--faint); margin-top:2px; }
@@ -348,11 +352,12 @@
           g = {
             id: r.id, joined: r.color === 'black', color: r.color, status: r.status,
             myRating: r.my_rating, oppName: r.opp_name || 'Opponent', oppRating: r.opp_rating,
-            fen: r.fen, turn: r.turn, notified: true,
+            fen: r.fen, turn: r.turn, started: r.started, notified: true,
           };
           games.push(g); byLocal[r.id] = g; changed = true;
           return;
         }
+        if (r.started && g.started !== r.started) { g.started = r.started; changed = true; }
         if (r.opp_name && g.oppName !== r.opp_name) { g.oppName = r.opp_name; changed = true; }
         if (r.opp_rating && g.oppRating !== r.oppRating) { g.oppRating = r.opp_rating; changed = true; }
         if (r.color && g.color !== r.color) { g.color = r.color; changed = true; }
@@ -391,6 +396,15 @@
       return `<div class="mini">${cells}</div>`;
     }
     const firstName = n => (n || 'Opponent').split(' ')[0];
+    const ago = g => {
+      const t = g.started ? g.started * 1000 : g.created;   // server unix secs → ms, or local ms
+      if (!t) return '';
+      const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+      if (s < 60) return 'just now';
+      const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+      const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+      return Math.floor(h / 24) + 'd ago';
+    };
 
     // ---- games list ----
     function renderGames() {
@@ -409,19 +423,21 @@
           ? `<div class="status" style="color:var(--good);background:rgba(69,200,110,0.12)"><span class="sd" style="background:var(--good);box-shadow:0 0 8px var(--good)"></span> Live — opponent joined</div>`
           : `<div class="status waiting"><span class="sd"></span> Waiting to join</div>`;
         const sub = active && t
-          ? `You ${g.myRating} · ${escapeHtml(g.oppName)} ${g.oppRating} · <span class="handicap-chip">handicap <span class="tier">${t.name}</span></span>`
+          ? `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">${t.name}</span></span>`
           : `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">set when they join</span></span>`;
-        const turnHtml = active
-          ? `<div class="g-turn ${yourTurn ? 'you' : 'them'}">${yourTurn ? '● Your move' : '○ ' + escapeHtml(firstName(g.oppName)) + '’s move'}</div>`
-          : '';
+        const startedTxt = ago(g);
+        const meta = [];
+        if (active) meta.push(yourTurn ? '<span class="mv-you">● Your move</span>' : '<span class="mv-them">○ ' + escapeHtml(firstName(g.oppName)) + '’s move</span>');
+        if (startedTxt) meta.push('started ' + startedTxt);
+        const metaHtml = meta.length ? `<div class="g-meta">${meta.join(' · ')}</div>` : '';
         return `<div class="game" style="--stripe:${active ? 'var(--good)' : 'var(--warn)'}">
           <div class="g-row">
             <div class="g-preview" onclick="enterGame(${i})" title="Open game" role="button">${miniBoard(g.fen, myColor)}</div>
             <div class="g-main">
-              <div class="g-name">${escapeHtml(g.oppName)}</div>
+              <div class="g-name">${escapeHtml(g.oppName)}${active && g.oppRating ? ` <span class="g-elo">${g.oppRating}</span>` : ''}</div>
               <div class="g-sub">${sub}</div>
               ${statusHtml}
-              ${turnHtml}
+              ${metaHtml}
             </div>
           </div>
           ${active ? '' : `<div class="invite-link"><span>${link}</span><button onclick="copy('${link}')">Copy</button></div>`}

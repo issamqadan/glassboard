@@ -21,6 +21,7 @@ mod room;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::{
     extract::{
@@ -35,6 +36,7 @@ use axum::{
 use engine::Color;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
+use sqlx::Row;
 use tokio::sync::{broadcast, Mutex};
 use tower_http::cors::CorsLayer;
 
@@ -44,8 +46,14 @@ struct RoomState {
     room: Room,
     tx: broadcast::Sender<String>,
     seats: Seats,
+    /// Unix seconds when the room was created (for "started N ago" in the lobby).
+    started: u64,
 }
 type Rooms = Arc<Mutex<HashMap<String, RoomState>>>;
+
+fn now_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
 
 /// A registered player. `key` in the map is the username lowercased.
 #[derive(Clone)]
@@ -59,19 +67,116 @@ struct Account {
 /// server sleeps — swap this for Postgres (Neon) to make accounts durable.
 type Players = Arc<Mutex<HashMap<String, Account>>>;
 
+/// Account storage: durable Postgres (Neon) when DATABASE_URL is set, else an
+/// in-memory registry (fine for local/dev; wiped when the server restarts).
+#[derive(Clone)]
+enum Store {
+    Memory(Players),
+    Pg(sqlx::PgPool),
+}
+
+struct AccountOut {
+    id: String,
+    name: String,
+    rating: i32,
+    returning: bool,
+}
+enum AccountErr {
+    WrongPin,
+    Server,
+}
+
+impl Store {
+    /// Claim a username with a PIN, or sign back in with the same pair.
+    async fn account(&self, name: &str, pin: &str, rating: i32) -> Result<AccountOut, AccountErr> {
+        let key = name.to_lowercase();
+        let id = format!("u_{key}");
+        match self {
+            Store::Memory(players) => {
+                let mut map = players.lock().await;
+                if let Some(acc) = map.get(&key) {
+                    if acc.pin != pin {
+                        return Err(AccountErr::WrongPin);
+                    }
+                    return Ok(AccountOut { id: acc.id.clone(), name: acc.name.clone(), rating: acc.rating, returning: true });
+                }
+                map.insert(key, Account { id: id.clone(), name: name.to_string(), pin: pin.to_string(), rating });
+                Ok(AccountOut { id, name: name.to_string(), rating, returning: false })
+            }
+            Store::Pg(pool) => {
+                let existing = sqlx::query("SELECT id, name, pin, rating FROM players WHERE key = $1")
+                    .bind(&key)
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(|_| AccountErr::Server)?;
+                if let Some(row) = existing {
+                    let db_pin: String = row.get("pin");
+                    if db_pin != pin {
+                        return Err(AccountErr::WrongPin);
+                    }
+                    return Ok(AccountOut {
+                        id: row.get("id"),
+                        name: row.get("name"),
+                        rating: row.get("rating"),
+                        returning: true,
+                    });
+                }
+                sqlx::query("INSERT INTO players (key, id, name, pin, rating) VALUES ($1, $2, $3, $4, $5)")
+                    .bind(&key)
+                    .bind(&id)
+                    .bind(name)
+                    .bind(pin)
+                    .bind(rating)
+                    .execute(pool)
+                    .await
+                    .map_err(|_| AccountErr::Server)?;
+                Ok(AccountOut { id, name: name.to_string(), rating, returning: false })
+            }
+        }
+    }
+}
+
+/// Build the account store from the environment: Postgres if DATABASE_URL is set
+/// (creating the table on first run), otherwise in-memory.
+async fn build_store() -> Store {
+    match std::env::var("DATABASE_URL") {
+        Ok(url) if !url.is_empty() => {
+            let pool = sqlx::postgres::PgPoolOptions::new()
+                .max_connections(5)
+                .connect(&url)
+                .await
+                .expect("connect to DATABASE_URL");
+            sqlx::query(
+                "CREATE TABLE IF NOT EXISTS players (\
+                   key TEXT PRIMARY KEY, id TEXT NOT NULL, name TEXT NOT NULL, \
+                   pin TEXT NOT NULL, rating INT NOT NULL)",
+            )
+            .execute(&pool)
+            .await
+            .expect("create players table");
+            println!("Accounts: Postgres (durable)");
+            Store::Pg(pool)
+        }
+        _ => {
+            println!("Accounts: in-memory (set DATABASE_URL for durable accounts)");
+            Store::Memory(Arc::new(Mutex::new(HashMap::new())))
+        }
+    }
+}
+
 #[derive(Clone)]
 struct AppState {
     rooms: Rooms,
-    players: Players,
+    store: Store,
 }
 impl FromRef<AppState> for Rooms {
     fn from_ref(s: &AppState) -> Rooms {
         s.rooms.clone()
     }
 }
-impl FromRef<AppState> for Players {
-    fn from_ref(s: &AppState) -> Players {
-        s.players.clone()
+impl FromRef<AppState> for Store {
+    fn from_ref(s: &AppState) -> Store {
+        s.store.clone()
     }
 }
 
@@ -82,6 +187,7 @@ fn new_room_state() -> RoomState {
         room: Room::new(),
         tx: broadcast::channel(64).0,
         seats: Seats::default(),
+        started: now_secs(),
     }
 }
 
@@ -133,13 +239,13 @@ enum ServerMsg {
 #[tokio::main]
 async fn main() {
     let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
-    let players: Players = Arc::new(Mutex::new(HashMap::new()));
+    let store = build_store().await;
     let app = Router::new()
         .route("/", get(root))
         .route("/games", get(list_games).post(create_game))
         .route("/account", post(account))
         .layer(CorsLayer::permissive())
-        .with_state(AppState { rooms, players });
+        .with_state(AppState { rooms, store });
 
     let addr = std::env::var("PORT")
         .ok()
@@ -179,6 +285,8 @@ struct GameSummary {
     fen: String,
     /// Whose move it is: "white" | "black".
     turn: String,
+    /// Unix seconds when the game was created.
+    started: u64,
 }
 
 /// Pre-register a game so the host holds White before sharing the invite link.
@@ -224,6 +332,7 @@ async fn list_games(
             opp_rating: opp.as_ref().map(|p| p.rating),
             fen: rs.room.fen(),
             turn: rs.room.turn().to_string(),
+            started: rs.started,
         });
     }
     Json(out)
@@ -239,7 +348,7 @@ struct AccountReq {
 
 /// Claim a username with a PIN, or sign back in with the same pair. Returns a
 /// stable player id so the same account is one identity across devices.
-async fn account(State(players): State<Players>, Json(req): Json<AccountReq>) -> impl IntoResponse {
+async fn account(State(store): State<Store>, Json(req): Json<AccountReq>) -> impl IntoResponse {
     let name = req.name.trim().to_string();
     let pin = req.pin.trim().to_string();
     if name.is_empty() || name.chars().count() > 24 {
@@ -248,22 +357,21 @@ async fn account(State(players): State<Players>, Json(req): Json<AccountReq>) ->
     if pin.len() != 4 || !pin.chars().all(|c| c.is_ascii_digit()) {
         return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":"PIN must be exactly 4 digits."})));
     }
-    let key = name.to_lowercase();
-    let mut map = players.lock().await;
-    if let Some(acc) = map.get(&key) {
-        if acc.pin != pin {
-            return (StatusCode::CONFLICT, Json(serde_json::json!({"error":"That name is taken — wrong PIN."})));
-        }
-        return (StatusCode::OK, Json(serde_json::json!({
-            "id": acc.id, "name": acc.name, "rating": acc.rating, "returning": true
-        })));
-    }
     let rating = if (100..=3200).contains(&req.rating) { req.rating } else { 1200 };
-    let id = format!("u_{}", key);
-    map.insert(key, Account { id: id.clone(), name: name.clone(), pin, rating });
-    (StatusCode::CREATED, Json(serde_json::json!({
-        "id": id, "name": name, "rating": rating, "returning": false
-    })))
+    match store.account(&name, &pin, rating).await {
+        Ok(o) => (
+            if o.returning { StatusCode::OK } else { StatusCode::CREATED },
+            Json(serde_json::json!({"id": o.id, "name": o.name, "rating": o.rating, "returning": o.returning})),
+        ),
+        Err(AccountErr::WrongPin) => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({"error":"That name is taken — wrong PIN."})),
+        ),
+        Err(AccountErr::Server) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error":"Server error — please try again."})),
+        ),
+    }
 }
 
 // ---------------- WebSocket game ----------------
