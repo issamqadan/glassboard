@@ -119,6 +119,9 @@ async function main() {
     });
   }
 
+  const rb = el("resignBtn");
+  if (rb) rb.addEventListener("click", resign);
+
   if (mine) {
     set("mcEyebrow", "Your game");
     set("mcTitle", "Waiting for your opponent");
@@ -346,11 +349,38 @@ function coord(kind, text) {
 function renderStatus() {
   levelEl.textContent = assistData ? assistData.level : "—";
   if (!state) return;
-  if (state.status === "checkmate") statusEl.textContent = `Checkmate — ${state.turn === "white" ? "Black" : "White"} wins.`;
-  else if (state.status === "stalemate") statusEl.textContent = "Stalemate — draw.";
-  else if (state.status === "fifty-move") statusEl.textContent = "Draw — fifty-move rule.";
-  else if (state.turn === myColor) statusEl.textContent = `Your move (you are ${myColor})` + (game.inCheck() ? " — check!" : "");
+
+  // Outcome (server sends winner/reason; fall back to status for older servers).
+  let reason = state.reason || "";
+  let winner = state.winner || "";
+  if (!reason && state.status !== "ongoing") {
+    if (state.status === "checkmate") { reason = "checkmate"; winner = state.turn === "white" ? "black" : "white"; }
+    else if (state.status === "stalemate") { reason = "stalemate"; winner = ""; }
+    else if (state.status === "fifty-move") { reason = "fifty-move rule"; winner = ""; }
+  }
+  const over = reason !== "";
+
+  const rb = el("resignBtn");
+  if (rb) rb.hidden = !(myColor && state.status === "ongoing" && !over);
+
+  if (over) {
+    const draw = winner === "";
+    const won = winner === myColor;
+    const label = draw ? "Draw" : won ? "You win" : "You lose";
+    const cls = draw ? "draw" : won ? "win" : "loss";
+    statusEl.innerHTML = `<span class="result ${cls}">${label}</span> — by ${escapeHtml(reason)}. ` +
+      `<a href="./portal.html" style="color:var(--accent)">Back to lobby →</a>`;
+    return;
+  }
+  if (state.turn === myColor) statusEl.textContent = `Your move (you are ${myColor})` + (game.inCheck() ? " — check!" : "");
   else statusEl.textContent = `Waiting for ${state.turn} to move…`;
+}
+
+function resign() {
+  if (!ws || ws.readyState !== 1 || !myColor) return;
+  if (!state || state.status !== "ongoing" || (state.reason && state.reason !== "")) return;
+  if (!confirm("Resign this game? Your opponent will be recorded as the winner.")) return;
+  ws.send(JSON.stringify({ t: "resign" }));
 }
 
 function renderAssist() {

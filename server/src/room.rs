@@ -20,6 +20,8 @@ pub struct Room {
     pub white_elo: i32,
     pub black_elo: i32,
     pub last_uci: Option<String>,
+    /// Set when a player resigns — that colour loses.
+    pub resigned: Option<Color>,
     /// Full glass-box history for this game (replayed to anyone who joins).
     pub glass: Vec<GlassEntry>,
 }
@@ -39,6 +41,7 @@ impl Room {
             white_elo: 1500,
             black_elo: 1500,
             last_uci: None,
+            resigned: None,
             glass: Vec::new(),
         }
     }
@@ -78,13 +81,45 @@ impl Room {
     pub fn reset(&mut self) {
         self.board = Board::startpos();
         self.last_uci = None;
+        self.resigned = None;
         self.glass.clear();
+    }
+
+    /// `who` resigns — that colour loses. First resignation sticks.
+    pub fn resign(&mut self, who: Color) {
+        if self.resigned.is_none() {
+            self.resigned = Some(who);
+        }
+    }
+
+    /// Game outcome: (over, winner "white"|"black"|"" for draw, reason).
+    pub fn outcome(&self) -> (bool, &'static str, &'static str) {
+        if let Some(c) = self.resigned {
+            let winner = match c {
+                Color::White => "black",
+                Color::Black => "white",
+            };
+            return (true, winner, "resignation");
+        }
+        match self.status() {
+            "checkmate" => {
+                // The side to move is checkmated → the other side wins.
+                let winner = match self.board.side {
+                    Color::White => "black",
+                    Color::Black => "white",
+                };
+                (true, winner, "checkmate")
+            }
+            "stalemate" => (true, "", "stalemate"),
+            "fifty-move" => (true, "", "fifty-move rule"),
+            _ => (false, "", ""),
+        }
     }
 
     /// Apply `who`'s move given in coordinate notation. Rejects out-of-turn or
     /// illegal moves — the server never trusts the client's word for legality.
     pub fn apply_move(&mut self, who: Color, uci: &str) -> Result<(), String> {
-        if self.status() != "ongoing" {
+        if self.resigned.is_some() || self.status() != "ongoing" {
             return Err("game is over".into());
         }
         if self.board.side != who {

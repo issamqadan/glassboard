@@ -516,3 +516,12 @@ button {
 /* testing: force-assist toggle in the assist panel header */
 .test-toggle { margin-left: auto; font-size: 0.68rem; font-weight: 400; color: #7f92ab; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .test-toggle input { width: auto; margin: 0; cursor: pointer; }
+
+/* resign button + game result */
+.topbar { display: flex; align-items: center; gap: 12px; }
+.resign-btn { margin-left: auto; background: transparent; border: 1px solid #6b3540; color: #f0808a; border-radius: 8px; padding: 5px 14px; font-size: 0.82rem; font-weight: 600; }
+.resign-btn:hover { background: rgba(240,128,138,0.12); border-color: #f0808a; }
+.status .result { font-weight: 700; }
+.status .result.win { color: #45c86e; }
+.status .result.loss { color: #f0808a; }
+.status .result.draw { color: #b9c6da; }

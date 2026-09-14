@@ -210,6 +210,7 @@ enum ClientMsg {
         summary: String,
     },
     Reset,
+    Resign,
 }
 
 #[derive(Serialize)]
@@ -229,6 +230,10 @@ enum ServerMsg {
         black_elo: i32,
         white_name: String,
         black_name: String,
+        /// "white" | "black" | "" (draw); set once the game is over.
+        winner: String,
+        /// "checkmate" | "stalemate" | "resignation" | "fifty-move rule" | "".
+        reason: String,
     },
     Glass {
         side: String,
@@ -243,6 +248,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(root))
         .route("/games", get(list_games).post(create_game))
+        .route("/games/delete", post(delete_game))
         .route("/account", post(account))
         .layer(CorsLayer::permissive())
         .with_state(AppState { rooms, store });
@@ -287,6 +293,12 @@ struct GameSummary {
     turn: String,
     /// Unix seconds when the game was created.
     started: u64,
+    /// Game over? (checkmate/stalemate/resignation/fifty-move)
+    over: bool,
+    /// "white" | "black" | "" — winner once over.
+    winner: String,
+    /// How it ended, if over.
+    reason: String,
 }
 
 /// Pre-register a game so the host holds White before sharing the invite link.
@@ -302,6 +314,27 @@ async fn create_game(State(rooms): State<Rooms>, Json(b): Json<CreateReq>) -> Js
         rs.room.white_elo = b.rating;
     }
     Json(serde_json::json!({ "id": b.id, "status": rs.seats.status() }))
+}
+
+#[derive(Deserialize)]
+struct DeleteReq {
+    id: String,
+    #[serde(default)]
+    pid: String,
+}
+
+/// Host-only: delete a game room entirely (gone for both players).
+async fn delete_game(State(rooms): State<Rooms>, Json(b): Json<DeleteReq>) -> Json<serde_json::Value> {
+    let mut map = rooms.lock().await;
+    let is_host = map
+        .get(&b.id)
+        .and_then(|rs| rs.seats.host.as_ref())
+        .map(|h| h.id == b.pid)
+        .unwrap_or(false);
+    if is_host {
+        map.remove(&b.id);
+    }
+    Json(serde_json::json!({ "deleted": is_host }))
 }
 
 /// List the games a player is in, with status (for the lobby / notifications).
@@ -323,6 +356,7 @@ async fn list_games(
         } else {
             ("black", &rs.seats.guest, &rs.seats.host)
         };
+        let (over, winner, reason) = rs.room.outcome();
         out.push(GameSummary {
             id: id.clone(),
             status: rs.seats.status().to_string(),
@@ -333,6 +367,9 @@ async fn list_games(
             fen: rs.room.fen(),
             turn: rs.room.turn().to_string(),
             started: rs.started,
+            over,
+            winner: winner.to_string(),
+            reason: reason.to_string(),
         });
     }
     Json(out)
@@ -525,6 +562,15 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
                             }
                             broadcast_state(&rooms, &room_code).await;
                         }
+                        Ok(ClientMsg::Resign) => {
+                            {
+                                let mut map = rooms.lock().await;
+                                if let Some(rs) = map.get_mut(&room_code) {
+                                    rs.room.resign(color);
+                                }
+                            }
+                            broadcast_state(&rooms, &room_code).await;
+                        }
                         _ => {}
                     }
                 }
@@ -540,6 +586,7 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
 async fn broadcast_state(rooms: &Rooms, code: &str) {
     let map = rooms.lock().await;
     if let Some(rs) = map.get(code) {
+        let (_, winner, reason) = rs.room.outcome();
         let msg = ServerMsg::State {
             fen: rs.room.fen(),
             turn: rs.room.turn().to_string(),
@@ -549,6 +596,8 @@ async fn broadcast_state(rooms: &Rooms, code: &str) {
             black_elo: rs.room.black_elo,
             white_name: rs.seats.host.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
             black_name: rs.seats.guest.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
+            winner: winner.to_string(),
+            reason: reason.to_string(),
         };
         let _ = rs.tx.send(json(&msg));
     }

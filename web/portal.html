@@ -98,6 +98,10 @@
     .status { display:inline-flex; align-items:center; gap:6px; font-size:0.72rem; font-weight:620; padding:5px 10px; border-radius:999px; }
     .status .sd { width:7px; height:7px; border-radius:50%; }
     .status.waiting { color:var(--warn); background:rgba(230,169,76,0.12); } .status.waiting .sd { background:var(--warn); }
+    .status.g-fin { background:rgba(255,255,255,0.05); }
+    .status.g-fin.win { color:var(--good); } .status.g-fin.win .sd { background:var(--good); }
+    .status.g-fin.loss { color:#f0808a; } .status.g-fin.loss .sd { background:#f0808a; }
+    .status.g-fin.draw { color:var(--muted); } .status.g-fin.draw .sd { background:var(--muted); }
     .handicap-chip { font-size:0.74rem; color:var(--muted); } .handicap-chip .tier { color:var(--gold); font-weight:650; }
     .invite-link { display:flex; align-items:center; gap:8px; margin-top:14px; padding:9px 10px 9px 13px; background:var(--bg-2); border:1px solid var(--line); border-radius:10px; font-family:var(--mono); font-size:0.76rem; color:var(--muted); }
     .invite-link span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
@@ -256,6 +260,9 @@
     function setInput(id, v) { const e = document.getElementById(id); if (e) { e.value = v; e.dispatchEvent(new Event('input')); } }
     const loadGames = () => { try { return JSON.parse(localStorage.getItem('gb_games')) || []; } catch { return []; } };
     const saveGames = g => localStorage.setItem('gb_games', JSON.stringify(g));
+    // Games hidden from *this* device's lobby (either side can hide; local only).
+    const loadHidden = () => { try { return new Set(JSON.parse(localStorage.getItem('gb_hidden')) || []); } catch { return new Set(); } };
+    const saveHidden = s => localStorage.setItem('gb_hidden', JSON.stringify([...s]));
     let me = loadMe();
     if (me) me.id = playerId();
     const SERVER_HTTP = 'https://playglassboard.onrender.com';
@@ -344,16 +351,19 @@
       try { remote = await (await fetch(SERVER_HTTP + '/games?player=' + encodeURIComponent(me.id))).json(); }
       catch { return; }
       const games = loadGames();
+      const hidden = loadHidden();
       const byLocal = {}; games.forEach(g => byLocal[g.id] = g);
       let changed = false;
       (remote || []).forEach(r => {
+        if (hidden.has(r.id)) return;   // don't re-add a game hidden on this device
         let g = byLocal[r.id];
         if (!g) {
           // A game we're part of but isn't in our list (typically one we joined).
           g = {
             id: r.id, joined: r.color === 'black', color: r.color, status: r.status,
             myRating: r.my_rating, oppName: r.opp_name || 'Opponent', oppRating: r.opp_rating,
-            fen: r.fen, turn: r.turn, started: r.started, notified: true,
+            fen: r.fen, turn: r.turn, started: r.started,
+            over: r.over, winner: r.winner, reason: r.reason, notified: true,
           };
           games.push(g); byLocal[r.id] = g; changed = true;
           return;
@@ -364,6 +374,9 @@
         if (r.color && g.color !== r.color) { g.color = r.color; changed = true; }
         if (r.fen && g.fen !== r.fen) { g.fen = r.fen; changed = true; }       // live preview
         if (r.turn && g.turn !== r.turn) { g.turn = r.turn; changed = true; }
+        if (typeof r.over === 'boolean' && (g.over !== r.over || g.reason !== r.reason)) {
+          g.over = r.over; g.winner = r.winner; g.reason = r.reason; changed = true;
+        }
         if (r.status === 'active' && g.status !== 'active') {
           g.status = 'active';
           if (!g.notified && !g.joined) { g.notified = true; toast((r.opp_name || 'Your opponent') + ' joined', 'Game ready — Enter to play.'); }
@@ -409,55 +422,78 @@
 
     // ---- games list ----
     function renderGames() {
-      const games = loadGames();
-      const el = document.getElementById('games');
+      const hidden = loadHidden();
+      const games = loadGames().filter(g => !hidden.has(g.id));
+      const elx = document.getElementById('games');
       document.getElementById('gamesCount').textContent = games.length ? '· ' + games.length : '';
       const ca = document.getElementById('clearAll'); if (ca) ca.hidden = !games.length;
-      if (!games.length) { el.innerHTML = '<div class="empty">No games yet. Hit <b>New game</b> to create one and share the link.</div>'; return; }
-      el.innerHTML = games.map((g, i) => {
+      if (!games.length) { elx.innerHTML = '<div class="empty">No games yet. Hit <b>New game</b> to create one and share the link.</div>'; return; }
+      elx.innerHTML = games.map((g) => {
         const link = gameLink(g);
-        const active = g.status === 'active';
+        const over = !!g.over;
+        const active = g.status === 'active' && !over;
         const myColor = g.color || 'white';
         const yourTurn = active && g.turn && g.turn === myColor;
-        const t = active && g.oppRating ? tierFor(g.myRating - g.oppRating) : null;
-        const statusHtml = active
-          ? `<div class="status" style="color:var(--good);background:rgba(69,200,110,0.12)"><span class="sd" style="background:var(--good);box-shadow:0 0 8px var(--good)"></span> Live — opponent joined</div>`
-          : `<div class="status waiting"><span class="sd"></span> Waiting to join</div>`;
-        const sub = active && t
+        const t = (active || over) && g.oppRating ? tierFor(g.myRating - g.oppRating) : null;
+        let statusHtml, metaHtml = '';
+        if (over) {
+          const draw = !g.winner, won = g.winner === myColor;
+          const rc = draw ? 'draw' : won ? 'win' : 'loss';
+          const lbl = draw ? 'Draw' : won ? 'You won' : 'You lost';
+          statusHtml = `<div class="status g-fin ${rc}"><span class="sd"></span> ${lbl} · ${escapeHtml(g.reason || 'finished')}</div>`;
+        } else {
+          statusHtml = active
+            ? `<div class="status" style="color:var(--good);background:rgba(69,200,110,0.12)"><span class="sd" style="background:var(--good);box-shadow:0 0 8px var(--good)"></span> Live — opponent joined</div>`
+            : `<div class="status waiting"><span class="sd"></span> Waiting to join</div>`;
+          const meta = [];
+          if (active) meta.push(yourTurn ? '<span class="mv-you">● Your move</span>' : '<span class="mv-them">○ ' + escapeHtml(firstName(g.oppName)) + '’s move</span>');
+          const startedTxt = ago(g); if (startedTxt) meta.push('started ' + startedTxt);
+          metaHtml = meta.length ? `<div class="g-meta">${meta.join(' · ')}</div>` : '';
+        }
+        const sub = (active || over) && t
           ? `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">${t.name}</span></span>`
           : `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">set when they join</span></span>`;
-        const startedTxt = ago(g);
-        const meta = [];
-        if (active) meta.push(yourTurn ? '<span class="mv-you">● Your move</span>' : '<span class="mv-them">○ ' + escapeHtml(firstName(g.oppName)) + '’s move</span>');
-        if (startedTxt) meta.push('started ' + startedTxt);
-        const metaHtml = meta.length ? `<div class="g-meta">${meta.join(' · ')}</div>` : '';
-        return `<div class="game" style="--stripe:${active ? 'var(--good)' : 'var(--warn)'}">
+        return `<div class="game" style="--stripe:${over ? 'var(--faint)' : active ? 'var(--good)' : 'var(--warn)'}">
           <div class="g-row">
-            <div class="g-preview" onclick="enterGame(${i})" title="Open game" role="button">${miniBoard(g.fen, myColor)}</div>
+            <div class="g-preview" ${over ? '' : `onclick="enterGame('${g.id}')"`} title="Open game" role="button">${miniBoard(g.fen, myColor)}</div>
             <div class="g-main">
-              <div class="g-name">${escapeHtml(g.oppName)}${active && g.oppRating ? ` <span class="g-elo">${g.oppRating}</span>` : ''}</div>
+              <div class="g-name">${escapeHtml(g.oppName)}${g.oppRating ? ` <span class="g-elo">${g.oppRating}</span>` : ''}</div>
               <div class="g-sub">${sub}</div>
               ${statusHtml}
               ${metaHtml}
             </div>
           </div>
-          ${active ? '' : `<div class="invite-link"><span>${link}</span><button onclick="copy('${link}')">Copy</button></div>`}
+          ${(!active && !over) ? `<div class="invite-link"><span>${link}</span><button onclick="copy('${link}')">Copy</button></div>` : ''}
           <div class="g-actions">
-            <button class="enter" onclick="enterGame(${i})">${active ? 'Resume game →' : 'Enter game →'}</button>
-            <button class="del" onclick="removeGame(${i})">Delete</button>
+            ${!over ? `<button class="enter" onclick="enterGame('${g.id}')">${active ? 'Resume game →' : 'Enter game →'}</button>` : ''}
+            ${!g.joined ? `<button class="del" onclick="deleteGame('${g.id}')">Delete</button>` : ''}
+            <button class="del" onclick="hideGame('${g.id}')">Hide</button>
           </div>
         </div>`;
       }).join('');
     }
-    function enterGame(i) {
-      const g = loadGames()[i]; if (!g) return;
+    const gameById = id => loadGames().find(g => g.id === id);
+    function enterGame(id) {
+      const g = gameById(id); if (!g) return;
       let url = 'multiplayer.html?room=' + encodeURIComponent(g.id) + '&elo=' + (g.myRating || '');
       // A game we created → we're host (White). A game we joined → re-enter as guest.
       if (!g.joined) url += '&host=' + encodeURIComponent(me.name) + '&mine=1';
       location.href = url;
     }
-    function removeGame(i) {
-      const games = loadGames(); games.splice(i, 1); saveGames(games); renderGames();
+    // Hide from THIS device's lobby (either side; local only — won't reappear).
+    function hideGame(id) {
+      const h = loadHidden(); h.add(id); saveHidden(h);
+      saveGames(loadGames().filter(g => g.id !== id));
+      renderGames();
+    }
+    // Host-only: delete the game on the server (gone for both players).
+    function deleteGame(id) {
+      if (!confirm('Delete this game for both players? It ends the game and removes it from the server.')) return;
+      fetch(SERVER_HTTP + '/games/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, pid: me.id })
+      }).catch(() => {});
+      hideGame(id);
     }
     function clearAllGames() {
       const games = loadGames(); if (!games.length) return;
