@@ -112,6 +112,13 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-15** — **Registration (in-memory) + more fixes.** Beginner tutorial
+  now covers all six pieces + the goal. Lobby shows games you **joined** (not just
+  created) by merging the server's game list. Shipped **name + 4-digit PIN
+  registration** (`POST /account`) → a stable cross-device player id, wired into
+  the portal identity modal. **Caveat:** accounts live in server memory, so Render
+  free-tier sleep wipes them — the durable version = swap the registry for **Neon
+  Postgres** (P2), which needs a ~5-min DB provision (free, no card).
 - **2026-09-15** — **Identity: staged plan (both).** Fixed onboarding-from-invite
   (return to the game with name+score, not the portal; name now required, no silent
   "Player"). Quick win shipped: **device-stable player id** (localStorage → one
