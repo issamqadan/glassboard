@@ -319,10 +319,13 @@ function renderAssist() {
   if (a.hanging.length) add(`<div class="warn">⚠ Hanging: ${a.hanging.map(sqName).join(", ")}</div>`);
   a.messages.forEach((m) => add(`<div class="msg">• ${escapeHtml(m)}</div>`));
   a.candidates.forEach((c) => {
-    const rec = a.recommended && c.uci === a.recommended ? " rec" : "";
+    const isRec = a.recommended && c.uci === a.recommended;
     const div = document.createElement("div");
-    div.className = "cand" + rec;
-    div.innerHTML = `<span>${c.uci}${rec ? " ➤" : ""}</span><span class="score">${fmtScore(c.score)}</span>`;
+    div.className = "cand" + (isRec ? " rec" : "");
+    div.innerHTML =
+      `<div class="cand-main"><span class="cand-move">${c.san || c.uci}${isRec ? " ➤" : ""}</span>` +
+      (c.note ? `<div class="cand-note">${escapeHtml(c.note)}</div>` : "") +
+      `</div><span class="score">${fmtScore(c.score)}</span>`;
     div.addEventListener("click", () => sendMove(c.from, c.to));
     assistEl.appendChild(div);
   });

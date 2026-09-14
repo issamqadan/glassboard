@@ -112,6 +112,13 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-14** — **P1.5 (1,2,3,5 done).** Shipped: (1) tap-a-level assessment;
+  (2) learn-to-play + (5) "How Glassboard works" onboarding (`web/learn.html`);
+  and (3) **explained suggestions** — engine now renders **SAN** (`san.rs`:
+  `Nf3`/`exd5`/`O-O`/`Ra8#`, with tests) and the assist layer adds a plain-language
+  **note** per candidate ("Develops your knight", "Captures the bishop — wins
+  material", "Gives check"). Bindings + client show `San` + the note instead of
+  raw coordinates. Remaining P1.5: none. Next: **P3 strategy layer**.
 - **2026-09-14** — **Real-game feedback → P1.5 Onboarding & beginner-ready.**
   After playing a real game, five priorities captured: (1) friendly level
   assessment on invite/join, (2) a learn-to-play intro for total beginners

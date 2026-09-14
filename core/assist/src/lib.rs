@@ -42,7 +42,11 @@ pub enum AssistLevel {
 pub struct Candidate {
     pub mv: Move,
     pub uci: String,
+    /// Human-readable move, e.g. "Nf3", "exd5", "O-O".
+    pub san: String,
     pub score: i32,
+    /// Plain-language note on what the move does, e.g. "Develops your knight".
+    pub note: String,
 }
 
 /// The assistance produced for a position at a given rung. Fields are populated
@@ -100,6 +104,8 @@ pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
             .take(3)
             .map(|(mv, score)| Candidate {
                 uci: to_uci(mv),
+                san: san(b, mv),
+                note: describe(b, mv),
                 mv,
                 score,
             })
@@ -233,6 +239,59 @@ fn hanging_pieces(b: &Board, side: Color) -> Vec<Square> {
         }
     }
     out
+}
+
+/// A plain-language, beginner-friendly note on what a move accomplishes.
+fn describe(b: &Board, mv: Move) -> String {
+    let mut nb = *b;
+    nb.make_move(mv);
+    let opp = nb.side;
+    let opp_king = king_square(&nb, opp);
+    let gives_check = is_attacked(&nb, opp_king, opp.opp());
+    if gives_check && generate_legal(&nb).is_empty() {
+        return "Checkmate — wins the game!".to_string();
+    }
+
+    let mover = b.squares[mv.from as usize].map(|p| p.kind);
+    let captured = if mv.flag == Flag::EnPassant {
+        Some(PieceKind::Pawn)
+    } else {
+        b.squares[mv.to as usize].map(|p| p.kind)
+    };
+
+    if let Some(vk) = captured {
+        let mut s = format!("Captures the {}", kind_name(vk));
+        let attacker = mover.map(material).unwrap_or(0);
+        let safe = !is_attacked(&nb, mv.to, opp); // our piece isn't recaptured
+        if material(vk) > attacker || safe {
+            s.push_str(" — wins material");
+        }
+        if gives_check {
+            s.push_str(", with check");
+        }
+        return s;
+    }
+    if gives_check {
+        return "Gives check.".to_string();
+    }
+    if mv.flag == Flag::Castle {
+        return "Castles — tucks the king to safety.".to_string();
+    }
+    if mv.promo.is_some() {
+        return "Promotes to a queen.".to_string();
+    }
+    if let Some(k) = mover {
+        let back = if b.side == Color::White { 0 } else { 7 };
+        if (k == PieceKind::Knight || k == PieceKind::Bishop) && rank_of(mv.from) == back {
+            return format!("Develops your {}.", kind_name(k));
+        }
+        // d4, e4, d5, e5 — the classic central squares.
+        if k == PieceKind::Pawn && [27u8, 28, 35, 36].contains(&mv.to) {
+            return "Fights for the centre.".to_string();
+        }
+        return format!("Improves your {}.", kind_name(k));
+    }
+    "A solid move.".to_string()
 }
 
 fn kind_name(k: PieceKind) -> &'static str {

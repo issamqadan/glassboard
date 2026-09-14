@@ -202,11 +202,13 @@ impl Game {
             .iter()
             .map(|c| {
                 format!(
-                    "{{\"from\":{},\"to\":{},\"uci\":{},\"score\":{}}}",
+                    "{{\"from\":{},\"to\":{},\"uci\":{},\"san\":{},\"score\":{},\"note\":{}}}",
                     c.mv.from,
                     c.mv.to,
                     json_str(&c.uci),
-                    c.score
+                    json_str(&c.san),
+                    c.score,
+                    json_str(&c.note)
                 )
             })
             .collect::<Vec<_>>()

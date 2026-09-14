@@ -255,9 +255,27 @@ button {
 .assist .cand.rec {
   border-color: #2fa96b;
 }
+.assist .cand {
+  align-items: center;
+}
+.assist .cand-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.assist .cand-move {
+  font-weight: 600;
+}
+.assist .cand-note {
+  font-size: 0.78rem;
+  color: #8ea0b8;
+  line-height: 1.35;
+}
 .assist .cand .score {
   color: #8ea0b8;
   font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 .assist .none {
   color: #7f92ab;
