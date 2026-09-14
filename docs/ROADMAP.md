@@ -90,8 +90,9 @@ where an **LLM + chess knowledge** genuinely earns its place (server-side; key a
 | Phase | Scope | Needs |
 |-------|-------|-------|
 | **P1 — Lobby real** | Device identity; create/invite/join/notify; the concept as the real frontend. Runs on the existing WS server. | Frontend build; small server additions |
+| **P1.5 — Onboarding & beginner-ready** (from real-game feedback 2026-09-14) | (1) friendly **level assessment** — "how well do you play?" → a rating — on both invite and join (a rating number means nothing to a non-player); (2) a **learn-to-play** intro for total beginners — piece names, how each piece moves, the goal; (3) **plain-language descriptions on every assistance suggestion** — readable move (SAN) + what it does ("Nf3 — develops a knight and guards e5"); (4) an **"How Glassboard works"** intro (the transparent handicap / assistance / glass-box). Unblocks inviting people who've never played. | engine SAN + heuristic move descriptions; UI/content |
 | **P2 — Persistence** | Neon Postgres; Active/Past dashboard; the calibration log (every game recorded). | DB + server API |
-| **P3 — Strategy layer** | Named-strategy library + heuristic plan detection + opponent-intent read + plan tracker + LLM articulation. In-game strategic assistance panel. | Strategy engine + LLM (server-side) |
+| **P3 — Strategy layer** | Beyond single moves: **compound / multi-step strategies** the assisted player follows (named-plan library + heuristic plan detection + a plan-progress tracker), **opponent-intent reads** that *alert when an opponent's move signals an upcoming plan*, and natural-language articulation (LLM). In-game strategic assistance panel. | Strategy engine + LLM (server-side) |
 | **P4 — Calibration (M4)** | Neural eval for tunable strength; measure each rung's / plan's Elo value from alpha data; replace the seed handicap with a measured mapping. | Python/PyTorch + `assist-calibrate` |
 
 ## Open decisions
@@ -111,6 +112,13 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-14** — **Real-game feedback → P1.5 Onboarding & beginner-ready.**
+  After playing a real game, five priorities captured: (1) friendly level
+  assessment on invite/join, (2) a learn-to-play intro for total beginners
+  (pieces + moves + goal), (3) plain-language descriptions on every assistance
+  suggestion, (4) an "How Glassboard works" intro, and (5) **strategy-level
+  assistance** — compound/multi-step plans + opponent-move alerts — made explicit
+  in P3. Build order: P1.5 (unblocks inviting non-players) → P3 (strategy).
 - **2026-09-13** — **P1: server game registry + join notification.** The server
   (axum) now persists games in memory with **identity-based seating** (host→White,
   guest→Black, keyed by player id, stable across reconnects) and exposes

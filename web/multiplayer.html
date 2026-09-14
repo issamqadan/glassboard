@@ -27,6 +27,14 @@
           <label class="mc-field">Your rating <input id="elo" type="number" value="1200" min="100" max="3200" /></label>
           <button id="connect" class="mc-join">Join game →</button>
         </div>
+        <div class="lvl-chips">
+          <span class="lvl-lead">Not sure of your rating? Tap your level:</span>
+          <button type="button" onclick="setInput('elo',500)">Never played</button>
+          <button type="button" onclick="setInput('elo',900)">Beginner</button>
+          <button type="button" onclick="setInput('elo',1200)">Casual</button>
+          <button type="button" onclick="setInput('elo',1600)">Club player</button>
+          <button type="button" onclick="setInput('elo',2100)">Expert</button>
+        </div>
         <div class="mc-handi" id="mcHandi"></div>
         <details class="mc-adv">
           <summary>Advanced (server &amp; room)</summary>

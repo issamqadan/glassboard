@@ -348,3 +348,9 @@ button {
 .players .waiting-dot { width: 9px; height: 9px; border-radius: 50%; background: #e6a94c; display: inline-block; animation: pulse-w 1.4s infinite; }
 @keyframes pulse-w { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 .players .turn { margin-left: auto; font-size: 0.8rem; color: var(--accent); font-weight: 600; }
+
+/* friendly level chips (assess your level without a rating) */
+.lvl-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.lvl-chips .lvl-lead { font-size: 0.82rem; color: #7f92ab; margin-right: 2px; }
+.lvl-chips button { background: rgba(255, 255, 255, 0.04); border: 1px solid #35507a; color: #b9c6da; border-radius: 999px; padding: 7px 13px; font-size: 0.82rem; cursor: pointer; }
+.lvl-chips button:hover { border-color: var(--accent); color: #e7ecf3; }

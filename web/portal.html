@@ -113,6 +113,9 @@
     .field { margin-bottom:16px; } .field > label { display:block; font-size:0.78rem; color:var(--muted); margin-bottom:8px; font-weight:550; }
     .field input { width:100%; padding:12px 14px; border-radius:11px; background:var(--bg-2); border:1px solid var(--line); color:var(--text); font-family:inherit; font-size:0.94rem; }
     .field input:focus { border-color:var(--accent); }
+    .lvl-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .lvl-chips button { background: var(--glass); border: 1px solid var(--line-2); color: var(--muted); border-radius: 999px; padding: 8px 13px; font-size: 0.82rem; cursor: pointer; }
+    .lvl-chips button:hover { border-color: var(--accent); color: var(--text); }
     .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .rung-readout { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:11px; background:var(--bg-2); border:1px solid var(--line); margin-bottom:18px; }
     .rung-badge { font-size:0.72rem; font-weight:700; padding:6px 11px; border-radius:999px; background:rgba(224,190,121,0.14); color:var(--gold); border:1px solid rgba(224,190,121,0.35); white-space:nowrap; }
@@ -171,7 +174,17 @@
     <div class="modal">
       <div class="modal-head"><div><span class="eyebrow" style="color:var(--accent)">Your player</span><h3>Who’s playing?</h3><p class="lede">Just a name and your rough chess rating — no account needed.</p></div></div>
       <div class="field"><label>Display name</label><input id="idName" placeholder="e.g. Issam" maxlength="24"></div>
-      <div class="field"><label>Your rating <span style="color:var(--faint)">(a rough guess is fine — beginners ~800, club ~1500, expert ~2000+)</span></label><input id="idRating" type="number" min="400" max="3000" value="1200"></div>
+      <div class="field">
+        <label>How well do you play chess? <span style="color:var(--faint)">(tap one — or type your rating)</span></label>
+        <div class="lvl-chips">
+          <button type="button" onclick="setInput('idRating',500)">Never played</button>
+          <button type="button" onclick="setInput('idRating',900)">Beginner</button>
+          <button type="button" onclick="setInput('idRating',1200)">Casual</button>
+          <button type="button" onclick="setInput('idRating',1600)">Club player</button>
+          <button type="button" onclick="setInput('idRating',2100)">Expert</button>
+        </div>
+        <input id="idRating" type="number" min="400" max="3000" placeholder="rating (e.g. 1200)" style="margin-top:10px">
+      </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveIdentity()">Save</button>
     </div>
   </div>
@@ -212,6 +225,7 @@
       if (!id) { id = 'p' + Math.random().toString(36).slice(2, 10); sessionStorage.setItem('gb_pid', id); }
       return id;
     }
+    function setInput(id, v) { const e = document.getElementById(id); if (e) { e.value = v; e.dispatchEvent(new Event('input')); } }
     const loadGames = () => { try { return JSON.parse(localStorage.getItem('gb_games')) || []; } catch { return []; } };
     const saveGames = g => localStorage.setItem('gb_games', JSON.stringify(g));
     let me = loadMe();

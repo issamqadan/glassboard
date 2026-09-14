@@ -68,6 +68,8 @@ function currentPlayer() {
   localStorage.setItem("gb_me", JSON.stringify({ name, rating }));
   return { id: playerId(), name, rating };
 }
+// Level chips fill the rating input and trigger the handicap preview.
+function setInput(id, v) { const e = document.getElementById(id); if (e) { e.value = v; e.dispatchEvent(new Event("input")); } }
 
 async function main() {
   await init();
