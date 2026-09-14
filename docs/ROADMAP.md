@@ -112,6 +112,12 @@ Next: **P1 — Lobby real** (this roadmap).
 
 ## Changelog
 
+- **2026-09-15** — **Durable accounts LIVE on Neon.** `DATABASE_URL` set on Render;
+  server boots `Accounts: Postgres (durable)`. Verified end-to-end against
+  production: register (201) → sign back in returning:true (200, read from
+  Postgres) → wrong PIN 409. Accounts now survive sleep/redeploy and work across
+  devices. **Remaining P2:** persist *games* (still in-memory) + Active/Past
+  dashboard + calibration log.
 - **2026-09-15** — **Neon-ready durable accounts + richer lobby.** Server has a
   storage layer: Postgres (Neon) when `DATABASE_URL` is set (auto-creates the
   `players` table), else in-memory — so `/account` becomes durable + cross-device
