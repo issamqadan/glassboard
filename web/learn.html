@@ -308,13 +308,31 @@
       const el = document.getElementById("res-num"); let cur = Math.max(300, estimate - 600);
       const t = setInterval(() => { cur += 30; if (cur >= estimate) { cur = estimate; clearInterval(t); } el.textContent = cur; }, 22);
     }
+    // Where to go when done. If we arrived from a game invite the join card
+    // passes ?next=<game url>; return there (same-origin only) so the player
+    // lands back on their game with name + new score filled in. Else the portal.
+    function nextUrl() {
+      const n = new URLSearchParams(location.search).get("next");
+      if (!n) return null;
+      try { const u = new URL(n, location.href); if (u.origin === location.origin) return u.href; } catch {}
+      return null;
+    }
     function finish() {
       const name = document.getElementById("res-name").value.trim() || "Player";
-      const prev = (() => { try { return JSON.parse(localStorage.getItem("gb_me")) || {}; } catch { return {}; } })();
       localStorage.setItem("gb_me", JSON.stringify({ name, rating: estimate }));
-      location.href = "./portal.html";
+      location.href = nextUrl() || "./portal.html";
     }
     function restart() { setDots(0); go("welcome"); }
+
+    // Arrived from a game? Make Skip + the final CTA point back to that game.
+    (function () {
+      const nx = nextUrl();
+      if (!nx) return;
+      const skip = document.querySelector(".top a");
+      if (skip) { skip.href = nx; skip.textContent = "Skip to game →"; }
+      const cta = document.querySelector("#s-result .btn");
+      if (cta) cta.textContent = "Save & join the game →";
+    })();
   </script>
 </body>
 </html>

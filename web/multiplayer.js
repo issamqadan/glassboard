@@ -92,6 +92,11 @@ async function main() {
   const pn = el("pname");
   if (pn) { try { const m = JSON.parse(localStorage.getItem("gb_me")); if (m && m.name) pn.value = m.name; } catch {} }
 
+  // Send new players to onboarding, then back to THIS game (not the portal),
+  // with their name + score filled in.
+  const learnLink = el("learnLink");
+  if (learnLink) learnLink.href = "./learn.html?next=" + encodeURIComponent(location.href);
+
   if (mine) {
     set("mcEyebrow", "Your game");
     set("mcTitle", "Waiting for your opponent");
@@ -105,9 +110,15 @@ async function main() {
       : `Read how it works, then enter your own rating to join — you’ll play Black.`);
   }
 
-  // The joiner must set their own score — it isn't known yet. Start empty; the
-  // Join button stays disabled until they enter a valid rating.
-  if (isJoiner) { eloEl.value = ""; eloEl.placeholder = "your rating, e.g. 1400"; }
+  // The joiner sets their own score. If they've done onboarding/portal, it's
+  // known — prefill it (returning from "Find your level" lands ready to join).
+  // Otherwise start empty; Join stays disabled until they enter a valid rating.
+  if (isJoiner) {
+    let saved = null;
+    try { const m = JSON.parse(localStorage.getItem("gb_me")); if (m && m.rating) saved = m.rating; } catch {}
+    if (saved) { eloEl.value = saved; }
+    else { eloEl.value = ""; eloEl.placeholder = "your rating, e.g. 1400"; }
+  }
 
   const refreshJoin = () => {
     const v = parseInt(eloEl.value, 10);
