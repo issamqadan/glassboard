@@ -1,7 +1,7 @@
 # Status — where Glassboard stands
 
 > Running context log so any session can pick up instantly. Newest at top.
-> **Last updated:** 2026-09-12
+> **Last updated:** 2026-09-15 · tag `v0.2.0`
 
 **Name/domain (parked 2026-09-06):** keeping **Glassboard** for now; a final
 naming pass is deferred (ChatGPT floated descriptive "ChessLevel/LevelChess"
@@ -32,7 +32,36 @@ assistance** (opponent-intent reads, named plans, plan-progress, move-in-plan),
 the calibration mission, and a 4-phase build plan. Design concept published
 2026-09-13.
 
-## Done
+## Done today (2026-09-14 → 15) — big push, tag `v0.2.0`
+
+- ✅ **Onboarding & beginner-ready** (`web/learn.html`): interactive **"Find your
+  level"** (piece tutorial for all 6 pieces, or 3 live puzzles → estimated
+  rating); invite→onboarding→**returns to the game** with name+score filled;
+  name required (no silent "Player").
+- ✅ **Explained suggestions**: engine **SAN** (`core/engine/san.rs`) + assist
+  plain-language **notes** ("Develops your knight", "Captures the bishop — wins
+  material"); shown in the assist panel.
+- ✅ **Beautiful board + theming**: clean **SVG piece set** (`web/pieces.js`,
+  token-driven two-tone), framed board, selected-glow / move-dots / capture-rings
+  / last-move / place-animation; **4 board themes** (Glass/Walnut/Emerald/
+  Midnight) via a swatch switcher (`web/theme.js`), all CSS-token-driven.
+- ✅ **Lobby**: live **board previews** of active games (+ whose-move + "started N
+  ago"); shows games you **joined** (not just created); device-stable identity
+  (one browser = one player; `?test=1` for two-in-one-browser); "Clear all".
+- ✅ **Durable accounts on Neon** (LIVE): `POST /account` (name + 4-digit PIN →
+  stable cross-device id) backed by Postgres when `DATABASE_URL` is set
+  (`Store` in `server/src/main.rs`), in-memory otherwise. Verified in prod. Portal
+  identity modal is now sign-in/create.
+- ✅ **P3 strategy layer (layers 1–2), LIVE**: `core/assist/strategy.rs` — phase
+  detection + fit-scored named-plan library (Win the loose piece · Develop &
+  Castle · Seize the Centre · Attack the King · Simplify · Push the Passer),
+  each with arrows+rings, step tracker, concrete move, + opponent-intent read.
+  Exposed via WASM; **live Strategy panel** in `multiplayer.html`/`.js` that
+  **draws the picked plan on the board** and relays it to the opponent
+  (glass-box). Preview: `web/strategy.html`. **Shows when you're the assisted
+  side (gap ≥ 500) on your turn.**
+
+## Done (earlier)
 
 - ✅ **Vision, name, governing docs** — VISION.md, CLAUDE.md, ARCHITECTURE.md;
   `vision-check` skill live.
@@ -93,27 +122,27 @@ the calibration mission, and a 4-phase build plan. Design concept published
 
 ## Next session — resume here
 
-0. **▶ Phase 1 — Lobby** (per [ROADMAP.md](ROADMAP.md)). **Shipped so far:**
-   `web/portal.html` — device identity, create game → invite link, "Your games";
-   and a context-rich **join match card** in `multiplayer.html` (both scores +
-   explained assistance; joiner sets their own rating). **⏸ Pending: user testing
-   — feedback next session.** **Next:** server-side game registry so the initiator
-   is notified across the portal when someone joins. Then P2 persistence (Neon),
-   P3 strategy layer, P4 calibration.
-1. **Clarify per-side handicap in the UI**: the stronger-rated side correctly
-   shows OFF (only the weaker side is assisted) — make the copy clearer so it
-   doesn't read as a bug. Consider showing both sides' rung.
-2. **Multiplayer polish**: rematch button, promotion picker (currently a
-   `prompt`), reconnect handling, and a friendlier "server waking up…" state for
-   the free-tier cold start.
-3. **M4 — neural eval + calibration**: make the handicap a *measured* number.
+**Status:** P3 strategy layer (layers 1–2) is LIVE and playable. User is
+**playing with it to gather feedback** (paused here 2026-09-15). Pick up with:
 
-Done recently: glass-box "visible to both" full-game history (2026-09-12).
-2. **M4 — neural eval + calibration**: train a net (Python/PyTorch), infer in
-   Rust; the `assist-calibrate` skill replaces the seed `recommended_level`
-   thresholds with a *measured* effective-Elo mapping.
-3. Optional web polish: promotion picker UI (currently a `prompt`), a move list,
-   an "autopilot: play recommended" button, and sizing on small screens.
+1. **Feedback pass on the live strategy layer** — the user is testing it. Likely
+   tweaks: arrow styling/animation, strategy copy, which plans get offered,
+   phase thresholds, offering fewer/more plans. (See `core/assist/strategy.rs` +
+   `multiplayer.js` renderStrategy/drawPlan.)
+2. **Layer-3 personalization → needs game-logging to Neon.** Record each finished
+   game (players, moves, result, handicap used, plans followed) to Postgres —
+   this is the calibration/personalization data pipeline AND makes games survive
+   restarts. Extend `Store` in `server/src/main.rs` (a `games` table) + persist on
+   game end. THE key next build for "learns about the player over time."
+3. **Grow the named-plan library** + wire the strategy panel into the **AI page**
+   (`index.html`/`main.js`) too (currently multiplayer only).
+4. **Rotate the Neon DB password** (shared in chat during setup) — Neon → reset
+   password → update `DATABASE_URL` on Render.
+5. **Multiplayer polish** (still open): rematch button, promotion picker (a
+   `prompt` today), reconnect, friendlier "server waking up…" cold-start state.
+6. **M4/P4 — measured calibration**: neural eval + `assist-calibrate` to replace
+   the seed `recommended_level` thresholds with a measured effective-Elo mapping
+   (feeds off the logged games from #2).
 
 ## How to run
 
