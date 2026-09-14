@@ -180,6 +180,44 @@ fn phase(b: &Board) -> &'static str {
     }
 }
 
+/// Pawns of `color` that have no friendly pawn on an adjacent file (isolated).
+fn isolated_of(b: &Board, color: Color) -> Vec<Square> {
+    let mut has_file = [false; 8];
+    for s in 0..64u8 {
+        if let Some(p) = b.squares[s as usize] {
+            if p.color == color && p.kind == PieceKind::Pawn {
+                has_file[file_of(s) as usize] = true;
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for s in 0..64u8 {
+        if let Some(p) = b.squares[s as usize] {
+            if p.color == color && p.kind == PieceKind::Pawn {
+                let f = file_of(s) as usize;
+                let left = f > 0 && has_file[f - 1];
+                let right = f < 7 && has_file[f + 1];
+                if !left && !right {
+                    out.push(s);
+                }
+            }
+        }
+    }
+    out
+}
+fn open_file(b: &Board, file: i32) -> bool {
+    !(0..64u8).any(|s| matches!(b.squares[s as usize], Some(p) if p.kind == PieceKind::Pawn && file_of(s) == file))
+}
+fn has_rook(b: &Board, color: Color) -> bool {
+    b.squares.iter().flatten().any(|p| p.color == color && p.kind == PieceKind::Rook)
+}
+/// A bishop of `color` fianchettoed on g2/b2 (White) or g7/b7 (Black).
+fn fianchetto_bishop(b: &Board, color: Color) -> Option<Square> {
+    let sqs: [Square; 2] = if color == Color::White { [14, 9] } else { [54, 49] };
+    sqs.into_iter()
+        .find(|&s| matches!(b.squares[s as usize], Some(p) if p.color == color && p.kind == PieceKind::Bishop))
+}
+
 fn pick(ranked: &[(Move, i32)], pred: impl Fn(&Move) -> bool) -> Option<Move> {
     ranked.iter().map(|(m, _)| *m).find(|m| pred(m))
 }
@@ -409,6 +447,107 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
         }
     }
 
+    // --- Attack the isolated pawn (structural: opponent has an isolani) ---
+    let opp_iso = isolated_of(b, opp);
+    if let Some(&pawn) = opp_iso.iter().min_by_key(|&&s| (file_of(s) - 4).abs().min((file_of(s) - 3).abs())) {
+        let block_sq = if opp == Color::White { pawn.saturating_add(8) } else { pawn.wrapping_sub(8) };
+        let rec = pick(ranked, |m| m.to == pawn)
+            .or_else(|| pick(ranked, |m| m.to == block_sq))
+            .unwrap_or(top);
+        let mut rings = vec![pawn];
+        if block_sq < 64 {
+            rings.push(block_sq);
+        }
+        out.push(mk(
+            "iso_attack",
+            "Attack the isolated pawn",
+            "Their pawn has no neighbour to defend it — blockade it with a knight, pile up, and win it.",
+            44,
+            rec,
+            "Targets the weak isolated pawn — blockade it, then win it.".to_string(),
+            vec![PlanArrow { from: rec.from, to: rec.to, kind: ArrowKind::Attack }],
+            rings,
+            vec![
+                step("Blockade it with a knight", false),
+                step("Pile up attackers on it", false),
+                step("Win the weak pawn", false),
+            ],
+        ));
+    }
+
+    // --- Seize the open file (structural: a fully open file + a rook) ---
+    if has_rook(b, side) {
+        if let Some(file) = (0..8i32).find(|&f| open_file(b, f)) {
+            let rec = pick(ranked, |m| kind_at(b, m.from) == Some(PieceKind::Rook) && file_of(m.to) == file)
+                .unwrap_or(top);
+            let fname = (b'a' + file as u8) as char;
+            out.push(mk(
+                "open_file",
+                "Seize the open file",
+                "An open file is a highway for your rooks — occupy it, double up, and invade.",
+                33,
+                rec,
+                format!("Puts a rook on the open {fname}-file — control it and invade the 7th."),
+                vec![PlanArrow { from: rec.from, to: rec.to, kind: ArrowKind::Support }],
+                vec![rec.to],
+                vec![
+                    step("Put a rook on the open file", false),
+                    step("Double your rooks", false),
+                    step("Invade the 7th rank", false),
+                ],
+            ));
+        }
+    }
+
+    // --- Kingside pawn storm (enemy king castled short, in the middlegame) ---
+    if ph == "middlegame" {
+        let kf = file_of(opp_king);
+        let kr = rank_of(opp_king);
+        let enemy_short = kf >= 5
+            && ((side == Color::White && kr >= 6) || (side == Color::Black && kr <= 1));
+        if enemy_short {
+            let rec = pick(ranked, |m| {
+                kind_at(b, m.from) == Some(PieceKind::Pawn) && file_of(m.from) >= 5 && forward_pawn(b, m, side)
+            })
+            .unwrap_or(top);
+            out.push(mk(
+                "pawn_storm",
+                "Kingside pawn storm",
+                "Their king is castled kingside — roll your g- and h-pawns up the board to tear open its cover.",
+                36,
+                rec,
+                "Advances a kingside pawn — the storm that cracks their king open.".to_string(),
+                vec![PlanArrow { from: rec.from, to: rec.to, kind: ArrowKind::Attack }],
+                vec![opp_king],
+                vec![
+                    step("Advance your g/h pawns", false),
+                    step("Pry open the king's cover", false),
+                    step("Break through with your pieces", false),
+                ],
+            ));
+        }
+    }
+
+    // --- The long diagonal (a fianchettoed bishop) ---
+    if let Some(bsq) = fianchetto_bishop(b, side) {
+        let rec = pick(ranked, |m| m.from == bsq).unwrap_or(top);
+        out.push(mk(
+            "fianchetto",
+            "The long diagonal",
+            "Your fianchettoed bishop rakes the long diagonal — keep it open and aim it at their king.",
+            29,
+            rec,
+            "Works the long diagonal — your bishop is a long-range sniper on their position.".to_string(),
+            vec![PlanArrow { from: bsq, to: opp_king, kind: ArrowKind::Attack }],
+            vec![opp_king],
+            vec![
+                step("Keep the long diagonal open", false),
+                step("Aim the bishop at their king", false),
+                step("Add pieces to the attack", false),
+            ],
+        ));
+    }
+
     out.sort_by(|a, b| b.fit.cmp(&a.fit));
     out.truncate(3);
 
@@ -480,6 +619,15 @@ mod tests {
         assert!(s.strategies.iter().any(|x| x.id == "develop" || x.id == "center"));
         // every strategy carries a concrete first move
         assert!(s.strategies.iter().all(|x| !x.move_san.is_empty()));
+    }
+
+    #[test]
+    fn isolated_pawn_is_targeted() {
+        // Black has an isolated d5 pawn (no c/e pawns), defended by its king so
+        // it's not simply loose — the plan is to target the isolani. White to move.
+        let b = parse_fen("8/8/4k3/3p4/8/8/3RK3/8 w - - 0 1");
+        let s = strategize(&b, &ranked(&b));
+        assert!(s.strategies.iter().any(|x| x.id == "iso_attack"));
     }
 
     #[test]
