@@ -310,15 +310,26 @@
     // Poll the server for our games' status → notify when someone joins.
     async function pollGames() {
       if (!me) return;
-      const games = loadGames(); if (!games.length) return;
+      // Always ask the server which games we're in — this is how a game we JOINED
+      // (not created locally) shows up in our lobby too.
       let remote;
       try { remote = await (await fetch(SERVER_HTTP + '/games?player=' + encodeURIComponent(me.id))).json(); }
       catch { return; }
-      const byId = {}; (remote || []).forEach(r => byId[r.id] = r);
+      const games = loadGames();
+      const byLocal = {}; games.forEach(g => byLocal[g.id] = g);
       let changed = false;
-      for (const g of games) {
-        const r = byId[g.id];
-        if (!r) continue;
+      (remote || []).forEach(r => {
+        let g = byLocal[r.id];
+        if (!g) {
+          // A game we're part of but isn't in our list (typically one we joined).
+          g = {
+            id: r.id, joined: r.color === 'black', color: r.color, status: r.status,
+            myRating: r.my_rating, oppName: r.opp_name || 'Opponent', oppRating: r.opp_rating,
+            fen: r.fen, turn: r.turn, notified: true,
+          };
+          games.push(g); byLocal[r.id] = g; changed = true;
+          return;
+        }
         if (r.opp_name && g.oppName !== r.opp_name) { g.oppName = r.opp_name; changed = true; }
         if (r.opp_rating && g.oppRating !== r.oppRating) { g.oppRating = r.opp_rating; changed = true; }
         if (r.color && g.color !== r.color) { g.color = r.color; changed = true; }
@@ -326,10 +337,10 @@
         if (r.turn && g.turn !== r.turn) { g.turn = r.turn; changed = true; }
         if (r.status === 'active' && g.status !== 'active') {
           g.status = 'active';
-          if (!g.notified) { g.notified = true; toast((r.opp_name || 'Your opponent') + ' joined', 'Game ready — Enter to play.'); }
+          if (!g.notified && !g.joined) { g.notified = true; toast((r.opp_name || 'Your opponent') + ' joined', 'Game ready — Enter to play.'); }
           changed = true;
         }
-      }
+      });
       if (changed) { saveGames(games); renderGames(); }
     }
     setInterval(pollGames, 4000);
@@ -400,7 +411,10 @@
     }
     function enterGame(i) {
       const g = loadGames()[i]; if (!g) return;
-      location.href = 'multiplayer.html?room=' + g.id + '&elo=' + g.myRating + '&host=' + encodeURIComponent(me.name) + '&mine=1';
+      let url = 'multiplayer.html?room=' + encodeURIComponent(g.id) + '&elo=' + (g.myRating || '');
+      // A game we created → we're host (White). A game we joined → re-enter as guest.
+      if (!g.joined) url += '&host=' + encodeURIComponent(me.name) + '&mine=1';
+      location.href = url;
     }
     function removeGame(i) {
       const games = loadGames(); games.splice(i, 1); saveGames(games); renderGames();

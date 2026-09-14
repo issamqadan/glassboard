@@ -228,9 +228,12 @@
 
     // ---------- tutorial (beginners) ----------
     const TUT = [
-      { title: "Meet the knight ♞", prompt: "The knight moves in an <b>L</b> — and it can jump over pieces. Tap it, then tap a blue square to move.", fen: "8/8/8/8/8/8/8/8", place: { 27: "N" } },
-      { title: "The rook ♜", prompt: "The rook moves in <b>straight lines</b> — as far as you like. Tap it and move it.", fen: "8/8/8/8/8/8/8/8", place: { 27: "R" } },
-      { title: "The pawn ♟", prompt: "Pawns step <b>forward</b> (two on the first move) and capture <b>diagonally</b>. Move it forward.", fen: "8/8/8/8/8/8/8/8", place: { 11: "P" } },
+      { title: "The pawn", prompt: "Pawns move <b>forward</b> — one square, or two on their first move — and capture <b>diagonally</b>. Tap it, then a blue square.", place: { 12: "P" } },
+      { title: "The knight", prompt: "The knight moves in an <b>L</b> and can <b>jump over</b> other pieces. Tap it, then a blue square.", place: { 27: "N" } },
+      { title: "The bishop", prompt: "The bishop glides <b>diagonally</b>, as far as it likes. Give it a go.", place: { 27: "B" } },
+      { title: "The rook", prompt: "The rook moves in <b>straight lines</b> — across, or up and down. Move it.", place: { 27: "R" } },
+      { title: "The queen", prompt: "The most powerful piece — the queen moves in <b>any direction</b>, any distance. Try it.", place: { 27: "Q" } },
+      { title: "The king", prompt: "The king moves <b>one square</b> in any direction. Keep him safe — the whole game is about protecting your king.", place: { 28: "K" } },
     ];
     let tutStep = 0;
     function startTutorial() { tutStep = 0; go("tutorial"); loadTut(); }
@@ -239,7 +242,7 @@
       document.getElementById("tut-title").innerHTML = t.title;
       document.getElementById("tut-prompt").innerHTML = t.prompt;
       document.getElementById("tut-fb").textContent = "";
-      const map = mapFromFen(t.fen); Object.assign(map, t.place);
+      const map = {}; Object.assign(map, t.place);
       const only = +Object.keys(t.place)[0];
       board("tut-board", map, {
         only, onMove: (from, to, render) => {
@@ -252,7 +255,7 @@
     function finishTutorial() {
       // beginners: goal explainer, then a beginner level
       estimate = 500;
-      showResult("You've got the idea!", "You just moved your first pieces. Glassboard will guide you the rest of the way — with help that's always shown to your opponent.");
+      showResult("You've met all the pieces!", "The goal of chess: trap the other player’s king so it can’t escape — that’s called checkmate. You don’t need to memorize anything — Glassboard guides you, and every hint is shown to your opponent too.");
     }
 
     // ---------- assessment ----------

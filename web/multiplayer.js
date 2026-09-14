@@ -114,6 +114,12 @@ async function main() {
     set("mcSub", he
       ? `${host} is rated ${he}. Read how it works, then enter your own rating to join — you’ll play Black.`
       : `Read how it works, then enter your own rating to join — you’ll play Black.`);
+  } else if (roomEl.value) {
+    // Re-entering a game we're already in (opened from the lobby).
+    set("mcEyebrow", "Your game");
+    set("mcTitle", "Resume game");
+    set("mcSub", `Room “${roomEl.value}”. Click Join to reconnect and continue.`);
+    const intro = el("mcIntro"); if (intro) intro.style.display = "none";
   }
 
   // The joiner sets their own score. If they've done onboarding/portal, it's
