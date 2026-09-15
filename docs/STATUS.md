@@ -77,6 +77,11 @@ the calibration mission, and a 4-phase build plan. Design concept published
   file, Kingside pawn storm, The long diagonal (fianchetto), plus the earlier
   set. Deterministic + measurable; **no LLM/API key** (user chose no-key).
   Free-tier LLM (Groq/Gemini) remains an optional future switch.
+- ✅ **Durable game persistence (P1)** (`v0.2.2`): games saved to Neon (`games`
+  table) on every change and restored on boot — they now survive Render's ~15-min
+  idle spin-down AND redeploys. Root-caused + fixed the "waiting to join after a
+  few moves" (rooms were RAM-only). `server/src/main.rs` snapshot/save/load/delete;
+  glass-box history serialized too. **Pending: prod verification (canary game).**
 
 ## Done (earlier)
 
@@ -146,11 +151,11 @@ the calibration mission, and a 4-phase build plan. Design concept published
    tweaks: arrow styling/animation, strategy copy, which plans get offered,
    phase thresholds, offering fewer/more plans. (See `core/assist/strategy.rs` +
    `multiplayer.js` renderStrategy/drawPlan.)
-2. **Layer-3 personalization → needs game-logging to Neon.** Record each finished
-   game (players, moves, result, handicap used, plans followed) to Postgres —
-   this is the calibration/personalization data pipeline AND makes games survive
-   restarts. Extend `Store` in `server/src/main.rs` (a `games` table) + persist on
-   game end. THE key next build for "learns about the player over time."
+2. **Casual vs Match modes** (user idea 2026-09-15 — see ROADMAP "Game modes").
+   "New game" asks Casual (unlimited two-sided assistance, no ratings) or Match
+   (declared handicap + ratings, measured). Persist the mode with the game
+   (games table already durable). **Build next.**
+   Then: layer-3 personalization from the now-durable game history (calibration).
 3. **Grow the named-plan library** + wire the strategy panel into the **AI page**
    (`index.html`/`main.js`) too (currently multiplayer only).
 4. **Rotate the Neon DB password** (shared in chat during setup) — Neon → reset

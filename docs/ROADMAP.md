@@ -95,6 +95,23 @@ where an **LLM + chess knowledge** genuinely earns its place (server-side; key a
 | **P3 — Strategy layer** | Beyond single moves: **compound / multi-step strategies** the assisted player follows (named-plan library + heuristic plan detection + a plan-progress tracker), **opponent-intent reads** that *alert when an opponent's move signals an upcoming plan*, and natural-language articulation (LLM). In-game strategic assistance panel. | Strategy engine + LLM (server-side) |
 | **P4 — Calibration (M4)** | Neural eval for tunable strength; measure each rung's / plan's Elo value from alpha data; replace the seed handicap with a measured mapping. | Python/PyTorch + `assist-calibrate` |
 
+## Game modes — Casual vs Match (design, 2026-09-15)
+
+A first-class distinction the product should make when starting a game:
+
+- **Casual** — free play. **Unlimited assistance for BOTH sides**, no rating/score
+  declaration required, doesn't affect any rating. A transparent sandbox to learn,
+  explore strategies, and have fun. (Generalizes today's "force assist" testing
+  toggle into a real mode.)
+- **Match** — the competitive game. **Assistance is part of the declared terms**:
+  the handicap model + the amount/level/quantity of assistance is set up front,
+  ratings matter, and the result is measured (feeds calibration). This is the
+  vision's fairness game.
+
+Implication: "New game" first asks **Casual or Match**. Match carries the rating +
+handicap declaration; Casual skips it and grants both players the full assistance
+spectrum. Persist the chosen mode with the game. (Build next.)
+
 ## Open decisions
 
 1. Accounts vs device-identity for **beta** (alpha = device).
