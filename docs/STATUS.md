@@ -1,7 +1,7 @@
 # Status — where Glassboard stands
 
 > Running context log so any session can pick up instantly. Newest at top.
-> **Last updated:** 2026-09-15 · tag `v0.2.1`
+> **Last updated:** 2026-09-15 · tag `v0.2.2`
 
 **Name/domain (parked 2026-09-06):** keeping **Glassboard** for now; a final
 naming pass is deferred (ChatGPT floated descriptive "ChessLevel/LevelChess"
@@ -64,6 +64,19 @@ the calibration mission, and a 4-phase build plan. Design concept published
   a "force" checkbox / `?assist=<rung>` in `multiplayer.html` to turn assistance
   on for the stronger side too — feel the strategy UX from either seat.
   Transparent (glass-boxed); a testing aid, **not** the fair default.
+- ✅ **Resign + game result** (`v0.2.2`): Resign button (server `ClientMsg::Resign`
+  → `Room.resigned`; `Room.outcome()` → winner/reason for resign/checkmate/
+  stalemate/fifty-move; broadcast State carries winner+reason). Game shows
+  "You win/lose/Draw — by <reason>".
+- ✅ **Lobby delete/hide** (`v0.2.2`): host **Delete** (`POST /games/delete`,
+  host-only → gone for both) vs **Hide** (either side, local `gb_hidden` → poll
+  won't re-add). `/games` now returns over/winner/reason; finished games show a
+  result chip. Fixes "delete just returns".
+- ✅ **Real named strategies — no key** (`v0.2.2`): richer, structural,
+  persistent plans in `strategy.rs` — Attack the isolated pawn, Seize the open
+  file, Kingside pawn storm, The long diagonal (fianchetto), plus the earlier
+  set. Deterministic + measurable; **no LLM/API key** (user chose no-key).
+  Free-tier LLM (Groq/Gemini) remains an optional future switch.
 
 ## Done (earlier)
 
