@@ -1,7 +1,7 @@
 # Status — where Glassboard stands
 
 > Running context log so any session can pick up instantly. Newest at top.
-> **Last updated:** 2026-09-15 · tag `v0.2.2`
+> **Last updated:** 2026-09-15 · tag `v0.3.0`
 
 **Name/domain (parked 2026-09-06):** keeping **Glassboard** for now; a final
 naming pass is deferred (ChatGPT floated descriptive "ChessLevel/LevelChess"
@@ -77,11 +77,23 @@ the calibration mission, and a 4-phase build plan. Design concept published
   file, Kingside pawn storm, The long diagonal (fianchetto), plus the earlier
   set. Deterministic + measurable; **no LLM/API key** (user chose no-key).
   Free-tier LLM (Groq/Gemini) remains an optional future switch.
-- ✅ **Durable game persistence (P1)** (`v0.2.2`): games saved to Neon (`games`
-  table) on every change and restored on boot — they now survive Render's ~15-min
-  idle spin-down AND redeploys. Root-caused + fixed the "waiting to join after a
-  few moves" (rooms were RAM-only). `server/src/main.rs` snapshot/save/load/delete;
-  glass-box history serialized too. **Pending: prod verification (canary game).**
+- ✅ **Durable game persistence (P1) — VERIFIED** (`v0.3.0`): games saved to Neon
+  (`games` table) on every change and restored on boot — survive Render's ~15-min
+  idle spin-down AND redeploys. Root-caused + fixed "waiting to join after a few
+  moves" (rooms were RAM-only). `server/src/main.rs` snapshot/save/load/delete;
+  glass serialized. **Proven in prod:** a canary game survived multiple restarts.
+- ✅ **Casual vs Match modes** (`v0.3.0`): New-game picker. Match = ratings +
+  declared handicap (measured). Casual = free play, BOTH sides unlimited
+  assistance, no ratings (join with just a name). Mode persisted (games.mode
+  column + ALTER migration), carried in invite link/state/summaries, shown as a
+  lobby chip. Confirmed in prod.
+- ✅ **Smoother join** (`v0.3.0`): fixed the friction (son couldn't join) — the
+  disabled Match Join button now explains itself ("Enter your rating above to
+  join ↑"); Casual needs only a name.
+- ✅ **Turn notifications, in-tab** (`v0.3.0`): opponent's move → tab-title badge
+  + (backgrounded) beep + browser Notification; "🔔 Notify" button requests
+  permission. Away/closed-tab/mobile push (Web Push + service worker + VAPID) is
+  **deferred** (user: not now).
 
 ## Done (earlier)
 
@@ -144,27 +156,25 @@ the calibration mission, and a 4-phase build plan. Design concept published
 
 ## Next session — resume here
 
-**Status:** P3 strategy layer (layers 1–2) is LIVE and playable. User is
-**playing with it to gather feedback** (paused here 2026-09-15). Pick up with:
+**Status:** Multiplayer is now robust & feature-complete for alpha — durable
+games (survive restarts), Casual/Match modes, resign, lobby delete/hide, in-tab
+turn notifications, real named strategies, durable accounts, themeable board.
+User is **playtesting** (paused here 2026-09-15). Pick up with:
 
-1. **Feedback pass on the live strategy layer** — the user is testing it. Likely
-   tweaks: arrow styling/animation, strategy copy, which plans get offered,
-   phase thresholds, offering fewer/more plans. (See `core/assist/strategy.rs` +
-   `multiplayer.js` renderStrategy/drawPlan.)
-2. **Casual vs Match modes** (user idea 2026-09-15 — see ROADMAP "Game modes").
-   "New game" asks Casual (unlimited two-sided assistance, no ratings) or Match
-   (declared handicap + ratings, measured). Persist the mode with the game
-   (games table already durable). **Build next.**
-   Then: layer-3 personalization from the now-durable game history (calibration).
+1. **Playtest feedback** — likely tweaks to strategy plans (arrow styling, copy,
+   which plans, phase thresholds), and general polish from real games.
+2. **Web Push notifications** (deferred by user, but the natural next big one for
+   days-long games): service worker + PWA manifest + VAPID + `subscriptions`
+   table + push-on-move. iOS needs Add-to-Home-Screen. Free.
 3. **Grow the named-plan library** + wire the strategy panel into the **AI page**
-   (`index.html`/`main.js`) too (currently multiplayer only).
-4. **Rotate the Neon DB password** (shared in chat during setup) — Neon → reset
+   (`index.html`/`main.js`) — currently multiplayer only. Optional: free-tier LLM
+   articulation (Groq/Gemini) as an opt-in switch.
+4. **Multiplayer polish**: rematch/new-game button, promotion picker (a `prompt`
+   today), reconnect, friendlier "server waking up…" cold-start state.
+5. **Rotate the Neon DB password** (shared in chat during setup) — Neon → reset
    password → update `DATABASE_URL` on Render.
-5. **Multiplayer polish** (still open): rematch button, promotion picker (a
-   `prompt` today), reconnect, friendlier "server waking up…" cold-start state.
-6. **M4/P4 — measured calibration**: neural eval + `assist-calibrate` to replace
-   the seed `recommended_level` thresholds with a measured effective-Elo mapping
-   (feeds off the logged games from #2).
+6. **Layer-3 personalization + M4/P4 calibration** from the now-durable game
+   history — measured effective-Elo mapping to replace the seed thresholds.
 
 ## How to run
 
