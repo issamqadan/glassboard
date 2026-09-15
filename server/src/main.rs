@@ -40,7 +40,7 @@ use sqlx::Row;
 use tokio::sync::{broadcast, Mutex};
 use tower_http::cors::CorsLayer;
 
-use room::{Player, Room, Seats};
+use room::{GlassEntry, Player, Room, Seats};
 
 struct RoomState {
     room: Room,
@@ -154,7 +154,18 @@ async fn build_store() -> Store {
             .execute(&pool)
             .await
             .expect("create players table");
-            println!("Accounts: Postgres (durable)");
+            sqlx::query(
+                "CREATE TABLE IF NOT EXISTS games (\
+                   id TEXT PRIMARY KEY, fen TEXT NOT NULL, last_uci TEXT, \
+                   resigned TEXT NOT NULL DEFAULT '', white_elo INT NOT NULL, black_elo INT NOT NULL, \
+                   host_id TEXT, host_name TEXT, host_rating INT, \
+                   guest_id TEXT, guest_name TEXT, guest_rating INT, \
+                   glass TEXT NOT NULL DEFAULT '[]', started BIGINT NOT NULL)",
+            )
+            .execute(&pool)
+            .await
+            .expect("create games table");
+            println!("Accounts + games: Postgres (durable)");
             Store::Pg(pool)
         }
         _ => {
@@ -162,6 +173,125 @@ async fn build_store() -> Store {
             Store::Memory(Arc::new(Mutex::new(HashMap::new())))
         }
     }
+}
+
+// ---- durable game persistence (Postgres) ----
+
+struct GameRow {
+    id: String,
+    fen: String,
+    last_uci: Option<String>,
+    resigned: String,
+    white_elo: i32,
+    black_elo: i32,
+    host: Option<Player>,
+    guest: Option<Player>,
+    glass: String,
+    started: i64,
+}
+fn snapshot(id: &str, rs: &RoomState) -> GameRow {
+    let resigned = match rs.room.resigned {
+        Some(engine::Color::White) => "white",
+        Some(engine::Color::Black) => "black",
+        None => "",
+    }
+    .to_string();
+    GameRow {
+        id: id.to_string(),
+        fen: rs.room.fen(),
+        last_uci: rs.room.last_uci.clone(),
+        resigned,
+        white_elo: rs.room.white_elo,
+        black_elo: rs.room.black_elo,
+        host: rs.seats.host.clone(),
+        guest: rs.seats.guest.clone(),
+        glass: serde_json::to_string(&rs.room.glass).unwrap_or_else(|_| "[]".to_string()),
+        started: rs.started as i64,
+    }
+}
+async fn save_snapshot(pool: &sqlx::PgPool, g: GameRow) {
+    let hi = g.host.as_ref().map(|p| p.id.clone());
+    let hn = g.host.as_ref().map(|p| p.name.clone());
+    let hr = g.host.as_ref().map(|p| p.rating);
+    let gi = g.guest.as_ref().map(|p| p.id.clone());
+    let gn = g.guest.as_ref().map(|p| p.name.clone());
+    let gr = g.guest.as_ref().map(|p| p.rating);
+    let _ = sqlx::query(
+        "INSERT INTO games (id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) \
+         ON CONFLICT (id) DO UPDATE SET fen=$2,last_uci=$3,resigned=$4,white_elo=$5,black_elo=$6,host_id=$7,host_name=$8,host_rating=$9,guest_id=$10,guest_name=$11,guest_rating=$12,glass=$13",
+    )
+    .bind(g.id).bind(g.fen).bind(g.last_uci).bind(g.resigned).bind(g.white_elo).bind(g.black_elo)
+    .bind(hi).bind(hn).bind(hr).bind(gi).bind(gn).bind(gr).bind(g.glass).bind(g.started)
+    .execute(pool)
+    .await;
+}
+/// Persist one room's current state (no-op unless Postgres is configured).
+async fn persist_game(store: &Store, rooms: &Rooms, id: &str) {
+    let pool = match store {
+        Store::Pg(p) => p.clone(),
+        _ => return,
+    };
+    let snap = { rooms.lock().await.get(id).map(|rs| snapshot(id, rs)) };
+    if let Some(s) = snap {
+        save_snapshot(&pool, s).await;
+    }
+}
+async fn delete_game_db(store: &Store, id: &str) {
+    if let Store::Pg(pool) = store {
+        let _ = sqlx::query("DELETE FROM games WHERE id=$1").bind(id).execute(pool).await;
+    }
+}
+/// Reload all saved games into fresh RoomStates on boot (so games survive restarts).
+async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
+    let rows = match sqlx::query(
+        "SELECT id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started FROM games",
+    )
+    .fetch_all(pool)
+    .await
+    {
+        Ok(r) => r,
+        Err(_) => return Vec::new(),
+    };
+    let mut out = Vec::new();
+    for row in rows {
+        let id: String = row.get("id");
+        let fen: String = row.get("fen");
+        let resigned = match row.get::<String, _>("resigned").as_str() {
+            "white" => Some(engine::Color::White),
+            "black" => Some(engine::Color::Black),
+            _ => None,
+        };
+        let glass: Vec<GlassEntry> = serde_json::from_str(&row.get::<String, _>("glass")).unwrap_or_default();
+        let host = row.get::<Option<String>, _>("host_id").map(|id| Player {
+            id,
+            name: row.get::<Option<String>, _>("host_name").unwrap_or_default(),
+            rating: row.get::<Option<i32>, _>("host_rating").unwrap_or(1500),
+        });
+        let guest = row.get::<Option<String>, _>("guest_id").map(|id| Player {
+            id,
+            name: row.get::<Option<String>, _>("guest_name").unwrap_or_default(),
+            rating: row.get::<Option<i32>, _>("guest_rating").unwrap_or(1500),
+        });
+        let room = Room {
+            board: engine::parse_fen(&fen),
+            white_taken: host.is_some(),
+            black_taken: guest.is_some(),
+            white_elo: row.get("white_elo"),
+            black_elo: row.get("black_elo"),
+            last_uci: row.get("last_uci"),
+            resigned,
+            glass,
+        };
+        let rs = RoomState {
+            room,
+            tx: broadcast::channel(64).0,
+            seats: Seats { host, guest },
+            started: row.get::<i64, _>("started") as u64,
+        };
+        out.push((id, rs));
+    }
+    out
 }
 
 #[derive(Clone)]
@@ -245,6 +375,18 @@ enum ServerMsg {
 async fn main() {
     let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
     let store = build_store().await;
+    // Restore saved games so they survive redeploys and idle spin-downs.
+    if let Store::Pg(pool) = &store {
+        let loaded = load_all_games(pool).await;
+        let n = loaded.len();
+        {
+            let mut map = rooms.lock().await;
+            for (id, rs) in loaded {
+                map.insert(id, rs);
+            }
+        }
+        println!("Restored {n} game(s) from Postgres");
+    }
     let app = Router::new()
         .route("/", get(root))
         .route("/games", get(list_games).post(create_game))
@@ -302,18 +444,26 @@ struct GameSummary {
 }
 
 /// Pre-register a game so the host holds White before sharing the invite link.
-async fn create_game(State(rooms): State<Rooms>, Json(b): Json<CreateReq>) -> Json<serde_json::Value> {
-    let mut map = rooms.lock().await;
-    let rs = map.entry(b.id.clone()).or_insert_with(new_room_state);
-    if rs.seats.host.is_none() {
-        rs.seats.host = Some(Player {
-            id: b.pid.clone(),
-            name: b.name.clone(),
-            rating: b.rating,
-        });
-        rs.room.white_elo = b.rating;
-    }
-    Json(serde_json::json!({ "id": b.id, "status": rs.seats.status() }))
+async fn create_game(
+    State(rooms): State<Rooms>,
+    State(store): State<Store>,
+    Json(b): Json<CreateReq>,
+) -> Json<serde_json::Value> {
+    let status = {
+        let mut map = rooms.lock().await;
+        let rs = map.entry(b.id.clone()).or_insert_with(new_room_state);
+        if rs.seats.host.is_none() {
+            rs.seats.host = Some(Player {
+                id: b.pid.clone(),
+                name: b.name.clone(),
+                rating: b.rating,
+            });
+            rs.room.white_elo = b.rating;
+        }
+        rs.seats.status().to_string()
+    };
+    persist_game(&store, &rooms, &b.id).await;
+    Json(serde_json::json!({ "id": b.id, "status": status }))
 }
 
 #[derive(Deserialize)]
@@ -324,15 +474,25 @@ struct DeleteReq {
 }
 
 /// Host-only: delete a game room entirely (gone for both players).
-async fn delete_game(State(rooms): State<Rooms>, Json(b): Json<DeleteReq>) -> Json<serde_json::Value> {
-    let mut map = rooms.lock().await;
-    let is_host = map
-        .get(&b.id)
-        .and_then(|rs| rs.seats.host.as_ref())
-        .map(|h| h.id == b.pid)
-        .unwrap_or(false);
+async fn delete_game(
+    State(rooms): State<Rooms>,
+    State(store): State<Store>,
+    Json(b): Json<DeleteReq>,
+) -> Json<serde_json::Value> {
+    let is_host = {
+        let mut map = rooms.lock().await;
+        let is_host = map
+            .get(&b.id)
+            .and_then(|rs| rs.seats.host.as_ref())
+            .map(|h| h.id == b.pid)
+            .unwrap_or(false);
+        if is_host {
+            map.remove(&b.id);
+        }
+        is_host
+    };
     if is_host {
-        map.remove(&b.id);
+        delete_game_db(&store, &b.id).await;
     }
     Json(serde_json::json!({ "deleted": is_host }))
 }
@@ -413,14 +573,18 @@ async fn account(State(store): State<Store>, Json(req): Json<AccountReq>) -> imp
 
 // ---------------- WebSocket game ----------------
 
-async fn root(ws: Option<WebSocketUpgrade>, State(rooms): State<Rooms>) -> axum::response::Response {
+async fn root(
+    ws: Option<WebSocketUpgrade>,
+    State(rooms): State<Rooms>,
+    State(store): State<Store>,
+) -> axum::response::Response {
     match ws {
-        Some(ws) => ws.on_upgrade(move |socket| handle(socket, rooms)),
+        Some(ws) => ws.on_upgrade(move |socket| handle(socket, rooms, store)),
         None => "Glassboard multiplayer server — connect via WebSocket.".into_response(),
     }
 }
 
-async fn handle(socket: WebSocket, rooms: Rooms) {
+async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
     let (mut sink, mut stream) = socket.split();
 
     // First frame must be a join.
@@ -523,6 +687,7 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
     });
 
     broadcast_state(&rooms, &room_code).await;
+    persist_game(&store, &rooms, &room_code).await;
 
     loop {
         tokio::select! {
@@ -542,16 +707,20 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
                                 }
                             }
                             broadcast_state(&rooms, &room_code).await;
+                            persist_game(&store, &rooms, &room_code).await;
                         }
                         Ok(ClientMsg::Glass { summary }) => {
-                            let mut map = rooms.lock().await;
-                            if let Some(rs) = map.get_mut(&room_code) {
-                                rs.room.push_glass(color_str, &summary);
-                                let _ = rs.tx.send(json(&ServerMsg::Glass {
-                                    side: color_str.to_string(),
-                                    summary,
-                                }));
+                            {
+                                let mut map = rooms.lock().await;
+                                if let Some(rs) = map.get_mut(&room_code) {
+                                    rs.room.push_glass(color_str, &summary);
+                                    let _ = rs.tx.send(json(&ServerMsg::Glass {
+                                        side: color_str.to_string(),
+                                        summary,
+                                    }));
+                                }
                             }
+                            persist_game(&store, &rooms, &room_code).await;
                         }
                         Ok(ClientMsg::Reset) => {
                             {
@@ -561,6 +730,7 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
                                 }
                             }
                             broadcast_state(&rooms, &room_code).await;
+                            persist_game(&store, &rooms, &room_code).await;
                         }
                         Ok(ClientMsg::Resign) => {
                             {
@@ -570,6 +740,7 @@ async fn handle(socket: WebSocket, rooms: Rooms) {
                                 }
                             }
                             broadcast_state(&rooms, &room_code).await;
+                            persist_game(&store, &rooms, &room_code).await;
                         }
                         _ => {}
                     }

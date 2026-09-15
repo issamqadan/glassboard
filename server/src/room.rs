@@ -4,9 +4,10 @@
 //! illegal move. Network plumbing lives in `main.rs`.
 
 use engine::*;
+use serde::{Deserialize, Serialize};
 
 /// One transparent assistance record, kept so late joiners see the full history.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GlassEntry {
     pub side: String,
     pub summary: String,
