@@ -525,3 +525,10 @@ button {
 .status .result.win { color: #45c86e; }
 .status .result.loss { color: #f0808a; }
 .status .result.draw { color: #b9c6da; }
+
+/* turn-notify button in the game header */
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.topbar-right .resign-btn { margin-left: 0; }
+.topbtn { background: transparent; border: 1px solid var(--line); color: #b9c6da; border-radius: 8px; padding: 5px 12px; font-size: 0.82rem; font-weight: 600; }
+.topbtn:hover { border-color: var(--accent); color: var(--accent); }
+.topbtn:disabled { opacity: 0.5; cursor: default; }

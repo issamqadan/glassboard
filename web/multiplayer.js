@@ -43,6 +43,8 @@ let pickedStrategyId = null;
 let lastStratRelay = null;
 let forceAssist = null; // testing: force an assist rung even when you're stronger
 let gameMode = "match"; // "match" (declared handicap) | "casual" (free, both sides assisted)
+let prevMyTurn = false, seenState = false;
+const baseTitle = "Glassboard — Online";
 let lastMove = null;
 let lastGlassFen = null;
 let hostName = null;
@@ -124,6 +126,14 @@ async function main() {
 
   const rb = el("resignBtn");
   if (rb) rb.addEventListener("click", resign);
+
+  const nb = el("notifyBtn");
+  if (nb) {
+    updateNotifyBtn();
+    nb.addEventListener("click", () => {
+      if (window.Notification) Notification.requestPermission().then(() => updateNotifyBtn());
+    });
+  }
 
   if (mine) {
     set("mcEyebrow", "Your game");
@@ -244,8 +254,59 @@ function onState(msg) {
   selected = null;
   legalTargets = [];
 
+  // Notify when the opponent's move makes it our turn (not on the initial join).
+  const myTurn = msg.status === "ongoing" && msg.turn === myColor;
+  if (seenState && myTurn && !prevMyTurn) onMyTurn();
+  if (!myTurn) document.title = baseTitle;
+  prevMyTurn = myTurn;
+  seenState = true;
+
   computeAssist();
   paint();
+}
+
+const oppLabel = () => (myColor === "white" ? state.black_name : state.white_name) || "Your opponent";
+let audioCtx = null;
+function beep() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.type = "sine"; o.frequency.value = 680;
+    const t = audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.16, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    o.start(t); o.stop(t + 0.3);
+  } catch {}
+}
+function onMyTurn() {
+  document.title = "● Your move · Glassboard";
+  if (document.hidden) {
+    beep();
+    if (window.Notification && Notification.permission === "granted") {
+      try {
+        new Notification("Your move — Glassboard", {
+          body: `${oppLabel()} moved. It's your turn.`,
+          tag: "gb-" + (roomEl.value || "game"),
+          renotify: true,
+        });
+      } catch {}
+    }
+  }
+}
+// Clear the tab-title badge once the player is looking again.
+window.addEventListener("focus", () => (document.title = baseTitle));
+document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = baseTitle; });
+
+function updateNotifyBtn() {
+  const nb = el("notifyBtn");
+  if (!nb) return;
+  if (!window.Notification) { nb.hidden = true; return; }
+  const p = Notification.permission;
+  nb.textContent = p === "granted" ? "🔔 On" : p === "denied" ? "🔕 Blocked" : "🔔 Notify";
+  nb.disabled = p === "denied";
 }
 
 // Compute this side-to-move's assistance for the current position (honoring the
