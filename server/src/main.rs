@@ -48,6 +48,9 @@ struct RoomState {
     seats: Seats,
     /// Unix seconds when the room was created (for "started N ago" in the lobby).
     started: u64,
+    /// "match" (declared handicap, ratings, measured) | "casual" (free, unlimited
+    /// two-sided assistance, no ratings).
+    mode: String,
 }
 type Rooms = Arc<Mutex<HashMap<String, RoomState>>>;
 
@@ -160,11 +163,16 @@ async fn build_store() -> Store {
                    resigned TEXT NOT NULL DEFAULT '', white_elo INT NOT NULL, black_elo INT NOT NULL, \
                    host_id TEXT, host_name TEXT, host_rating INT, \
                    guest_id TEXT, guest_name TEXT, guest_rating INT, \
-                   glass TEXT NOT NULL DEFAULT '[]', started BIGINT NOT NULL)",
+                   glass TEXT NOT NULL DEFAULT '[]', started BIGINT NOT NULL, \
+                   mode TEXT NOT NULL DEFAULT 'match')",
             )
             .execute(&pool)
             .await
             .expect("create games table");
+            // Migrate older tables that predate a column.
+            let _ = sqlx::query("ALTER TABLE games ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'match'")
+                .execute(&pool)
+                .await;
             println!("Accounts + games: Postgres (durable)");
             Store::Pg(pool)
         }
@@ -188,6 +196,7 @@ struct GameRow {
     guest: Option<Player>,
     glass: String,
     started: i64,
+    mode: String,
 }
 fn snapshot(id: &str, rs: &RoomState) -> GameRow {
     let resigned = match rs.room.resigned {
@@ -207,6 +216,7 @@ fn snapshot(id: &str, rs: &RoomState) -> GameRow {
         guest: rs.seats.guest.clone(),
         glass: serde_json::to_string(&rs.room.glass).unwrap_or_else(|_| "[]".to_string()),
         started: rs.started as i64,
+        mode: rs.mode.clone(),
     }
 }
 async fn save_snapshot(pool: &sqlx::PgPool, g: GameRow) {
@@ -217,12 +227,12 @@ async fn save_snapshot(pool: &sqlx::PgPool, g: GameRow) {
     let gn = g.guest.as_ref().map(|p| p.name.clone());
     let gr = g.guest.as_ref().map(|p| p.rating);
     let _ = sqlx::query(
-        "INSERT INTO games (id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) \
-         ON CONFLICT (id) DO UPDATE SET fen=$2,last_uci=$3,resigned=$4,white_elo=$5,black_elo=$6,host_id=$7,host_name=$8,host_rating=$9,guest_id=$10,guest_name=$11,guest_rating=$12,glass=$13",
+        "INSERT INTO games (id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started,mode) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) \
+         ON CONFLICT (id) DO UPDATE SET fen=$2,last_uci=$3,resigned=$4,white_elo=$5,black_elo=$6,host_id=$7,host_name=$8,host_rating=$9,guest_id=$10,guest_name=$11,guest_rating=$12,glass=$13,mode=$15",
     )
     .bind(g.id).bind(g.fen).bind(g.last_uci).bind(g.resigned).bind(g.white_elo).bind(g.black_elo)
-    .bind(hi).bind(hn).bind(hr).bind(gi).bind(gn).bind(gr).bind(g.glass).bind(g.started)
+    .bind(hi).bind(hn).bind(hr).bind(gi).bind(gn).bind(gr).bind(g.glass).bind(g.started).bind(g.mode)
     .execute(pool)
     .await;
 }
@@ -245,7 +255,7 @@ async fn delete_game_db(store: &Store, id: &str) {
 /// Reload all saved games into fresh RoomStates on boot (so games survive restarts).
 async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
     let rows = match sqlx::query(
-        "SELECT id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started FROM games",
+        "SELECT id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started,mode FROM games",
     )
     .fetch_all(pool)
     .await
@@ -288,6 +298,7 @@ async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
             tx: broadcast::channel(64).0,
             seats: Seats { host, guest },
             started: row.get::<i64, _>("started") as u64,
+            mode: row.get::<Option<String>, _>("mode").unwrap_or_else(|| "match".to_string()),
         };
         out.push((id, rs));
     }
@@ -318,6 +329,7 @@ fn new_room_state() -> RoomState {
         tx: broadcast::channel(64).0,
         seats: Seats::default(),
         started: now_secs(),
+        mode: "match".to_string(),
     }
 }
 
@@ -364,6 +376,8 @@ enum ServerMsg {
         winner: String,
         /// "checkmate" | "stalemate" | "resignation" | "fifty-move rule" | "".
         reason: String,
+        /// "match" | "casual".
+        mode: String,
     },
     Glass {
         side: String,
@@ -419,6 +433,8 @@ struct CreateReq {
     name: String,
     #[serde(default)]
     rating: i32,
+    #[serde(default)]
+    mode: String,
 }
 
 #[derive(Serialize)]
@@ -441,6 +457,8 @@ struct GameSummary {
     winner: String,
     /// How it ended, if over.
     reason: String,
+    /// "match" | "casual".
+    mode: String,
 }
 
 /// Pre-register a game so the host holds White before sharing the invite link.
@@ -459,6 +477,9 @@ async fn create_game(
                 rating: b.rating,
             });
             rs.room.white_elo = b.rating;
+            if b.mode == "casual" || b.mode == "match" {
+                rs.mode = b.mode.clone();
+            }
         }
         rs.seats.status().to_string()
     };
@@ -530,6 +551,7 @@ async fn list_games(
             over,
             winner: winner.to_string(),
             reason: reason.to_string(),
+            mode: rs.mode.clone(),
         });
     }
     Json(out)
@@ -769,6 +791,7 @@ async fn broadcast_state(rooms: &Rooms, code: &str) {
             black_name: rs.seats.guest.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
             winner: winner.to_string(),
             reason: reason.to_string(),
+            mode: rs.mode.clone(),
         };
         let _ = rs.tx.send(json(&msg));
     }

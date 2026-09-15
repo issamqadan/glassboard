@@ -89,6 +89,9 @@
     .g-turn { font-size:0.74rem; font-weight:640; margin-top:7px; }
     .g-turn.you { color:var(--good); } .g-turn.them { color:var(--faint); }
     .g-elo { color:var(--faint); font-weight:500; font-size:0.9em; font-variant-numeric:tabular-nums; }
+    .mode-chip { font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; padding:2px 7px; border-radius:999px; vertical-align:middle;
+      background:rgba(92,201,236,0.14); color:var(--accent); border:1px solid rgba(92,201,236,0.3); }
+    .mode-chip.casual { background:rgba(126,224,214,0.14); color:#7ee0d6; border-color:rgba(126,224,214,0.3); }
     .g-meta { font-size:0.75rem; color:var(--faint); margin-top:7px; }
     .g-meta .mv-you { color:var(--good); font-weight:640; }
     .g-meta .mv-them { color:var(--muted); font-weight:600; }
@@ -138,6 +141,13 @@
     .lvl-chips button { background: var(--glass); border: 1px solid var(--line-2); color: var(--muted); border-radius: 999px; padding: 8px 13px; font-size: 0.82rem; cursor: pointer; }
     .lvl-chips button:hover { border-color: var(--accent); color: var(--text); }
     .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .mode-pick { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+    .mode-opt { text-align:left; display:flex; flex-direction:column; gap:5px; padding:13px; border-radius:14px; border:1px solid var(--line); background:rgba(255,255,255,0.035); color:inherit; cursor:pointer; }
+    .mode-opt:hover { border-color:var(--line-2); }
+    .mode-opt.on { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); }
+    .mode-opt .mo-name { font-weight:680; font-size:0.98rem; }
+    .mode-opt .mo-desc { font-size:0.76rem; color:var(--muted); line-height:1.4; }
+    @media (max-width:520px){ .mode-pick{ grid-template-columns:1fr; } }
     .rung-readout { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:11px; background:var(--bg-2); border:1px solid var(--line); margin-bottom:18px; }
     .rung-badge { font-size:0.72rem; font-weight:700; padding:6px 11px; border-radius:999px; background:rgba(224,190,121,0.14); color:var(--gold); border:1px solid rgba(224,190,121,0.35); white-space:nowrap; }
     .rung-readout .txt { font-size:0.82rem; color:var(--muted); } .rung-readout .txt b { color:var(--text); }
@@ -217,11 +227,18 @@
   <!-- create -->
   <div class="overlay" id="createOverlay" onclick="if(event.target===this)closeCreate()">
     <div class="modal">
-      <div class="modal-head"><div><span class="eyebrow" style="color:var(--accent)">Create a game</span><h3>Set the match</h3><p class="lede">You play as White. Share the link — whoever opens it joins as Black.</p></div><button class="closebtn" onclick="closeCreate()">✕</button></div>
+      <div class="modal-head"><div><span class="eyebrow" style="color:var(--accent)">New game</span><h3>Match or Casual?</h3><p class="lede">Pick how you want to play — then share the invite link.</p></div><button class="closebtn" onclick="closeCreate()">✕</button></div>
+      <div class="mode-pick">
+        <button type="button" class="mode-opt on" data-mode="match" onclick="setMode('match')"><span class="mo-name">⚔ Match</span><span class="mo-desc">Ratings + a fair handicap — the weaker player gets assistance sized to the gap. Competitive &amp; measured.</span></button>
+        <button type="button" class="mode-opt" data-mode="casual" onclick="setMode('casual')"><span class="mo-name">🎈 Casual</span><span class="mo-desc">Just play. <b>Both</b> players get unlimited assistance — no ratings. A relaxed sandbox.</span></button>
+      </div>
       <div class="field"><label>Opponent’s name (optional)</label><input id="cOppName" placeholder="e.g. Maya"></div>
-      <div class="field"><label>Your rating</label><input id="cYou" type="number" min="400" max="3000"></div>
-      <div class="rung-readout"><span class="rung-badge" style="background:rgba(92,201,236,0.14);color:var(--accent);border-color:rgba(92,201,236,0.35)">Auto</span><span class="txt">Your opponent enters their rating when they join, after reading how it works — then Glassboard sets the handicap for the weaker side. <b style="color:var(--text)">You don’t guess their level.</b></span></div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="createGame()">Create game &amp; copy invite link</button>
+      <div id="matchOnly">
+        <div class="field"><label>Your rating</label><input id="cYou" type="number" min="400" max="3000"></div>
+        <div class="rung-readout"><span class="rung-badge" style="background:rgba(92,201,236,0.14);color:var(--accent);border-color:rgba(92,201,236,0.35)">Auto</span><span class="txt">Your opponent enters their rating when they join — then Glassboard sets the handicap for the weaker side. <b style="color:var(--text)">You don’t guess their level.</b></span></div>
+      </div>
+      <div id="casualNote" class="rung-readout" hidden><span class="rung-badge" style="background:rgba(126,224,214,0.14);color:#7ee0d6;border-color:rgba(126,224,214,0.35)">Free</span><span class="txt">No ratings. Both players can use the full assistance spectrum, always shown to each other. Your opponent joins with <b style="color:var(--text)">just a name</b>.</span></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="createGame()" id="createBtn">Create game &amp; copy invite link</button>
     </div>
   </div>
 
@@ -309,28 +326,42 @@
     }
 
     // ---- create ----
+    let createMode = 'match';
+    function setMode(m) {
+      createMode = m;
+      document.querySelectorAll('.mode-opt').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+      document.getElementById('matchOnly').hidden = m !== 'match';
+      document.getElementById('casualNote').hidden = m !== 'casual';
+      document.getElementById('createBtn').textContent = m === 'casual'
+        ? 'Create casual game & copy link' : 'Create game & copy invite link';
+    }
     function openCreate() {
       if (!me) { openIdentity(); return; }
       document.getElementById('cYou').value = me.rating;
       document.getElementById('cOppName').value = '';
+      setMode('match');
       document.getElementById('createOverlay').classList.add('open');
     }
     function closeCreate() { document.getElementById('createOverlay').classList.remove('open'); }
 
     function gameLink(g) {
       const base = location.href.replace(/portal\.html.*$/, '').replace(/[^/]*$/, '');
-      return base + 'multiplayer.html?room=' + g.id + '&host=' + encodeURIComponent(me.name) + '&he=' + me.rating;
+      let url = base + 'multiplayer.html?room=' + g.id + '&host=' + encodeURIComponent(me.name);
+      if (g.mode === 'casual') url += '&mode=casual';
+      else url += '&he=' + me.rating;
+      return url;
     }
     function createGame() {
       const oppName = document.getElementById('cOppName').value.trim() || 'Open invite';
-      const you = Math.max(400, Math.min(3000, +document.getElementById('cYou').value || me.rating));
-      me.rating = you; saveMe(me); renderMe();
+      const casual = createMode === 'casual';
+      const you = casual ? me.rating : Math.max(400, Math.min(3000, +document.getElementById('cYou').value || me.rating));
+      if (!casual) { me.rating = you; saveMe(me); renderMe(); }
       const id = Math.random().toString(36).slice(2, 6) + Math.random().toString(36).slice(2, 5);
-      const g = { id, oppName, myRating: you, status: 'waiting', created: Date.now() };
+      const g = { id, oppName, myRating: you, status: 'waiting', created: Date.now(), mode: createMode };
       const games = loadGames(); games.unshift(g); saveGames(games);
       registerGame(g);
       renderGames(); closeCreate();
-      copy(gameLink(g), 'Game created — invite link copied');
+      copy(gameLink(g), (casual ? 'Casual game' : 'Game') + ' created — invite link copied');
     }
 
     // Register the game with the server so the host holds White and we can be
@@ -339,7 +370,7 @@
       if (!me) return;
       fetch(SERVER_HTTP + '/games', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: g.id, pid: me.id, name: me.name, rating: g.myRating })
+        body: JSON.stringify({ id: g.id, pid: me.id, name: me.name, rating: g.myRating, mode: g.mode || 'match' })
       }).catch(() => {});
     }
     // Poll the server for our games' status → notify when someone joins.
@@ -362,7 +393,7 @@
           g = {
             id: r.id, joined: r.color === 'black', color: r.color, status: r.status,
             myRating: r.my_rating, oppName: r.opp_name || 'Opponent', oppRating: r.opp_rating,
-            fen: r.fen, turn: r.turn, started: r.started,
+            fen: r.fen, turn: r.turn, started: r.started, mode: r.mode || 'match',
             over: r.over, winner: r.winner, reason: r.reason, notified: true,
           };
           games.push(g); byLocal[r.id] = g; changed = true;
@@ -377,6 +408,7 @@
         if (typeof r.over === 'boolean' && (g.over !== r.over || g.reason !== r.reason)) {
           g.over = r.over; g.winner = r.winner; g.reason = r.reason; changed = true;
         }
+        if (r.mode && g.mode !== r.mode) { g.mode = r.mode; changed = true; }
         if (r.status === 'active' && g.status !== 'active') {
           g.status = 'active';
           if (!g.notified && !g.joined) { g.notified = true; toast((r.opp_name || 'Your opponent') + ' joined', 'Game ready — Enter to play.'); }
@@ -450,14 +482,18 @@
           const startedTxt = ago(g); if (startedTxt) meta.push('started ' + startedTxt);
           metaHtml = meta.length ? `<div class="g-meta">${meta.join(' · ')}</div>` : '';
         }
-        const sub = (active || over) && t
-          ? `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">${t.name}</span></span>`
-          : `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">set when they join</span></span>`;
+        const casual = g.mode === 'casual';
+        const modeChip = `<span class="mode-chip${casual ? ' casual' : ''}">${casual ? 'Casual' : 'Match'}</span>`;
+        const sub = casual
+          ? `<span style="color:#7ee0d6">Casual</span> — both players get unlimited help`
+          : ((active || over) && t
+            ? `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">${t.name}</span></span>`
+            : `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">set when they join</span></span>`);
         return `<div class="game" style="--stripe:${over ? 'var(--faint)' : active ? 'var(--good)' : 'var(--warn)'}">
           <div class="g-row">
             <div class="g-preview" ${over ? '' : `onclick="enterGame('${g.id}')"`} title="Open game" role="button">${miniBoard(g.fen, myColor)}</div>
             <div class="g-main">
-              <div class="g-name">${escapeHtml(g.oppName)}${g.oppRating ? ` <span class="g-elo">${g.oppRating}</span>` : ''}</div>
+              <div class="g-name">${escapeHtml(g.oppName)}${!casual && g.oppRating ? ` <span class="g-elo">${g.oppRating}</span>` : ''} ${modeChip}</div>
               <div class="g-sub">${sub}</div>
               ${statusHtml}
               ${metaHtml}

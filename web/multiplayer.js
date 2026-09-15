@@ -42,6 +42,7 @@ let assistData = null;
 let pickedStrategyId = null;
 let lastStratRelay = null;
 let forceAssist = null; // testing: force an assist rung even when you're stronger
+let gameMode = "match"; // "match" (declared handicap) | "casual" (free, both sides assisted)
 let lastMove = null;
 let lastGlassFen = null;
 let hostName = null;
@@ -94,6 +95,8 @@ async function main() {
   const mine = params.get("mine");
   hostName = host;
   const isJoiner = host && !mine;
+  gameMode = params.get("mode") === "casual" ? "casual" : "match";
+  const casual = gameMode === "casual";
   const set = (id, txt) => { const e = el(id); if (e) e.textContent = txt; };
   const joinBtn = el("connect");
 
@@ -127,6 +130,13 @@ async function main() {
     set("mcTitle", "Waiting for your opponent");
     set("mcSub", `Room “${roomEl.value}”. Join to enter as White, then share your invite link — whoever opens it joins as Black.`);
     const intro = el("mcIntro"); if (intro) intro.style.display = "none";
+  } else if (host && casual) {
+    set("mcEyebrow", "Casual game");
+    set("mcTitle", `Play ${host}`);
+    set("mcSub", `Casual — both of you get unlimited assistance (always shown to each other), no ratings. Just enter your name and join.`);
+    // No rating needed in casual — hide the rating field + level chips.
+    const ef = el("elo") && el("elo").closest(".mc-field"); if (ef) ef.style.display = "none";
+    const chips = document.querySelector("#matchCard .lvl-chips"); if (chips) chips.style.display = "none";
   } else if (host) {
     set("mcEyebrow", "You’re invited");
     set("mcTitle", `Play ${host}`);
@@ -153,14 +163,17 @@ async function main() {
 
   const refreshJoin = () => {
     const v = parseInt(eloEl.value, 10);
-    const ok = !isJoiner || (v >= 100 && v <= 3200);
+    const ok = casual || !isJoiner || (v >= 100 && v <= 3200);
     joinBtn.disabled = !ok;
-    joinBtn.style.opacity = ok ? "" : "0.45";
+    joinBtn.style.opacity = ok ? "" : "0.5";
     joinBtn.style.cursor = ok ? "" : "not-allowed";
+    // Make the disabled state explain itself instead of a dead grey button.
+    joinBtn.textContent = ok ? "Join game" : "Enter your rating above to join ↑";
   };
   const updateHandi = () => {
     refreshJoin();
     const h = el("mcHandi"); if (!h) return;
+    if (casual) { h.innerHTML = `<b style="color:#7ee0d6">Casual</b> — both players get the full assistance spectrum, always shown to each other. No ratings.`; return; }
     if (mine) { h.innerHTML = `<span style="color:#7f92ab">The handicap is set once your opponent joins and enters their rating.</span>`; return; }
     if (he == null) { h.textContent = ""; return; }
     const v = parseInt(eloEl.value, 10);
@@ -241,7 +254,10 @@ function computeAssist() {
   assistData = null;
   hanging = [];
   if (game && state && state.status === "ongoing" && state.turn === myColor) {
-    game.setAssistOverride(forceAssist || "");
+    // Casual: both sides get the full assistance spectrum. Else honor the
+    // testing override, otherwise the rating-derived handicap.
+    const isCasual = (state && state.mode === "casual") || gameMode === "casual";
+    game.setAssistOverride(isCasual ? "guided" : (forceAssist || ""));
     assistData = JSON.parse(game.assist(DEPTH));
     hanging = assistData.hanging;
     if (assistData.level !== "off" && state.fen !== lastGlassFen) {
