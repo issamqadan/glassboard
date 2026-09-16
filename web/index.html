@@ -30,8 +30,15 @@
       <div id="status" class="status">Loading engine…</div>
 
       <div class="layout">
-        <div id="board" class="board" aria-label="chess board"></div>
+        <div class="board-wrap">
+          <div id="board" class="board" aria-label="chess board"></div>
+          <svg id="planOverlay" class="plan-overlay" viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg>
+        </div>
         <aside class="panels">
+          <section class="panel" id="stratPanel" hidden>
+            <h2>Strategy <span class="hint" id="stratPhase"></span></h2>
+            <div id="strategy" class="strategy"></div>
+          </section>
           <section class="panel">
             <h2>Assistance <span id="level" class="pill">—</span></h2>
             <div id="assist" class="assist"></div>
