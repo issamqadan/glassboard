@@ -1,7 +1,15 @@
 # Status — where Glassboard stands
 
 > Running context log so any session can pick up instantly. Newest at top.
-> **Last updated:** 2026-09-15 · tag `v0.3.0`
+> **Last updated:** 2026-09-17 · tag `v0.3.0`
+
+**Player Model v1 shipped (2026-09-17):** every legal move is now classified
+for two beginner-defining mistakes — *left a piece hanging* and *missed free
+material* — and accumulated per-identity in Neon (`profiles` table, upsert per
+move). `GET /profile?player=<id>` exposes the totals; the portal shows a
+transparent "Your play" card. This is the learning signal the adaptive,
+agency-retaining assistance will lean on next. In-memory store (local dev, no
+`DATABASE_URL`) is a no-op, so nothing changes off-Neon.
 
 **Name/domain (parked 2026-09-06):** keeping **Glassboard** for now; a final
 naming pass is deferred (ChatGPT floated descriptive "ChessLevel/LevelChess"
