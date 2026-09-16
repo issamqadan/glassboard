@@ -172,13 +172,17 @@ async function main() {
   }
 
   const refreshJoin = () => {
+    const nameOk = !isJoiner || !!(el("pname") && el("pname").value.trim());
     const v = parseInt(eloEl.value, 10);
-    const ok = casual || !isJoiner || (v >= 100 && v <= 3200);
+    const ratingOk = casual || !isJoiner || (v >= 100 && v <= 3200);
+    const ok = nameOk && ratingOk;
     joinBtn.disabled = !ok;
     joinBtn.style.opacity = ok ? "" : "0.5";
     joinBtn.style.cursor = ok ? "" : "not-allowed";
     // Make the disabled state explain itself instead of a dead grey button.
-    joinBtn.textContent = ok ? "Join game" : "Enter your rating above to join ↑";
+    joinBtn.textContent = ok ? "Join game"
+      : !nameOk ? "Enter your name to join ↑"
+      : "Enter your rating to join ↑";
   };
   const updateHandi = () => {
     refreshJoin();
@@ -201,6 +205,13 @@ async function main() {
   };
   updateHandi();
   eloEl.addEventListener("input", updateHandi);
+  if (el("pname")) el("pname").addEventListener("input", refreshJoin);
+
+  // Opened from the lobby (host resuming their game, or a game we already
+  // joined) → jump straight onto the board; no Join button dance needed.
+  if (mine || (!host && roomEl.value)) {
+    connect();
+  }
 
   joinBtn.addEventListener("click", connect);
   renderBoardEmpty();

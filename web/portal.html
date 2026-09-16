@@ -192,7 +192,7 @@
     <div class="games" id="games"></div>
 
     <div class="section-head" style="margin-top:44px"><h2>How the handicap works</h2><span class="count">Off → Autopilot</span></div>
-    <p class="intro-lede">The wider the rating gap, the higher the assistance rung the weaker player receives — and the opponent sees exactly what help is given, every move. As the assisted player improves, the assistance falls away.</p>
+    <p class="intro-lede">The wider the rating gap, the higher the assistance rung the lower-rated player receives — and the opponent sees exactly what help is given, every move. As the assisted player improves, the assistance falls away.</p>
     <div class="ladder" id="ladder"></div>
 
     <div class="footlinks">
@@ -229,13 +229,13 @@
     <div class="modal">
       <div class="modal-head"><div><span class="eyebrow" style="color:var(--accent)">New game</span><h3>Match or Casual?</h3><p class="lede">Pick how you want to play — then share the invite link.</p></div><button class="closebtn" onclick="closeCreate()">✕</button></div>
       <div class="mode-pick">
-        <button type="button" class="mode-opt on" data-mode="match" onclick="setMode('match')"><span class="mo-name">⚔ Match</span><span class="mo-desc">Ratings + a fair handicap — the weaker player gets assistance sized to the gap. Competitive &amp; measured.</span></button>
+        <button type="button" class="mode-opt on" data-mode="match" onclick="setMode('match')"><span class="mo-name">⚔ Match</span><span class="mo-desc">Ratings + a fair handicap — the lower-rated player gets assistance sized to the gap. Competitive &amp; measured.</span></button>
         <button type="button" class="mode-opt" data-mode="casual" onclick="setMode('casual')"><span class="mo-name">🎈 Casual</span><span class="mo-desc">Just play. <b>Both</b> players get unlimited assistance — no ratings. A relaxed sandbox.</span></button>
       </div>
       <div class="field"><label>Opponent’s name (optional)</label><input id="cOppName" placeholder="e.g. Maya"></div>
       <div id="matchOnly">
         <div class="field"><label>Your rating</label><input id="cYou" type="number" min="400" max="3000"></div>
-        <div class="rung-readout"><span class="rung-badge" style="background:rgba(92,201,236,0.14);color:var(--accent);border-color:rgba(92,201,236,0.35)">Auto</span><span class="txt">Your opponent enters their rating when they join — then Glassboard sets the handicap for the weaker side. <b style="color:var(--text)">You don’t guess their level.</b></span></div>
+        <div class="rung-readout"><span class="rung-badge" style="background:rgba(92,201,236,0.14);color:var(--accent);border-color:rgba(92,201,236,0.35)">Auto</span><span class="txt">Your opponent enters their rating when they join — then Glassboard sets the handicap for whoever's rated lower. <b style="color:var(--text)">You don’t guess their level.</b></span></div>
       </div>
       <div id="casualNote" class="rung-readout" hidden><span class="rung-badge" style="background:rgba(126,224,214,0.14);color:#7ee0d6;border-color:rgba(126,224,214,0.35)">Free</span><span class="txt">No ratings. Both players can use the full assistance spectrum, always shown to each other. Your opponent joins with <b style="color:var(--text)">just a name</b>.</span></div>
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="createGame()" id="createBtn">Create game &amp; copy invite link</button>
