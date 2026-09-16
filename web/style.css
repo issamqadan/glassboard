@@ -624,11 +624,13 @@ main.game { padding: 16px 14px 30px; max-width: 1080px; }
 .opts .opts-body { display: flex; flex-wrap: wrap; gap: 12px 16px; padding: 12px 14px; }
 .opts .opts-body label { font-size: 0.85rem; color: #b9c6da; display: flex; align-items: center; gap: 7px; }
 
-/* layout: board is the hero; panels flow below on phones */
-.layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
-.board-col { display: flex; flex-direction: column; gap: 12px; width: 100%; }
-.board-wrap { width: 100%; }
-.board-wrap .board, .board { width: 100%; }
+/* layout: board is the hero; panels flow below on phones.
+   Scoped to main.game so the board sizing never leaks to other pages
+   (e.g. multiplayer.html, which has no width-capped board column). */
+main.game .layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+main.game .board-col { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+main.game .board-wrap { width: 100%; }
+main.game .board-wrap .board, main.game .board { width: 100%; }
 
 /* ---- the coach bar: primary, concrete assistance ---- */
 .coach { display: flex; align-items: center; gap: 13px; padding: 13px 15px; border-radius: 14px;
@@ -670,9 +672,9 @@ details.panel > *:not(summary) { padding: 12px 15px; }
 /* Desktop: board and panels side by side, board larger */
 @media (min-width: 900px) {
   main.game { padding: 22px 24px 40px; }
-  .layout { flex-wrap: nowrap; }
-  .board-col { width: min(560px, 54vw); flex: 0 0 auto; }
-  .panels { position: sticky; top: 72px; }
+  main.game .layout { flex-wrap: nowrap; }
+  main.game .board-col { width: min(560px, 54vw); flex: 0 0 auto; }
+  main.game .panels { position: sticky; top: 72px; }
 }
 
 /* Phones: tighten everything, big touch targets, coach stays prominent */
