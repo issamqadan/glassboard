@@ -138,7 +138,7 @@ async function main() {
   const rmb = el("rematchBtn");
   if (rmb) rmb.addEventListener("click", doRematch);
   const orm = el("overRematch"); if (orm) orm.addEventListener("click", doRematch);
-  const ocl = el("overClose"); if (ocl) ocl.addEventListener("click", () => { const ov = document.getElementById("overOverlay"); if (ov) ov.hidden = true; });
+  const ocl = el("overClose"); if (ocl) ocl.addEventListener("click", () => { const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; });
 
   if (mine) {
     set("mcEyebrow", "Your game");
@@ -281,7 +281,7 @@ function onState(msg) {
   const rez = gameResult(msg);
   const nowOver = !!rez.reason;
   if (nowOver && !wasOver) showGameOver(rez);
-  if (!nowOver) { const ov = document.getElementById("overOverlay"); if (ov) ov.hidden = true; }
+  if (!nowOver) { const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; }
   wasOver = nowOver;
 
   computeAssist();
@@ -339,12 +339,12 @@ function showGameOver(rez) {
   const res = el("overResult"), rea = el("overReason");
   if (res) { res.textContent = draw ? "Draw" : won ? "You win! 🎉" : "You lose"; res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss"); }
   if (rea) rea.textContent = "by " + rez.reason;
-  ov.hidden = false;
+  ov.style.display = "grid";
 }
 function doRematch() {
   if (!ws || ws.readyState !== 1) return;
   if (!confirm("Start a rematch — a fresh game with the same opponent?")) return;
-  const ov = document.getElementById("overOverlay"); if (ov) ov.hidden = true;
+  const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none";
   ws.send(JSON.stringify({ t: "reset" }));
 }
 
@@ -684,9 +684,9 @@ function showPromotion(from, to) {
     return `<button class="promo-pick" data-p="${p}"><span class="piece ${white ? "white" : "black"}">${glyph}</span></button>`;
   }).join("");
   choices.querySelectorAll(".promo-pick").forEach((b) => {
-    b.onclick = () => { ov.hidden = true; finishMove(from, to, b.dataset.p); };
+    b.onclick = () => { ov.style.display = "none"; finishMove(from, to, b.dataset.p); };
   });
-  ov.hidden = false;
+  ov.style.display = "grid";
 }
 
 // --- helpers ---------------------------------------------------------------
