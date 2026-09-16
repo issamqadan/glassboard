@@ -76,6 +76,14 @@ function playerId() {
 }
 // Name/rating are shared with the portal (localStorage); the id is per-tab.
 function currentPlayer() {
+  // Test mode (solo multiplayer testing): use a throwaway identity and NEVER
+  // write gb_me — localStorage is shared with the host tab, so overwriting it
+  // would corrupt the real player's identity.
+  if (new URLSearchParams(location.search).get("test")) {
+    const name = (el("pname") && el("pname").value.trim()) || "Tester";
+    const rating = parseInt(el("elo").value, 10) || 900;
+    return { id: playerId(), name, rating };
+  }
   let m = null;
   try { m = JSON.parse(localStorage.getItem("gb_me")); } catch {}
   const name = (el("pname") && el("pname").value.trim()) || (m && m.name) || "Player";
@@ -98,7 +106,16 @@ async function main() {
   const host = params.get("host") ? decodeURIComponent(params.get("host")) : null;
   const he = params.get("he") ? parseInt(params.get("he"), 10) : null;
   const mine = params.get("mine");
+  const isTest = params.get("test");
   hostName = host;
+  if (isTest) {
+    const b = document.createElement("div");
+    b.textContent = "🧪 Test opponent — throwaway player";
+    b.style.cssText = "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:70;" +
+      "background:rgba(224,190,121,.16);border:1px solid rgba(224,190,121,.5);color:#e0be79;" +
+      "padding:4px 13px;border-radius:999px;font-size:0.74rem;font-weight:640;white-space:nowrap;";
+    document.body.appendChild(b);
+  }
   const isJoiner = host && !mine;
   gameMode = params.get("mode") === "casual" ? "casual" : "match";
   const casual = gameMode === "casual";
@@ -226,8 +243,9 @@ async function main() {
   if (el("pname")) el("pname").addEventListener("input", refreshJoin);
 
   // Opened from the lobby (host resuming their game, or a game we already
-  // joined) → jump straight onto the board; no Join button dance needed.
-  if (mine || (!host && roomEl.value)) {
+  // joined), or a test-opponent link → jump straight onto the board; no Join
+  // button dance needed.
+  if (mine || isTest || (!host && roomEl.value)) {
     connect();
   }
 

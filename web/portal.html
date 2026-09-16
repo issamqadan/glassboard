@@ -528,6 +528,8 @@
           ${(!active && !over) ? `<div class="invite-link"><span>${link}</span><button onclick="copy('${link}')">Copy</button></div>` : ''}
           <div class="g-actions">
             ${!over ? `<button class="enter" onclick="enterGame('${g.id}')">${active ? 'Resume game →' : 'Enter game →'}</button>` : ''}
+            ${(active && !g.joined) ? `<button class="invite" onclick="copyInvite('${g.id}')" title="Copy the link to send your opponent">🔗 Invite link</button>` : ''}
+            ${(!over && !g.joined) ? `<button class="invite" onclick="testAsOpponent('${g.id}')" title="Open this game as a throwaway second player to test both sides yourself">🧪 Test opponent</button>` : ''}
             ${!g.joined ? `<button class="del" onclick="deleteGame('${g.id}')">Delete</button>` : ''}
             <button class="del" onclick="hideGame('${g.id}')">Hide</button>
           </div>
@@ -535,6 +537,21 @@
       }).join('');
     }
     const gameById = id => loadGames().find(g => g.id === id);
+    // Retrieve the opponent's invite link for a game (e.g. an active one whose
+    // invite box is no longer shown) and copy it to the clipboard.
+    function copyInvite(id) {
+      const g = gameById(id); if (!g) return;
+      copy(gameLink(g), 'Invite link copied — send it to your opponent to (re)join');
+    }
+    // Solo testing: open the game as a throwaway second player in a new tab so
+    // you can play both sides without needing another person.
+    function testAsOpponent(id) {
+      const g = gameById(id); if (!g) return;
+      let u = gameLink(g) + '&test=1';
+      if (g.mode !== 'casual') u += '&elo=' + Math.max(400, (g.myRating || 1200) - 600);
+      window.open(u, '_blank');
+      toast('Test opponent opened', 'A throwaway player joins in the new tab — play both sides.');
+    }
     function enterGame(id) {
       const g = gameById(id); if (!g) return;
       let url = 'multiplayer.html?room=' + encodeURIComponent(g.id) + '&elo=' + (g.myRating || '');
