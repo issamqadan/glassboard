@@ -12,10 +12,10 @@ const FILES = "abcdefgh";
 const DEPTH = 3;
 const RUNGS = [
   [100, "Off", "an even match — no assistance"],
-  [300, "Awareness", "safety signals — hanging pieces & checks"],
-  [500, "Coaching", "threats and the opponent’s plan, explained"],
-  [800, "Strategy", "a named strategy to follow"],
-  [1200, "Guided", "a plan with progress + the move to play"],
+  [300, "Hint", "safety signals — hanging pieces & checks"],
+  [500, "Coach", "threats and the opponent’s plan, explained"],
+  [800, "Guide", "candidate moves + a named strategy to follow"],
+  [1200, "Assist", "the single best move to play, every turn"],
   [Infinity, "Autopilot", "the co-pilot executes the plan"],
 ];
 const tierFor = (gap) => { const g = Math.abs(gap); for (const r of RUNGS) if (g < r[0]) return r; return RUNGS[RUNGS.length - 1]; };
@@ -26,6 +26,13 @@ const statusEl = el("status");
 const assistEl = el("assist");
 const glassEl = el("glass");
 const levelEl = el("level");
+
+// Public assistance vocabulary — a recognizable ladder ("I was on Guide") over
+// the engine's internal rung ids. Order of help: Off < Hint < Coach < Guide <
+// Assist < Autopilot.
+const LEVEL_LABEL = { off: "Off", awareness: "Hint", coaching: "Coach", suggestion: "Guide", guided: "Assist", autopilot: "Autopilot" };
+const LEVEL_DESC = { off: "No assistance", awareness: "Highlights threats & free material", coaching: "Explains threats in words", suggestion: "Suggests candidate moves", guided: "Shows the single best move", autopilot: "Can play the move for you" };
+const levelLabel = (l) => LEVEL_LABEL[l] || "—";
 const serverEl = el("server");
 const roomEl = el("room");
 const eloEl = el("elo");
@@ -573,7 +580,7 @@ function coord(kind, text) {
 }
 
 function renderStatus() {
-  levelEl.textContent = assistData ? assistData.level : "—";
+  if (levelEl) { levelEl.textContent = assistData ? levelLabel(assistData.level) : "—"; levelEl.title = assistData ? (LEVEL_DESC[assistData.level] || "") : ""; }
   if (!state) return;
 
   // Outcome (server sends winner/reason; fall back to status for older servers).
@@ -815,10 +822,10 @@ function showPromotion(from, to) {
 
 function summarize(a) {
   switch (a.level) {
-    case "awareness": return `Awareness: ${a.hanging.length} hanging piece(s) highlighted.`;
-    case "coaching": return `Coaching: ${a.messages.length} message(s) shown.`;
-    case "suggestion": return `Suggestion: ${a.candidates.length} candidate move(s) shown.`;
-    case "guided": return `Guided: recommended ${a.recommended ?? "-"}.`;
+    case "awareness": return `Hint: ${a.hanging.length} hanging piece(s) highlighted.`;
+    case "coaching": return `Coach: ${a.messages.length} message(s) shown.`;
+    case "suggestion": return `Guide: ${a.candidates.length} candidate move(s) shown.`;
+    case "guided": return `Assist: recommended ${a.recommended ?? "-"}.`;
     case "autopilot": return `Autopilot: recommended ${a.recommended ?? "-"}.`;
     default: return "No assistance.";
   }

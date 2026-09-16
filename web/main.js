@@ -17,6 +17,14 @@ const statusEl = document.getElementById("status");
 const assistEl = document.getElementById("assist");
 const glassEl = document.getElementById("glass");
 const levelEl = document.getElementById("level");
+
+// Public assistance vocabulary — a recognizable ladder ("I was on Guide") over
+// the engine's internal rung ids. Order of help: Off < Hint < Coach < Guide <
+// Assist < Autopilot.
+const LEVEL_LABEL = { off: "Off", awareness: "Hint", coaching: "Coach", suggestion: "Guide", guided: "Assist", autopilot: "Autopilot" };
+const LEVEL_DESC = { off: "No assistance", awareness: "Highlights threats & free material", coaching: "Explains threats in words", suggestion: "Suggests candidate moves", guided: "Shows the single best move", autopilot: "Can play the move for you" };
+const levelLabel = (l) => LEVEL_LABEL[l] || "—";
+function setLevelPill(l) { if (levelEl) { levelEl.textContent = levelLabel(l); levelEl.title = LEVEL_DESC[l] || ""; } }
 const depthEl = document.getElementById("depth");
 const humanEloEl = document.getElementById("humanElo");
 const engineEloEl = document.getElementById("engineElo");
@@ -82,7 +90,7 @@ function newGame() {
   resigned = false;
   pickedStrategyId = null;
   hideOver();
-  levelEl.textContent = game.assistLevel();
+  setLevelPill(game.assistLevel());
   onPositionChanged();
 }
 
@@ -339,7 +347,7 @@ function renderStatus() {
   else if (st === "fifty-move") msg = "Draw — fifty-move rule.";
   else msg = `${cap} to move` + (game.inCheck() ? " — check!" : "");
   statusEl.textContent = msg;
-  levelEl.textContent = game.assistLevel();
+  setLevelPill(game.assistLevel());
 }
 
 function renderAssist() {

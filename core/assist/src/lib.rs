@@ -231,14 +231,14 @@ fn summarize(a: &Assistance) -> String {
     match a.level {
         AssistLevel::Off => "No assistance used.".to_string(),
         AssistLevel::Awareness => {
-            format!("Awareness: {} hanging piece(s) highlighted.", a.hanging.len())
+            format!("Hint: {} hanging piece(s) highlighted.", a.hanging.len())
         }
-        AssistLevel::Coaching => format!("Coaching: {} message(s) shown.", a.messages.len()),
+        AssistLevel::Coaching => format!("Coach: {} message(s) shown.", a.messages.len()),
         AssistLevel::Suggestion => {
-            format!("Suggestion: {} candidate move(s) shown.", a.candidates.len())
+            format!("Guide: {} candidate move(s) shown.", a.candidates.len())
         }
         AssistLevel::Guided => format!(
-            "Guided: recommended {}.",
+            "Assist: recommended {}.",
             a.best.as_ref().map(|c| c.uci.as_str()).unwrap_or("-")
         ),
         AssistLevel::Autopilot => format!(

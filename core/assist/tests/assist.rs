@@ -112,7 +112,7 @@ fn glass_box_records_help() {
     assert_eq!(ev.level, AssistLevel::Guided);
     assert_eq!(ev.for_side, Color::White);
     assert!(
-        ev.summary.contains("Guided"),
+        ev.summary.contains("Assist"),
         "opponent-visible summary should describe the help, got {:?}",
         ev.summary
     );
