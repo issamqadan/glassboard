@@ -112,6 +112,51 @@ Implication: "New game" first asks **Casual or Match**. Match carries the rating
 handicap declaration; Casual skips it and grants both players the full assistance
 spectrum. Persist the chosen mode with the game. (Build next.)
 
+## Product direction — external review (2026-09-16)
+
+Deep external product/tech review (via ChatGPT, after playtesting with family)
+surfaced strong direction. Capture for future phases:
+
+- **The one hypothesis to prove:** *Can a 700 have a genuinely enjoyable game vs a
+  1500?* Optimize for **competitive game quality** and "that was a real game" —
+  **NOT** 50/50 win probability (mathematically fair but emotionally hollow).
+- **Missing architectural layer — the Player Model:** today it's
+  Engine → Assistance → Handicap → UI. Should become
+  **Engine → Player Model → Assistance Policy → Handicap → Experience.** Assistance
+  should depend on *what this human understands* (piece selection, threat
+  awareness, hanging pieces, tactics…), decomposed by capability — not just the
+  rating gap. Assistance scaffolds fade per-capability as the player learns.
+- **Separate three systems:** (1) Chess Intelligence (pure truth), (2) Player
+  Model (what they understand), (3) Assistance Policy (minimum info to reveal
+  now) → then the Transparency Service records it. Improve one without touching
+  the others.
+- **Agency-retention metric:** measure not just effective-Elo gain but
+  *EffectiveStrengthGain / AssistanceInformation* — max competitive improvement
+  from minimum intervention. "You left something undefended" ≫ "play Nf3" even at
+  equal Elo gain. This is likely the IP.
+- **Assistance as a first-class mechanic / budget:** an assistance budget spent
+  during a game (hint=1, candidate moves=2, best move=4, autoplay=5) → using help
+  becomes strategy. And a recognizable **vocabulary** (Off · Hint · Guide · Coach
+  · Assist · Autopilot) so people say "I was on Guide" like a golf handicap.
+- **Higher skill → more abstract help:** a 1900 doesn't need "play Nf3" but
+  "your opponent just weakened the dark squares." Assistance gets more abstract as
+  skill rises (keeps strong players engaged).
+- **First Game Mode (onboarding):** teach chess *inside* the first real game via
+  progressive disclosure — make the first move impossible to fail (pulse a piece →
+  illuminate legal squares → tap). Not a separate tutorial. (Partially addressed
+  2026-09-16: tutorial now pulses the tappable piece + explicit tap instruction.)
+- **Conversational level, not Elo:** "How would you describe yourself?" (never
+  played / know the moves / casual / regular / club / competitive) → map to rating
+  internally; then Glassboard learns the true level over games. (Partially done —
+  level chips.)
+- **Copy:** avoid "weaker player" (stigma) → done (now "lower-rated player").
+- **Server-authoritative for Match:** already validates moves; extend to validate
+  assistance *entitlement* + canonical state for rated games (Casual can stay
+  client-trusted).
+- **Brand language is landing:** "Different levels. One game." (consumer) +
+  "Chess, in the open." (philosophy) + Glass-box. Keep the link-based, no-account
+  invite flow simple — it's a core strength.
+
 ## Open decisions
 
 1. Accounts vs device-identity for **beta** (alpha = device).
