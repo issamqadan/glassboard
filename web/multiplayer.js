@@ -40,6 +40,8 @@ let legalTargets = [];
 let hanging = [];
 let freeCaptures = [];
 let assistData = null;
+let lastStratSig = ""; // signature of strategies last seen while the fold was open
+let curStratSig = "";
 let pickedStrategyId = null;
 let lastStratRelay = null;
 let forceAssist = null; // testing: force an assist rung even when you're stronger
@@ -134,6 +136,9 @@ async function main() {
 
   const rb = el("resignBtn");
   if (rb) rb.addEventListener("click", resign);
+
+  const sp = el("stratPanel");
+  if (sp) sp.addEventListener("toggle", () => { if (sp.open) { sp.classList.remove("has-new"); lastStratSig = curStratSig; } });
 
   const nb = el("notifyBtn");
   if (nb) {
@@ -407,6 +412,13 @@ function pieceNameAt(sq) {
   const c = (game ? game.boardString()[sq] : "") || "";
   return ({ p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" })[c.toLowerCase()] || "piece";
 }
+// The board itself is a status "bulb": an ambient glow that mirrors the coach.
+function setBoardGlow(tone) {
+  const bw = document.querySelector("main.game .board-wrap");
+  if (!bw) return;
+  bw.classList.remove("glow-danger", "glow-gold", "glow-calm");
+  if (tone === "danger" || tone === "gold" || tone === "calm") bw.classList.add("glow-" + tone);
+}
 function renderCoach() {
   const elc = document.getElementById("coach");
   if (!elc) return;
@@ -414,12 +426,14 @@ function renderCoach() {
     const waiting = state && state.status === "ongoing" && myColor && state.turn !== myColor;
     elc.className = "coach idle";
     elc.innerHTML = `<span class="co-ic">⏳</span><div class="co-body"><div class="co-head">${waiting ? "Waiting for your opponent…" : "No assistance right now"}</div></div>`;
+    setBoardGlow(null);
     return;
   }
   const a = assistData;
   if (a.level === "off") {
     elc.className = "coach idle";
     elc.innerHTML = `<span class="co-ic">♟</span><div class="co-body"><div class="co-head">You play unassisted</div><div class="co-sub">You're the higher-rated side — your opponent gets the help, shown in the glass-box.</div></div>`;
+    setBoardGlow(null);
     return;
   }
   let tone = "calm", ic = "✓", head = "You're safe", sub = "No immediate threats — improve a piece or make a plan.";
@@ -449,6 +463,7 @@ function renderCoach() {
     `<span class="co-ic">${ic}</span>` +
     `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>` +
     action;
+  setBoardGlow(tone);
   const pb = document.getElementById("coachPlay");
   if (pb && a.recommended) {
     const u = a.recommended;
@@ -587,6 +602,22 @@ function renderAssist() {
   const a = assistData;
   const add = (h) => assistEl.insertAdjacentHTML("beforeend", h);
   if (a.level === "off") add(`<div class="none">You're the higher-rated side — you play unassisted (that's the fair part). <b>Your opponent</b> is getting the help, and every bit of it shows in the <b>Glass-box</b> below.<br><span style="color:#7f92ab">Want to use plans + assistance yourself? Start a <b>Casual</b> game (both sides get it), or <a href="./index.html" style="color:var(--accent)">Play the AI ↗</a>.</span></div>`);
+  // Surface the picked strategy's move at the top of the list.
+  const sr = a.strategy;
+  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  if (picked && picked.moveUci) {
+    const q = uciToSquares(picked.moveUci);
+    const sm = document.createElement("div");
+    sm.className = "cand strat-move";
+    sm.style.setProperty("--sc", STRAT_COLOR[picked.id] || "#5cc9ec");
+    sm.innerHTML =
+      `<div class="cand-main"><span class="cand-tag">${STRAT_ICON[picked.id] || "◆"} ${escapeHtml(picked.name)}</span>` +
+      `<span class="cand-move">${escapeHtml(picked.moveSan || picked.moveUci)}</span>` +
+      (picked.moveNote ? `<div class="cand-note">${escapeHtml(picked.moveNote)}</div>` : "") +
+      `</div><span class="score">plan</span>`;
+    if (q) sm.addEventListener("click", () => sendMove(q.from, q.to));
+    assistEl.appendChild(sm);
+  }
   a.candidates.forEach((c) => {
     const isRec = a.recommended && c.uci === a.recommended;
     const div = document.createElement("div");
@@ -645,9 +676,13 @@ function renderStrategy() {
   if (!panel || !host) return;
   const sr = assistData && assistData.strategy;
   if (!sr || !sr.strategies || !sr.strategies.length) {
-    panel.hidden = true; host.innerHTML = ""; drawPlan(null); return;
+    panel.hidden = true; panel.classList.remove("has-new"); host.innerHTML = ""; drawPlan(null); return;
   }
   panel.hidden = false;
+  // Badge the collapsed fold when the ideas change (opening acknowledges it).
+  curStratSig = sr.phase + "|" + sr.strategies.map((s) => s.id).join(",");
+  if (panel.open) { lastStratSig = curStratSig; panel.classList.remove("has-new"); }
+  else if (curStratSig !== lastStratSig) { panel.classList.add("has-new"); }
   document.getElementById("stratPhase").textContent = sr.phase;
   host.innerHTML = "";
   if (sr.opponent) {
@@ -685,6 +720,7 @@ function renderStrategy() {
 function pickStrategy(id) {
   pickedStrategyId = id;
   renderStrategy();
+  renderAssist();
   const sr = assistData && assistData.strategy;
   const s = sr && sr.strategies.find((x) => x.id === id);
   if (s && ws && ws.readyState === 1) {

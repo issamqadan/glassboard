@@ -46,6 +46,8 @@ let selected = null;
 let legalTargets = [];
 let hanging = [];
 let freeCaptures = [];
+let lastStratSig = ""; // signature of strategies last seen while the fold was open
+let curStratSig = "";
 let lastMove = null; // { from, to } of the most recent move
 let assistData = null; // parsed assist JSON for the current (White) turn
 let busy = false;
@@ -58,6 +60,8 @@ const isWhitePiece = (c) => c !== "." && c === c.toUpperCase();
 async function main() {
   await init();
   document.getElementById("new").addEventListener("click", newGame);
+  const sp = document.getElementById("stratPanel");
+  if (sp) sp.addEventListener("toggle", () => { if (sp.open) { sp.classList.remove("has-new"); lastStratSig = curStratSig; } });
   const rb = document.getElementById("resignBtn");
   if (rb) rb.addEventListener("click", resign);
   const orm = document.getElementById("overRematch");
@@ -114,12 +118,20 @@ function pieceNameAt(sq) {
   const c = game.boardString()[sq] || "";
   return ({ p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" })[c.toLowerCase()] || "piece";
 }
+// The board itself is a status "bulb": an ambient glow that mirrors the coach.
+function setBoardGlow(tone) {
+  const bw = document.querySelector("main.game .board-wrap");
+  if (!bw) return;
+  bw.classList.remove("glow-danger", "glow-gold", "glow-calm");
+  if (tone === "danger" || tone === "gold" || tone === "calm") bw.classList.add("glow-" + tone);
+}
 function renderCoach() {
   const el = document.getElementById("coach");
   if (!el) return;
   if (!assistData) {
     el.className = "coach idle";
     el.innerHTML = `<span class="co-ic">🤖</span><div class="co-body"><div class="co-head">Engine is thinking…</div></div>`;
+    setBoardGlow(null);
     return;
   }
   const a = assistData;
@@ -156,6 +168,7 @@ function renderCoach() {
     `<span class="co-ic">${ic}</span>` +
     `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>` +
     action;
+  setBoardGlow(off ? null : tone);
   const pb = document.getElementById("coachPlay");
   if (pb && a.recommended) {
     const q = uciSquares(a.recommended);
@@ -242,8 +255,13 @@ function renderStrategy() {
   const panel = document.getElementById("stratPanel"), host = document.getElementById("strategy");
   if (!panel || !host) return;
   const sr = assistData && assistData.strategy;
-  if (!sr || !sr.strategies || !sr.strategies.length) { panel.hidden = true; host.innerHTML = ""; drawPlan(null); return; }
+  if (!sr || !sr.strategies || !sr.strategies.length) { panel.hidden = true; panel.classList.remove("has-new"); host.innerHTML = ""; drawPlan(null); return; }
   panel.hidden = false;
+  // Badge the collapsed fold when the set of ideas changes, so a change is
+  // never silent. Opening the fold acknowledges it (see the toggle listener).
+  curStratSig = sr.phase + "|" + sr.strategies.map((s) => s.id).join(",");
+  if (panel.open) { lastStratSig = curStratSig; panel.classList.remove("has-new"); }
+  else if (curStratSig !== lastStratSig) { panel.classList.add("has-new"); }
   document.getElementById("stratPhase").textContent = sr.phase;
   host.innerHTML = "";
   if (sr.opponent) { const o = document.createElement("div"); o.className = "opp-read"; o.innerHTML = `<span>👁</span><span>${escapeHtml(sr.opponent)}</span>`; host.appendChild(o); }
@@ -253,7 +271,7 @@ function renderStrategy() {
     card.className = "scard" + (s.id === pickedStrategyId ? " on" : "");
     card.style.setProperty("--sc", STRAT_COLOR[s.id] || "#5cc9ec");
     card.innerHTML = `<span class="sic">${STRAT_ICON[s.id] || "◆"}</span><div><div class="sname">${escapeHtml(s.name)}</div><div class="sidea">${escapeHtml(s.idea)}</div></div>`;
-    card.addEventListener("click", () => { pickedStrategyId = s.id; renderStrategy(); });
+    card.addEventListener("click", () => { pickedStrategyId = s.id; renderStrategy(); renderAssist(); });
     host.appendChild(card);
   });
   const picked = sr.strategies.find((s) => s.id === pickedStrategyId);
@@ -331,6 +349,23 @@ function renderAssist() {
     return;
   }
   const a = assistData;
+  // If a strategy is picked, surface its move at the top of the list so the
+  // plan and the concrete move live in one place.
+  const sr = a.strategy;
+  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  if (picked && picked.moveUci) {
+    const q = uciSquares(picked.moveUci);
+    const sm = document.createElement("div");
+    sm.className = "cand strat-move";
+    sm.style.setProperty("--sc", STRAT_COLOR[picked.id] || "#5cc9ec");
+    sm.innerHTML =
+      `<div class="cand-main"><span class="cand-tag">${STRAT_ICON[picked.id] || "◆"} ${escapeHtml(picked.name)}</span>` +
+      `<span class="cand-move">${escapeHtml(picked.moveSan || picked.moveUci)}</span>` +
+      (picked.moveNote ? `<div class="cand-note">${escapeHtml(picked.moveNote)}</div>` : "") +
+      `</div><span class="score">plan</span>`;
+    if (q) sm.addEventListener("click", () => playMove(q.from, q.to));
+    assistEl.appendChild(sm);
+  }
   if (a.candidates.length) {
     a.candidates.forEach((c) => {
       const isRec = a.recommended && c.uci === a.recommended;

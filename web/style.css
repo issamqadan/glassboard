@@ -673,8 +673,15 @@ details.panel > *:not(summary) { padding: 12px 15px; }
 @media (min-width: 900px) {
   main.game { padding: 22px 24px 40px; }
   main.game .layout { flex-wrap: nowrap; }
-  main.game .board-col { width: min(560px, 54vw); flex: 0 0 auto; }
+  /* Size the board to the screen: capped by width AND height so it never
+     overflows the window on short or wide displays. (vh is universally
+     supported; an unsupported unit inside min() would void the whole rule.) */
+  main.game .board-col { width: min(560px, 52vw, calc(100vh - 200px)); flex: 0 0 auto; }
   main.game .panels { position: sticky; top: 72px; }
+}
+/* Landscape phones/tablets: keep the square board within the viewport height. */
+@media (max-width: 899px) and (orientation: landscape) {
+  main.game .board-col { width: min(100%, calc(100vh - 150px)); margin: 0 auto; }
 }
 
 /* Phones: tighten everything, big touch targets, coach stays prominent */
@@ -686,3 +693,30 @@ details.panel > *:not(summary) { padding: 12px 15px; }
   .assist .cand { padding: 11px 12px; }
   .btn-primary { flex: 1; }
 }
+
+/* ---- board as a status "bulb": ambient glow that reflects the coach state ---- */
+main.game .board-wrap { border-radius: var(--board-radius); transition: box-shadow .35s ease; }
+main.game .board-wrap.glow-danger {
+  box-shadow: 0 0 0 2px rgba(242,112,126,.55), 0 0 34px 3px rgba(242,112,126,.5);
+  animation: bulb-danger 1.7s ease-in-out infinite;
+}
+main.game .board-wrap.glow-gold { box-shadow: 0 0 0 2px rgba(240,198,116,.5), 0 0 30px 2px rgba(240,198,116,.42); }
+main.game .board-wrap.glow-calm { box-shadow: 0 0 0 2px rgba(111,211,176,.32), 0 0 22px 1px rgba(111,211,176,.24); }
+@keyframes bulb-danger {
+  0%,100% { box-shadow: 0 0 0 2px rgba(242,112,126,.5), 0 0 22px 1px rgba(242,112,126,.4); }
+  50%     { box-shadow: 0 0 0 2px rgba(242,112,126,.85), 0 0 42px 5px rgba(242,112,126,.72); }
+}
+@media (prefers-reduced-motion: reduce) { main.game .board-wrap.glow-danger { animation: none; } }
+
+/* ---- collapsed "Strategic ideas" fold: pulse a badge when new ideas appear ---- */
+.strat-fold > summary::before { display: inline-block; }
+details.strat-fold.has-new > summary { color: #eaf0fb; }
+details.strat-fold.has-new > summary::before { color: #5cc9ec; animation: strat-pulse 1.4s ease-in-out infinite; }
+details.strat-fold.has-new[open] > summary::before { animation: none; color: #e0be79; }
+details.strat-fold.has-new > summary .hint::after { content: " · new ideas"; color: #5cc9ec; font-weight: 640; }
+@keyframes strat-pulse { 0%,100% { transform: scale(1); opacity: .85; } 50% { transform: scale(1.4); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { details.strat-fold.has-new > summary::before { animation: none; } }
+
+/* ---- a picked strategy's move, surfaced at the top of Suggested moves ---- */
+.assist .cand.strat-move { border-color: var(--sc, #5cc9ec); background: color-mix(in srgb, var(--sc, #5cc9ec) 13%, rgba(20,32,54,.6)); }
+.assist .cand.strat-move .cand-tag { display: block; font-size: 0.68rem; color: var(--sc, #5cc9ec); font-weight: 680; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
