@@ -395,6 +395,31 @@ async fn profile(
     Json(serde_json::json!({ "moves": moves, "hung": hung, "missed": missed }))
 }
 
+/// A move played off-server (e.g. the local vs-AI board). The client sends the
+/// position before the move and the move itself; we classify with the *same*
+/// logic as online play so the Player Model learns from every game, not just
+/// multiplayer ones. Only the human's own moves should be posted here.
+#[derive(serde::Deserialize)]
+struct RecordReq {
+    player: String,
+    fen: String,
+    uci: String,
+}
+async fn record(State(store): State<Store>, Json(req): Json<RecordReq>) -> Json<serde_json::Value> {
+    let before = engine::parse_fen(&req.fen);
+    let mover = before.side;
+    if let Some(mv) = room::parse_uci(&before, &req.uci) {
+        let played_to = uci_to_sq(&req.uci).unwrap_or(64);
+        let mut after = before;
+        after.make_move(mv);
+        let hung = left_piece_hanging(&after, mover);
+        let missed = missed_free_capture(&before, mover, played_to);
+        record_move(&store, &req.player, hung, missed).await;
+        return Json(serde_json::json!({ "ok": true, "hung": hung, "missed": missed }));
+    }
+    Json(serde_json::json!({ "ok": false }))
+}
+
 #[derive(Clone)]
 struct AppState {
     rooms: Rooms,
@@ -497,6 +522,7 @@ async fn main() {
         .route("/games/delete", post(delete_game))
         .route("/account", post(account))
         .route("/profile", get(profile))
+        .route("/record", post(record))
         .layer(CorsLayer::permissive())
         .with_state(AppState { rooms, store });
 

@@ -21,6 +21,26 @@ const depthEl = document.getElementById("depth");
 const humanEloEl = document.getElementById("humanElo");
 const engineEloEl = document.getElementById("engineElo");
 
+// Player Model: vs-AI games feed the same learning signal as online play.
+// We send each of the human's own moves (position before + the move) to the
+// server, which classifies it exactly like a multiplayer move. Fire-and-forget:
+// it never blocks the board, and only runs for a signed-in player.
+const SERVER_HTTP = "https://playglassboard.onrender.com";
+function gbMeId() { try { return (JSON.parse(localStorage.getItem("gb_me")) || {}).id || ""; } catch { return ""; } }
+function recordHumanMove(preFen, from, to, promo) {
+  const id = gbMeId();
+  if (!id) return;
+  const uci = sqName(from) + sqName(to) + (promo || "");
+  try {
+    fetch(SERVER_HTTP + "/record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ player: id, fen: preFen, uci }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {}
+}
+
 let game;
 let selected = null;
 let legalTargets = [];
@@ -323,11 +343,13 @@ function playMove(from, to) {
   doPlay(from, to, undefined);
 }
 function doPlay(from, to, promo) {
+  const preFen = game.fen(); // position before the human's move (for the Player Model)
   const ok = game.makeMove(from, to, promo);
   selected = null;
   legalTargets = [];
   if (!ok) { paint(); return; }
   lastMove = { from, to };
+  recordHumanMove(preFen, from, to, promo); // learn from this move too
   onPositionChanged(); // now Black to move → assist cleared
   setTimeout(engineReply, 150);
 }
