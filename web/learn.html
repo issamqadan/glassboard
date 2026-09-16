@@ -102,11 +102,8 @@
   </style>
 </head>
 <body>
-  <header class="top">
-    <span class="brand"><span class="mark">♞</span> Glassboard</span>
-    <span class="sp"></span>
-    <a href="./portal.html">Skip →</a>
-  </header>
+  <script src="./nav.js"></script>
+  <a class="skip-link" id="skipLink" href="./portal.html" style="position:fixed;top:68px;right:16px;z-index:5;color:#93a2c0;font-size:0.86rem;text-decoration:none">Skip →</a>
 
   <main>
     <div class="dots"><i class="on"></i><i></i><i></i></div>
@@ -346,7 +343,7 @@
     (function () {
       const nx = nextUrl();
       if (!nx) return;
-      const skip = document.querySelector(".top a");
+      const skip = document.getElementById("skipLink");
       if (skip) { skip.href = nx; skip.textContent = "Skip to game →"; }
       const cta = document.querySelector("#s-result .btn");
       if (cta) cta.textContent = "Save & join the game →";
