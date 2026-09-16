@@ -221,6 +221,17 @@ fn fianchetto_bishop(b: &Board, color: Color) -> Option<Square> {
 fn pick(ranked: &[(Move, i32)], pred: impl Fn(&Move) -> bool) -> Option<Move> {
     ranked.iter().map(|(m, _)| *m).find(|m| pred(m))
 }
+
+/// The best ranked move that serves the plan — but only if it's within ~1.3
+/// pawns of the engine's best move, so a plan never recommends a blunder.
+/// Falls back to the engine's best move otherwise.
+fn plan_move(ranked: &[(Move, i32)], top_score: i32, pred: impl Fn(&Move) -> bool) -> Move {
+    ranked
+        .iter()
+        .find(|(m, s)| pred(m) && *s + 130 >= top_score)
+        .map(|(m, _)| *m)
+        .unwrap_or(ranked[0].0)
+}
 fn kind_at(b: &Board, sq: Square) -> Option<PieceKind> {
     b.squares[sq as usize].map(|p| p.kind)
 }
@@ -246,6 +257,7 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
         return StrategyRead { phase: ph, strategies: out, opponent: None };
     }
     let top = ranked[0].0;
+    let top_score = ranked[0].1;
     let castle_mv = pick(ranked, |m| m.flag == Flag::Castle);
     let opp_king = king_square(b, opp);
 
@@ -306,9 +318,7 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
         if ph == "opening" {
             fit += 15;
         }
-        let rec = pick(ranked, |m| develops(b, m, side))
-            .or(castle_mv)
-            .unwrap_or(top);
+        let rec = plan_move(ranked, top_score, |m| develops(b, m, side) || m.flag == Flag::Castle);
         let mut arrows = vec![PlanArrow {
             from: rec.from,
             to: rec.to,
@@ -354,7 +364,9 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
             .filter(|&&s| matches!(b.squares[s as usize], Some(p) if p.color == side && p.kind == PieceKind::Pawn))
             .count() as i32;
         if own_center < 2 {
-            if let Some(rec) = pick(ranked, |m| center_push(b, m)) {
+            // Offer only if a *sound* central push exists (within the blunder guard).
+            let rec = plan_move(ranked, top_score, |m| center_push(b, m));
+            if center_push(b, &rec) {
                 out.push(mk(
                     "center",
                     "Seize the Centre",
@@ -380,7 +392,7 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
         let opp_home = king_square(b, opp) == king_home(opp);
         let my_developed = 4 - undeveloped(b, side, &[PieceKind::Knight, PieceKind::Bishop]);
         if (!opp_castled || opp_home) && my_developed >= 2 {
-            let rec = pick(ranked, |m| toward_king(m, opp_king)).unwrap_or(top);
+            let rec = plan_move(ranked, top_score, |m| toward_king(m, opp_king));
             out.push(mk(
                 "attack_king",
                 "Attack the King",
@@ -403,7 +415,7 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
     let lead = nonking_material(b, side) - nonking_material(b, opp);
     if lead >= 200 && ph != "opening" {
         // Prefer an equal trade (a capture) to reduce material while ahead.
-        let rec = pick(ranked, |m| b.squares[m.to as usize].is_some()).unwrap_or(top);
+        let rec = plan_move(ranked, top_score, |m| b.squares[m.to as usize].is_some());
         out.push(mk(
             "simplify",
             "Simplify — you're ahead",
@@ -425,7 +437,8 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
     if ph == "endgame" {
         let passers = passed_pawns(b, side);
         if !passers.is_empty() {
-            if let Some(rec) = pick(ranked, |m| passers.contains(&m.from) && forward_pawn(b, m, side)) {
+            let rec = plan_move(ranked, top_score, |m| passers.contains(&m.from) && forward_pawn(b, m, side));
+            if passers.contains(&rec.from) && forward_pawn(b, &rec, side) {
                 let promo_file = file_of(rec.to);
                 let promo_sq = if side == Color::White { (56 + promo_file) as u8 } else { promo_file as u8 };
                 out.push(mk(
@@ -451,9 +464,7 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
     let opp_iso = isolated_of(b, opp);
     if let Some(&pawn) = opp_iso.iter().min_by_key(|&&s| (file_of(s) - 4).abs().min((file_of(s) - 3).abs())) {
         let block_sq = if opp == Color::White { pawn.saturating_add(8) } else { pawn.wrapping_sub(8) };
-        let rec = pick(ranked, |m| m.to == pawn)
-            .or_else(|| pick(ranked, |m| m.to == block_sq))
-            .unwrap_or(top);
+        let rec = plan_move(ranked, top_score, |m| m.to == pawn || m.to == block_sq);
         let mut rings = vec![pawn];
         if block_sq < 64 {
             rings.push(block_sq);
@@ -478,8 +489,7 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
     // --- Seize the open file (structural: a fully open file + a rook) ---
     if has_rook(b, side) {
         if let Some(file) = (0..8i32).find(|&f| open_file(b, f)) {
-            let rec = pick(ranked, |m| kind_at(b, m.from) == Some(PieceKind::Rook) && file_of(m.to) == file)
-                .unwrap_or(top);
+            let rec = plan_move(ranked, top_score, |m| kind_at(b, m.from) == Some(PieceKind::Rook) && file_of(m.to) == file);
             let fname = (b'a' + file as u8) as char;
             out.push(mk(
                 "open_file",
@@ -530,7 +540,7 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
 
     // --- The long diagonal (a fianchettoed bishop) ---
     if let Some(bsq) = fianchetto_bishop(b, side) {
-        let rec = pick(ranked, |m| m.from == bsq).unwrap_or(top);
+        let rec = plan_move(ranked, top_score, |m| m.from == bsq);
         out.push(mk(
             "fianchetto",
             "The long diagonal",
@@ -619,6 +629,30 @@ mod tests {
         assert!(s.strategies.iter().any(|x| x.id == "develop" || x.id == "center"));
         // every strategy carries a concrete first move
         assert!(s.strategies.iter().all(|x| !x.move_san.is_empty()));
+    }
+
+    #[test]
+    fn plans_never_recommend_a_blunder() {
+        // A free queen is on offer (Rxd5). Every plan's recommended move must be
+        // within the blunder guard of the engine's best — no plan should hand
+        // back a bad "themed" move that ignores the win.
+        for fen in [
+            "4k3/8/8/3q4/8/8/8/3RK3 w - - 0 1",
+            "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+        ] {
+            let b = parse_fen(fen);
+            let ranked = ranked(&b);
+            let top = ranked[0].1;
+            let s = strategize(&b, &ranked);
+            for st in &s.strategies {
+                let sc = ranked
+                    .iter()
+                    .find(|(m, _)| crate::to_uci(*m) == st.move_uci)
+                    .map(|(_, sc)| *sc)
+                    .unwrap_or(top);
+                assert!(sc + 130 >= top, "plan '{}' recommended {} ({} vs best {})", st.id, st.move_san, sc, top);
+            }
+        }
     }
 
     #[test]
