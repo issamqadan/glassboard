@@ -135,6 +135,13 @@ async function main() {
     });
   }
 
+  const rmb = el("rematchBtn");
+  if (rmb) rmb.addEventListener("click", () => {
+    if (!ws || ws.readyState !== 1) return;
+    if (!confirm("Start a rematch — a fresh game with the same opponent?")) return;
+    ws.send(JSON.stringify({ t: "reset" }));
+  });
+
   if (mine) {
     set("mcEyebrow", "Your game");
     set("mcTitle", "Waiting for your opponent");
@@ -450,6 +457,8 @@ function renderStatus() {
 
   const rb = el("resignBtn");
   if (rb) rb.hidden = !(myColor && state.status === "ongoing" && !over);
+  const rmb = el("rematchBtn");
+  if (rmb) rmb.hidden = !(myColor && over);
 
   if (over) {
     const draw = winner === "";
@@ -626,14 +635,28 @@ function clearSelection() {
 }
 
 function sendMove(from, to) {
-  let promo = "";
-  if (game.isPromotion(from, to)) {
-    const p = window.prompt("Promote to? (q, r, b, n)", "q");
-    promo = p && "qrbn".includes(p.toLowerCase()) ? p.toLowerCase() : "q";
-  }
+  if (game.isPromotion(from, to)) { showPromotion(from, to); return; }
+  finishMove(from, to, "");
+}
+function finishMove(from, to, promo) {
   const uci = sqName(from) + sqName(to) + promo;
   ws.send(JSON.stringify({ t: "move", uci }));
   clearSelection(); // board updates when the server echoes the new state
+}
+// Inline promotion picker (no ugly window.prompt).
+function showPromotion(from, to) {
+  const ov = document.getElementById("promoOverlay");
+  if (!ov) { finishMove(from, to, "q"); return; }
+  const white = myColor === "white";
+  const choices = ov.querySelector(".promo-choices");
+  choices.innerHTML = ["q", "r", "b", "n"].map((p) => {
+    const glyph = typeof pieceSVG === "function" ? pieceSVG(white ? p.toUpperCase() : p) : p.toUpperCase();
+    return `<button class="promo-pick" data-p="${p}"><span class="piece ${white ? "white" : "black"}">${glyph}</span></button>`;
+  }).join("");
+  choices.querySelectorAll(".promo-pick").forEach((b) => {
+    b.onclick = () => { ov.hidden = true; finishMove(from, to, b.dataset.p); };
+  });
+  ov.hidden = false;
 }
 
 // --- helpers ---------------------------------------------------------------

@@ -9,7 +9,7 @@
   <body>
     <main>
       <header>
-        <div class="topbar"><a href="./portal.html" class="backlink">← Lobby</a><span class="topbar-right"><button id="notifyBtn" class="topbtn" title="Get notified when it's your turn">🔔 Notify</button><button id="resignBtn" class="resign-btn" hidden>Resign</button></span></div>
+        <div class="topbar"><a href="./portal.html" class="backlink">← Lobby</a><span class="topbar-right"><button id="notifyBtn" class="topbtn" title="Get notified when it's your turn">🔔 Notify</button><button id="rematchBtn" class="topbtn" hidden>Rematch ↻</button><button id="resignBtn" class="resign-btn" hidden>Resign</button></span></div>
         <h1>Glassboard <span class="tag">Online</span></h1>
         <p class="tagline">Chess, in the open — play a friend, with a transparent handicap.</p>
         <div id="players" class="players" hidden></div>
@@ -75,6 +75,9 @@
         help is relayed to both players' glass-box. The server validates every move, so no one
         can cheat. On the same Wi-Fi, set the Server to <code>ws://YOUR-LAN-IP:9001</code>.
       </p>
+      <div id="promoOverlay" class="promo-overlay" hidden>
+        <div class="promo-box"><div class="promo-title">Promote to</div><div class="promo-choices"></div></div>
+      </div>
     </main>
     <script src="./pieces.js"></script>
     <script src="./theme.js"></script>

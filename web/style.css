@@ -532,3 +532,12 @@ button {
 .topbtn { background: transparent; border: 1px solid var(--line); color: #b9c6da; border-radius: 8px; padding: 5px 12px; font-size: 0.82rem; font-weight: 600; }
 .topbtn:hover { border-color: var(--accent); color: var(--accent); }
 .topbtn:disabled { opacity: 0.5; cursor: default; }
+
+/* inline promotion picker */
+.promo-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(6,10,18,0.62); backdrop-filter: blur(3px); }
+.promo-box { background: #0c111b; border: 1px solid var(--line-2); border-radius: 16px; padding: 18px 20px; box-shadow: 0 24px 60px -20px rgba(0,0,0,0.85); text-align: center; }
+.promo-title { font-size: 0.72rem; color: #93a2c0; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 650; }
+.promo-choices { display: flex; gap: 10px; }
+.promo-pick { width: 64px; height: 64px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--dark); display: grid; place-items: center; cursor: pointer; transition: transform 0.12s, border-color 0.2s; }
+.promo-pick:hover { border-color: var(--accent); transform: translateY(-2px); }
+.promo-pick .piece { width: 82%; height: 82%; }
