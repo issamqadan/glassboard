@@ -38,6 +38,7 @@ let glassList = [];
 let selected = null;
 let legalTargets = [];
 let hanging = [];
+let freeCaptures = [];
 let assistData = null;
 let pickedStrategyId = null;
 let lastStratRelay = null;
@@ -369,13 +370,15 @@ function updateNotifyBtn() {
 function computeAssist() {
   assistData = null;
   hanging = [];
+  freeCaptures = [];
   if (game && state && state.status === "ongoing" && state.turn === myColor) {
     // Casual: both sides get the full assistance spectrum. Else honor the
     // testing override, otherwise the rating-derived handicap.
     const isCasual = (state && state.mode === "casual") || gameMode === "casual";
     game.setAssistOverride(isCasual ? "guided" : (forceAssist || ""));
     assistData = JSON.parse(game.assist(DEPTH));
-    hanging = assistData.hanging;
+    hanging = assistData.hanging || [];
+    freeCaptures = assistData.freeCaptures || [];
     if (assistData.level !== "off" && state.fen !== lastGlassFen) {
       ws.send(JSON.stringify({ t: "glass", summary: summarize(assistData) }));
       lastGlassFen = state.fen;
@@ -391,10 +394,67 @@ const oppElo = () => (myColor === "white" ? state.black_elo : state.white_elo);
 function paint() {
   renderBoard();
   renderPlayers();
-  renderStrategy();
+  renderCoach();
   renderAssist();
+  renderStrategy();
   renderGlass();
   renderStatus();
+}
+
+// The coach: one prominent, concrete piece of advice under the board — the
+// primary assistance surface, identical to the vs-AI page. Strategy is secondary.
+function pieceNameAt(sq) {
+  const c = (game ? game.boardString()[sq] : "") || "";
+  return ({ p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" })[c.toLowerCase()] || "piece";
+}
+function renderCoach() {
+  const elc = document.getElementById("coach");
+  if (!elc) return;
+  if (!assistData) {
+    const waiting = state && state.status === "ongoing" && myColor && state.turn !== myColor;
+    elc.className = "coach idle";
+    elc.innerHTML = `<span class="co-ic">⏳</span><div class="co-body"><div class="co-head">${waiting ? "Waiting for your opponent…" : "No assistance right now"}</div></div>`;
+    return;
+  }
+  const a = assistData;
+  if (a.level === "off") {
+    elc.className = "coach idle";
+    elc.innerHTML = `<span class="co-ic">♟</span><div class="co-body"><div class="co-head">You play unassisted</div><div class="co-sub">You're the higher-rated side — your opponent gets the help, shown in the glass-box.</div></div>`;
+    return;
+  }
+  let tone = "calm", ic = "✓", head = "You're safe", sub = "No immediate threats — improve a piece or make a plan.";
+  if (a.inCheck) {
+    tone = "danger"; ic = "⚠"; head = "You're in check";
+    sub = "You must get your king out of check this move.";
+  } else if (a.hanging && a.hanging.length) {
+    tone = "danger"; ic = "⚠";
+    const sq = a.hanging[0];
+    head = `Your ${pieceNameAt(sq)} on ${sqName(sq)} can be taken`;
+    sub = a.hanging.length > 1
+      ? `${a.hanging.length} of your pieces are undefended — move or protect them.`
+      : "Defend it or move it to safety.";
+  } else if (a.freeCaptures && a.freeCaptures.length) {
+    tone = "gold"; ic = "★";
+    const sq = a.freeCaptures[0];
+    head = `Free material: win the ${pieceNameAt(sq)} on ${sqName(sq)}`;
+    sub = "Your opponent left it undefended — take it.";
+  }
+  let action = "";
+  if (a.recommended) {
+    const rec = (a.candidates || []).find((c) => c.uci === a.recommended);
+    action = `<button class="co-play" id="coachPlay">Play ${escapeHtml(rec ? (rec.san || rec.uci) : a.recommended)} →</button>`;
+  }
+  elc.className = "coach " + tone;
+  elc.innerHTML =
+    `<span class="co-ic">${ic}</span>` +
+    `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>` +
+    action;
+  const pb = document.getElementById("coachPlay");
+  if (pb && a.recommended) {
+    const u = a.recommended;
+    const toSq = (s) => (s.charCodeAt(0) - 97) + (s.charCodeAt(1) - 49) * 8;
+    pb.addEventListener("click", () => sendMove(toSq(u.slice(0, 2)), toSq(u.slice(2, 4))));
+  }
 }
 
 function renderPlayers() {
@@ -453,6 +513,7 @@ function renderBoard() {
     if (selected === i) sq.classList.add("selected");
     if (legalTargets.includes(i)) { sq.classList.add("target"); if (s[i] !== ".") sq.classList.add("capture"); }
     if (hanging.includes(i)) sq.classList.add("hanging");
+    if (freeCaptures.includes(i)) sq.classList.add("free");
     if (lastMove && (lastMove.from === i || lastMove.to === i)) sq.classList.add("lastmove");
 
     if (rank === bottomRank) sq.appendChild(coord("file", FILES[file]));
@@ -526,9 +587,6 @@ function renderAssist() {
   const a = assistData;
   const add = (h) => assistEl.insertAdjacentHTML("beforeend", h);
   if (a.level === "off") add(`<div class="none">You're the higher-rated side — you play unassisted (that's the fair part). <b>Your opponent</b> is getting the help, and every bit of it shows in the <b>Glass-box</b> below.<br><span style="color:#7f92ab">Want to use plans + assistance yourself? Start a <b>Casual</b> game (both sides get it), or <a href="./index.html" style="color:var(--accent)">Play the AI ↗</a>.</span></div>`);
-  if (a.inCheck) add(`<div class="warn">⚠ You are in check.</div>`);
-  if (a.hanging.length) add(`<div class="warn">⚠ Hanging: ${a.hanging.map(sqName).join(", ")}</div>`);
-  a.messages.forEach((m) => add(`<div class="msg">• ${escapeHtml(m)}</div>`));
   a.candidates.forEach((c) => {
     const isRec = a.recommended && c.uci === a.recommended;
     const div = document.createElement("div");
@@ -540,6 +598,9 @@ function renderAssist() {
     div.addEventListener("click", () => sendMove(c.from, c.to));
     assistEl.appendChild(div);
   });
+  if (!assistEl.innerHTML) {
+    assistEl.innerHTML = `<div class="none">No move suggestions at this level — the coach still flags threats above.</div>`;
+  }
 }
 
 // --- strategy layer ---------------------------------------------------------
