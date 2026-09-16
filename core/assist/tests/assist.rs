@@ -18,6 +18,31 @@ fn awareness_flags_hanging_queen() {
     );
 }
 
+/// Awareness spots free enemy material: the black rook on d5 is attacked by the
+/// white rook on d1 and defended by nothing — free to win.
+#[test]
+fn awareness_spots_free_enemy_material() {
+    let b = parse_fen("8/8/8/3r4/8/8/8/3RK3 w - - 0 1");
+    let a = analyze(&b, AssistLevel::Awareness, 1);
+    assert!(
+        a.free_captures.contains(&algebraic_to_sq("d5")),
+        "the free rook on d5 should be flagged, got {:?}",
+        a.free_captures
+    );
+}
+
+/// Coaching puts free material into words.
+#[test]
+fn coaching_names_the_free_capture() {
+    let b = parse_fen("8/8/8/3r4/8/8/8/3RK3 w - - 0 1");
+    let a = analyze(&b, AssistLevel::Coaching, 1);
+    assert!(
+        a.messages.iter().any(|m| m.contains("win the rook") && m.contains("d5")),
+        "coaching should name the free rook on d5, got {:?}",
+        a.messages
+    );
+}
+
 /// Coaching explains a check in words.
 #[test]
 fn coaching_explains_check() {

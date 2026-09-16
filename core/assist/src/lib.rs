@@ -60,6 +60,9 @@ pub struct Assistance {
     pub in_check: bool,
     /// Own pieces that are attacked and undefended (awareness+).
     pub hanging: Vec<Square>,
+    /// Enemy pieces we can capture for free right now (awareness+) — the
+    /// offensive mirror of `hanging`.
+    pub free_captures: Vec<Square>,
     /// Human-readable threat explanations (coaching+).
     pub messages: Vec<String>,
     /// Ranked candidate moves (suggestion+).
@@ -77,28 +80,37 @@ pub struct Assistance {
 pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
     let checked = in_check(b);
 
-    let hanging = if level >= AssistLevel::Awareness {
-        hanging_pieces(b, b.side)
+    let (hanging, free_captures) = if level >= AssistLevel::Awareness {
+        (hanging_pieces(b, b.side), free_captures(b, b.side))
     } else {
-        Vec::new()
+        (Vec::new(), Vec::new())
     };
 
     let mut messages = Vec::new();
     if level >= AssistLevel::Coaching {
         if checked {
-            messages.push("You are in check — you must respond.".to_string());
+            messages.push("You are in check — you must get out of it.".to_string());
         }
         for &s in &hanging {
             if let Some(p) = b.squares[s as usize] {
                 messages.push(format!(
-                    "Your {} on {} is attacked and undefended.",
+                    "Your {} on {} can be taken — defend it or move it.",
+                    kind_name(p.kind),
+                    sq_to_algebraic(s)
+                ));
+            }
+        }
+        for &s in &free_captures {
+            if let Some(p) = b.squares[s as usize] {
+                messages.push(format!(
+                    "You can win the {} on {} — it's free.",
                     kind_name(p.kind),
                     sq_to_algebraic(s)
                 ));
             }
         }
         if messages.is_empty() {
-            messages.push("No immediate threats detected.".to_string());
+            messages.push("No immediate threats — a good moment to improve a piece.".to_string());
         }
     }
 
@@ -141,6 +153,7 @@ pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
         level,
         in_check: checked,
         hanging,
+        free_captures,
         messages,
         candidates,
         best,
@@ -245,6 +258,28 @@ fn hanging_pieces(b: &Board, side: Color) -> Vec<Square> {
                 && p.kind != PieceKind::King
                 && is_attacked(b, s, side.opp())
                 && !is_attacked(b, s, side)
+            {
+                out.push(s);
+            }
+        }
+    }
+    out
+}
+
+/// Enemy pieces (excluding king and pawns) that our side attacks and the enemy
+/// does not defend — free material available to win right now. Mirrors the
+/// server-side Player-Model "missed free capture" signal so live help and the
+/// learning log describe the same thing.
+fn free_captures(b: &Board, side: Color) -> Vec<Square> {
+    let opp = side.opp();
+    let mut out = Vec::new();
+    for s in 0..64u8 {
+        if let Some(p) = b.squares[s as usize] {
+            if p.color == opp
+                && p.kind != PieceKind::King
+                && p.kind != PieceKind::Pawn
+                && is_attacked(b, s, side)
+                && !is_attacked(b, s, opp)
             {
                 out.push(s);
             }

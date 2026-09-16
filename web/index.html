@@ -8,54 +8,64 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <main>
-      <header>
-        <div class="topbar"><span class="topbar-right"><button id="resignBtn" class="resign-btn" hidden>Resign</button></span></div>
-        <h1>Glassboard <span class="tag">vs AI</span></h1>
-        <p class="tagline">Chess, in the open — play the engine with a transparent handicap.</p>
+    <main class="game">
+      <header class="game-head">
+        <div class="gh-row">
+          <h1>Play <span class="tag">vs AI</span></h1>
+          <span class="topbar-right"><button id="resignBtn" class="resign-btn" hidden>Resign</button></span>
+        </div>
         <div id="players" class="players" hidden></div>
       </header>
 
-      <div class="ratings">
-        <label>You (White) <input id="humanElo" type="number" value="1200" min="100" max="3200" /></label>
-        <label>Engine (Black) <input id="engineElo" type="number" value="1700" min="100" max="3200" /></label>
-        <label>Depth
-          <select id="depth">
-            <option value="2">2</option>
-            <option value="3" selected>3</option>
-            <option value="4">4</option>
-          </select>
-        </label>
-        <button id="new">New game</button>
+      <div class="controls">
+        <button id="new" class="btn-primary">＋ New game</button>
+        <details class="opts" id="setupFold">
+          <summary>Difficulty <span id="setupSum" class="opts-sum"></span></summary>
+          <div class="opts-body">
+            <label>You (White) <input id="humanElo" type="number" value="1200" min="100" max="3200" /></label>
+            <label>Engine (Black) <input id="engineElo" type="number" value="1700" min="100" max="3200" /></label>
+            <label>Depth
+              <select id="depth">
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="4">4</option>
+              </select>
+            </label>
+          </div>
+        </details>
       </div>
 
       <div id="status" class="status">Loading engine…</div>
 
       <div class="layout">
-        <div class="board-wrap">
-          <div id="board" class="board" aria-label="chess board"></div>
-          <svg id="planOverlay" class="plan-overlay" viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="board-col">
+          <div class="board-wrap">
+            <div id="board" class="board" aria-label="chess board"></div>
+            <svg id="planOverlay" class="plan-overlay" viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg>
+          </div>
+          <!-- The coach: concrete, in-the-moment help, right under the board. -->
+          <div id="coach" class="coach" aria-live="polite"></div>
         </div>
         <aside class="panels">
-          <section class="panel" id="stratPanel" hidden>
-            <h2>Strategy <span class="hint" id="stratPhase"></span></h2>
-            <div id="strategy" class="strategy"></div>
-          </section>
-          <section class="panel">
-            <h2>Assistance <span id="level" class="pill">—</span></h2>
+          <section class="panel" id="assistPanel">
+            <h2>Suggested moves <span id="level" class="pill">—</span></h2>
             <div id="assist" class="assist"></div>
           </section>
-          <section class="panel">
-            <h2>Glass-box <span class="hint">visible to both players</span></h2>
+          <details class="panel strat-fold" id="stratPanel" hidden>
+            <summary>Strategic ideas <span class="hint" id="stratPhase"></span></summary>
+            <div id="strategy" class="strategy"></div>
+          </details>
+          <details class="panel glass-fold">
+            <summary>Glass-box <span class="hint">visible to both players</span></summary>
             <div id="glass" class="glass"></div>
-          </section>
+          </details>
         </aside>
       </div>
 
       <p class="foot">
-        You are White. The Assistance-Handicap is computed from both ratings — the
-        wider the gap, the more help you get, all recorded in the glass-box for
-        your opponent to see. Click a piece then a target, or click a suggested move.
+        You are White. The help you get is set by the rating gap and recorded in
+        the glass-box for your opponent to see. Tap a piece, then a highlighted
+        square — or tap a suggested move.
       </p>
       <div id="promoOverlay" class="promo-overlay" style="display:none">
         <div class="promo-box"><div class="promo-title">Promote to</div><div class="promo-choices"></div></div>

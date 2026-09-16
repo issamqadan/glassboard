@@ -45,6 +45,7 @@ let game;
 let selected = null;
 let legalTargets = [];
 let hanging = [];
+let freeCaptures = [];
 let lastMove = null; // { from, to } of the most recent move
 let assistData = null; // parsed assist JSON for the current (White) turn
 let busy = false;
@@ -85,10 +86,12 @@ function newGame() {
 // for White's turn exactly once, then repaints everything.
 function onPositionChanged() {
   hanging = [];
+  freeCaptures = [];
   assistData = null;
   if (game.status() === "ongoing" && game.sideToMove() === "white") {
     assistData = JSON.parse(game.assist(depth())); // records to glass-box once
-    hanging = assistData.hanging;
+    hanging = assistData.hanging || [];
+    freeCaptures = assistData.freeCaptures || [];
   }
   paint();
 }
@@ -97,14 +100,75 @@ function onPositionChanged() {
 function paint() {
   renderBoard();
   renderPlayers();
-  renderStrategy();
+  renderCoach();
   renderAssist();
+  renderStrategy();
   renderGlass();
   renderStatus();
   showGameOverIfNeeded();
 }
 
+// The coach: one prominent, concrete piece of advice under the board. This is
+// the primary assistance surface — the abstract strategy layer is secondary.
+function pieceNameAt(sq) {
+  const c = game.boardString()[sq] || "";
+  return ({ p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" })[c.toLowerCase()] || "piece";
+}
+function renderCoach() {
+  const el = document.getElementById("coach");
+  if (!el) return;
+  if (!assistData) {
+    el.className = "coach idle";
+    el.innerHTML = `<span class="co-ic">🤖</span><div class="co-body"><div class="co-head">Engine is thinking…</div></div>`;
+    return;
+  }
+  const a = assistData;
+  const off = a.level === "off";
+  let tone = off ? "idle" : "calm";
+  let ic = off ? "♟" : "✓";
+  let head = off ? "Your move" : "You're safe";
+  let sub = off ? "Assistance is off for this game." : "No immediate threats — improve a piece or make a plan.";
+
+  if (a.inCheck) {
+    tone = "danger"; ic = "⚠"; head = "You're in check";
+    sub = "You must get your king out of check this move.";
+  } else if (a.hanging && a.hanging.length) {
+    tone = "danger"; ic = "⚠";
+    const sq = a.hanging[0];
+    head = `Your ${pieceNameAt(sq)} on ${sqName(sq)} can be taken`;
+    sub = a.hanging.length > 1
+      ? `${a.hanging.length} of your pieces are undefended — move or protect them.`
+      : "Defend it or move it to safety.";
+  } else if (a.freeCaptures && a.freeCaptures.length) {
+    tone = "gold"; ic = "★";
+    const sq = a.freeCaptures[0];
+    head = `Free material: win the ${pieceNameAt(sq)} on ${sqName(sq)}`;
+    sub = "Your opponent left it undefended — take it.";
+  }
+
+  let action = "";
+  if (a.recommended) {
+    const rec = (a.candidates || []).find((c) => c.uci === a.recommended);
+    action = `<button class="co-play" id="coachPlay">Play ${escapeHtml(rec ? (rec.san || rec.uci) : a.recommended)} →</button>`;
+  }
+  el.className = "coach " + tone;
+  el.innerHTML =
+    `<span class="co-ic">${ic}</span>` +
+    `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>` +
+    action;
+  const pb = document.getElementById("coachPlay");
+  if (pb && a.recommended) {
+    const q = uciSquares(a.recommended);
+    if (q) pb.addEventListener("click", () => playMove(q.from, q.to));
+  }
+}
+
+function updateSetupSum() {
+  const el = document.getElementById("setupSum");
+  if (el) el.textContent = `You ${humanEloEl.value} · Engine ${engineEloEl.value}`;
+}
 function renderPlayers() {
+  updateSetupSum();
   const el = document.getElementById("players");
   if (!el) return;
   el.hidden = false;
@@ -219,6 +283,7 @@ function renderBoard() {
       if (selected === i) sq.classList.add("selected");
       if (legalTargets.includes(i)) { sq.classList.add("target"); if (s[i] !== ".") sq.classList.add("capture"); }
       if (hanging.includes(i)) sq.classList.add("hanging");
+      if (freeCaptures.includes(i)) sq.classList.add("free");
       if (lastMove && (lastMove.from === i || lastMove.to === i)) sq.classList.add("lastmove");
 
       // Coordinate labels on the edge squares.
@@ -262,16 +327,10 @@ function renderStatus() {
 function renderAssist() {
   assistEl.innerHTML = "";
   if (!assistData) {
-    assistEl.innerHTML = `<div class="none">Engine to move — no assistance this turn.</div>`;
+    assistEl.innerHTML = `<div class="none">Engine to move — no suggestions this turn.</div>`;
     return;
   }
   const a = assistData;
-  if (a.inCheck) add(`<div class="warn">⚠ You are in check.</div>`);
-  if (a.hanging.length) {
-    add(`<div class="warn">⚠ Hanging: ${a.hanging.map(sqName).join(", ")}</div>`);
-  }
-  a.messages.forEach((m) => add(`<div class="msg">• ${escapeHtml(m)}</div>`));
-
   if (a.candidates.length) {
     a.candidates.forEach((c) => {
       const isRec = a.recommended && c.uci === a.recommended;
@@ -285,10 +344,8 @@ function renderAssist() {
       assistEl.appendChild(el);
     });
   }
-  if (!assistEl.innerHTML) add(`<div class="none">No assistance at this rung.</div>`);
-
-  function add(html) {
-    assistEl.insertAdjacentHTML("beforeend", html);
+  if (!assistEl.innerHTML) {
+    assistEl.innerHTML = `<div class="none">No move suggestions at this level — the coach still flags threats above.</div>`;
   }
 }
 

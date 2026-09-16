@@ -585,3 +585,102 @@ button {
 .pf-focus { font-size:0.95rem; color:#dbe5f4; line-height:1.55; }
 .pf-focus b { color:#7ee0d6; font-weight:700; }
 .pf-note { font-size:0.83rem; color:#8b99b3; line-height:1.5; border-top:1px solid rgba(255,255,255,0.06); padding-top:12px; }
+
+/* ============================================================= *
+ *  Play screen — modern, mobile-first redesign (2026-09-17)
+ *  Base rules target phones; desktop is layered on at ≥900px.
+ * ============================================================= */
+:root {
+  --co-danger: #f2707e;  --co-danger-bg: rgba(242,112,126,0.13);
+  --co-gold:   #f0c674;  --co-gold-bg:   rgba(240,198,116,0.13);
+  --co-calm:   #6fd3b0;  --co-calm-bg:   rgba(111,211,176,0.10);
+  --co-idle:   #8ea0b8;  --co-idle-bg:   rgba(142,160,184,0.07);
+  --free: #6fd3b0;
+  --glass-card: rgba(255,255,255,0.035);
+  --glass-line: rgba(255,255,255,0.08);
+}
+
+main.game { padding: 16px 14px 30px; max-width: 1080px; }
+
+.game-head { margin-bottom: 12px; }
+.game-head .gh-row { display: flex; align-items: center; gap: 12px; }
+.game-head h1 { font-size: clamp(1.4rem, 5vw, 1.9rem); font-weight: 760; letter-spacing: -0.02em; margin: 0; }
+.game-head .tag { font-size: 0.42em; }
+.game-head .topbar-right { margin-left: auto; }
+
+/* control row: prominent New game + tucked-away difficulty */
+.controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.btn-primary { background: linear-gradient(140deg, #5cc9ec, #3a97bd); color: #04222d; border: 0;
+  font-weight: 680; font-size: 0.92rem; padding: 10px 18px; border-radius: 11px; cursor: pointer;
+  box-shadow: 0 8px 20px -8px rgba(92,201,236,0.6); transition: transform .12s, box-shadow .2s; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 12px 26px -8px rgba(92,201,236,0.8); }
+.opts { border: 1px solid var(--glass-line); border-radius: 11px; background: var(--glass-card); }
+.opts > summary { list-style: none; cursor: pointer; padding: 10px 14px; font-size: 0.9rem; color: #b9c6da;
+  display: flex; align-items: center; gap: 8px; user-select: none; }
+.opts > summary::-webkit-details-marker { display: none; }
+.opts > summary::before { content: "⚙"; opacity: 0.7; }
+.opts .opts-sum { color: #7f92ab; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.opts[open] > summary { border-bottom: 1px solid var(--glass-line); }
+.opts .opts-body { display: flex; flex-wrap: wrap; gap: 12px 16px; padding: 12px 14px; }
+.opts .opts-body label { font-size: 0.85rem; color: #b9c6da; display: flex; align-items: center; gap: 7px; }
+
+/* layout: board is the hero; panels flow below on phones */
+.layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.board-col { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.board-wrap { width: 100%; }
+.board-wrap .board, .board { width: 100%; }
+
+/* ---- the coach bar: primary, concrete assistance ---- */
+.coach { display: flex; align-items: center; gap: 13px; padding: 13px 15px; border-radius: 14px;
+  border: 1px solid var(--glass-line); background: var(--glass-card); position: relative; overflow: hidden;
+  min-height: 30px; animation: coach-in .28s cubic-bezier(.2,.8,.2,1); }
+.coach::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--co-idle); }
+.coach .co-ic { font-size: 1.5rem; line-height: 1; flex-shrink: 0; width: 30px; text-align: center; }
+.coach .co-body { flex: 1; min-width: 0; }
+.coach .co-head { font-weight: 680; font-size: 1rem; letter-spacing: -0.01em; color: #eaf0fb; line-height: 1.25; }
+.coach .co-sub { font-size: 0.85rem; color: #a9b7cf; margin-top: 2px; line-height: 1.35; }
+.coach .co-play { flex-shrink: 0; background: rgba(92,201,236,0.16); color: #bfe8f7; border: 1px solid rgba(92,201,236,0.5);
+  border-radius: 10px; padding: 9px 14px; font-weight: 640; font-size: 0.86rem; cursor: pointer; white-space: nowrap; transition: background .15s, transform .12s; }
+.coach .co-play:hover { background: rgba(92,201,236,0.28); transform: translateY(-1px); }
+.coach.danger { background: var(--co-danger-bg); } .coach.danger::before { background: var(--co-danger); } .coach.danger .co-ic { color: var(--co-danger); }
+.coach.gold   { background: var(--co-gold-bg); }   .coach.gold::before   { background: var(--co-gold); }   .coach.gold .co-ic   { color: var(--co-gold); }
+.coach.calm   { background: var(--co-calm-bg); }   .coach.calm::before   { background: var(--co-calm); }   .coach.calm .co-ic   { color: var(--co-calm); }
+.coach.idle   { background: var(--co-idle-bg); }   .coach.idle::before   { background: var(--co-idle); }   .coach.idle .co-ic   { opacity: .8; }
+@keyframes coach-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .coach { animation: none; } }
+
+/* free-material highlight on the board — the opportunity mirror of .hanging */
+.sq.free { box-shadow: inset 0 0 0 3px var(--free), inset 0 0 14px -3px rgba(111,211,176,0.5); }
+
+/* ---- panels as glass cards; secondary help collapses ---- */
+.panels { flex: 1 1 320px; min-width: 280px; display: flex; flex-direction: column; gap: 12px; }
+.panel { border: 1px solid var(--glass-line); border-radius: 14px; padding: 13px 15px; background: var(--glass-card); }
+.panel h2 { font-size: 0.95rem; font-weight: 640; }
+details.panel { padding: 0; }
+details.panel > summary { list-style: none; cursor: pointer; padding: 13px 15px; font-size: 0.95rem; font-weight: 640;
+  color: #e7ecf3; display: flex; align-items: center; gap: 8px; user-select: none; }
+details.panel > summary::-webkit-details-marker { display: none; }
+details.panel > summary::after { content: "▸"; margin-left: auto; color: #7f92ab; transition: transform .15s; }
+details.panel[open] > summary::after { transform: rotate(90deg); }
+details.panel[open] > summary { border-bottom: 1px solid var(--glass-line); }
+details.panel > *:not(summary) { padding: 12px 15px; }
+.strat-fold > summary::before { content: "◆"; color: #e0be79; }
+.glass-fold > summary::before { content: "▤"; color: #8ea0b8; }
+
+/* Desktop: board and panels side by side, board larger */
+@media (min-width: 900px) {
+  main.game { padding: 22px 24px 40px; }
+  .layout { flex-wrap: nowrap; }
+  .board-col { width: min(560px, 54vw); flex: 0 0 auto; }
+  .panels { position: sticky; top: 72px; }
+}
+
+/* Phones: tighten everything, big touch targets, coach stays prominent */
+@media (max-width: 640px) {
+  .game-head .tagline, .foot { display: none; }
+  .coach { padding: 12px 13px; border-radius: 13px; }
+  .coach .co-head { font-size: 0.96rem; }
+  .coach .co-play { padding: 10px 13px; }
+  .assist .cand { padding: 11px 12px; }
+  .btn-primary { flex: 1; }
+}
