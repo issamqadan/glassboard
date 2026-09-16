@@ -43,7 +43,7 @@ let pickedStrategyId = null;
 let lastStratRelay = null;
 let forceAssist = null; // testing: force an assist rung even when you're stronger
 let gameMode = "match"; // "match" (declared handicap) | "casual" (free, both sides assisted)
-let prevMyTurn = false, seenState = false;
+let prevMyTurn = false, seenState = false, wasOver = false;
 const baseTitle = "Glassboard — Online";
 let lastMove = null;
 let lastGlassFen = null;
@@ -136,11 +136,9 @@ async function main() {
   }
 
   const rmb = el("rematchBtn");
-  if (rmb) rmb.addEventListener("click", () => {
-    if (!ws || ws.readyState !== 1) return;
-    if (!confirm("Start a rematch — a fresh game with the same opponent?")) return;
-    ws.send(JSON.stringify({ t: "reset" }));
-  });
+  if (rmb) rmb.addEventListener("click", doRematch);
+  const orm = el("overRematch"); if (orm) orm.addEventListener("click", doRematch);
+  const ocl = el("overClose"); if (ocl) ocl.addEventListener("click", () => { const ov = document.getElementById("overOverlay"); if (ov) ov.hidden = true; });
 
   if (mine) {
     set("mcEyebrow", "Your game");
@@ -279,6 +277,13 @@ function onState(msg) {
   prevMyTurn = myTurn;
   seenState = true;
 
+  // Game-over screen (once per ending; cleared on rematch).
+  const rez = gameResult(msg);
+  const nowOver = !!rez.reason;
+  if (nowOver && !wasOver) showGameOver(rez);
+  if (!nowOver) { const ov = document.getElementById("overOverlay"); if (ov) ov.hidden = true; }
+  wasOver = nowOver;
+
   computeAssist();
   paint();
 }
@@ -317,6 +322,31 @@ function onMyTurn() {
 // Clear the tab-title badge once the player is looking again.
 window.addEventListener("focus", () => (document.title = baseTitle));
 document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = baseTitle; });
+
+function gameResult(msg) {
+  let reason = msg.reason || "", winner = msg.winner || "";
+  if (!reason && msg.status !== "ongoing") {
+    if (msg.status === "checkmate") { reason = "checkmate"; winner = msg.turn === "white" ? "black" : "white"; }
+    else if (msg.status === "stalemate") { reason = "stalemate"; winner = ""; }
+    else if (msg.status === "fifty-move") { reason = "fifty-move rule"; winner = ""; }
+  }
+  return { reason, winner };
+}
+function showGameOver(rez) {
+  const ov = document.getElementById("overOverlay");
+  if (!ov) return;
+  const draw = rez.winner === "", won = rez.winner === myColor;
+  const res = el("overResult"), rea = el("overReason");
+  if (res) { res.textContent = draw ? "Draw" : won ? "You win! 🎉" : "You lose"; res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss"); }
+  if (rea) rea.textContent = "by " + rez.reason;
+  ov.hidden = false;
+}
+function doRematch() {
+  if (!ws || ws.readyState !== 1) return;
+  if (!confirm("Start a rematch — a fresh game with the same opponent?")) return;
+  const ov = document.getElementById("overOverlay"); if (ov) ov.hidden = true;
+  ws.send(JSON.stringify({ t: "reset" }));
+}
 
 function updateNotifyBtn() {
   const nb = el("notifyBtn");

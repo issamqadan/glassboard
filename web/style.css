@@ -541,3 +541,14 @@ button {
 .promo-pick { width: 64px; height: 64px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--dark); display: grid; place-items: center; cursor: pointer; transition: transform 0.12s, border-color 0.2s; }
 .promo-pick:hover { border-color: var(--accent); transform: translateY(-2px); }
 .promo-pick .piece { width: 82%; height: 82%; }
+
+/* game-over overlay */
+.over-box { background: #0c111b; border: 1px solid var(--line-2); border-radius: 18px; padding: 28px 32px; text-align: center; box-shadow: 0 30px 70px -20px rgba(0,0,0,0.85); max-width: 90vw; }
+.over-result { font-size: 2rem; font-weight: 750; letter-spacing: -0.02em; }
+.over-result.win { color: #45c86e; } .over-result.loss { color: #f0808a; } .over-result.draw { color: #b9c6da; }
+.over-reason { color: #93a2c0; margin-top: 4px; font-size: 0.95rem; }
+.over-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+.over-btn { display: inline-flex; align-items: center; gap: 6px; padding: 11px 20px; border-radius: 12px; font-weight: 620; font-size: 0.95rem; border: 1px solid var(--line-2); background: rgba(255,255,255,0.04); color: #e7ecf3; cursor: pointer; }
+.over-btn:hover { border-color: var(--accent); }
+.over-btn.primary { background: linear-gradient(140deg, #5cc9ec, #3a97bd); color: #04222d; border: 0; }
+.over-close { margin-top: 14px; background: none; border: 0; color: #7f92ab; font-size: 0.82rem; cursor: pointer; text-decoration: underline; }
