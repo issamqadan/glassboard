@@ -165,13 +165,7 @@
   </style>
 </head>
 <body>
-  <header class="top">
-    <div class="wrap">
-      <div class="brand"><span class="mark">♞</span> Glassboard <small>Chess, in the open</small></div>
-      <span class="spacer"></span>
-      <button class="mechip" id="meChip" onclick="openIdentity()"><span class="av" id="meAv">—</span> <span>You: <b id="meName">—</b> · <span class="tnum" id="meRating">—</span></span></button>
-    </div>
-  </header>
+  <script src="./nav.js"></script>
 
   <main class="wrap">
     <section class="hero">
@@ -320,10 +314,11 @@
     }
     function renderMe() {
       if (!me) return;
-      document.getElementById('meName').textContent = me.name;
-      document.getElementById('meRating').textContent = me.rating;
-      document.getElementById('meAv').textContent = initials(me.name);
+      // Identity now lives in the shared top nav (nav.js).
+      if (window.gbNavSetProfile) window.gbNavSetProfile(me.name);
     }
+    // The nav's profile chip opens the identity modal on the portal.
+    window.gbNavProfile = openIdentity;
 
     // ---- create ----
     let createMode = 'match';

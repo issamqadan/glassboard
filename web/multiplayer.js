@@ -525,7 +525,7 @@ function renderAssist() {
   }
   const a = assistData;
   const add = (h) => assistEl.insertAdjacentHTML("beforeend", h);
-  if (a.level === "off") add(`<div class="none">No assistance — you're the stronger side (or at parity).</div>`);
+  if (a.level === "off") add(`<div class="none">You're the higher-rated side — you play unassisted (that's the fair part). <b>Your opponent</b> is getting the help, and every bit of it shows in the <b>Glass-box</b> below.<br><span style="color:#7f92ab">Want to use plans + assistance yourself? Start a <b>Casual</b> game (both sides get it), or <a href="./index.html" style="color:var(--accent)">Play the AI ↗</a>.</span></div>`);
   if (a.inCheck) add(`<div class="warn">⚠ You are in check.</div>`);
   if (a.hanging.length) add(`<div class="warn">⚠ Hanging: ${a.hanging.map(sqName).join(", ")}</div>`);
   a.messages.forEach((m) => add(`<div class="msg">• ${escapeHtml(m)}</div>`));

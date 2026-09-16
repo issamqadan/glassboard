@@ -37,6 +37,18 @@ function gbnav() {
   tabs.innerHTML = tabLinks + `<a class="gbtab" href="./portal.html"><span class="gbtab-ic">👤</span><span>You</span></a>`;
   document.body.appendChild(tabs);
 
+  // Profile chip opens the identity modal in-place when a page provides one
+  // (the portal); otherwise it navigates to the portal.
+  const meEl = top.querySelector(".gbnav-me");
+  if (meEl) meEl.addEventListener("click", (e) => {
+    if (typeof window.gbNavProfile === "function") { e.preventDefault(); window.gbNavProfile(); }
+  });
+  window.gbNavSetProfile = (nm) => {
+    const av = top.querySelector(".gbnav-av"), nameEl = top.querySelector(".gbnav-name");
+    if (av) av.textContent = nm ? esc(nm.trim().charAt(0).toUpperCase()) : "+";
+    if (nameEl) nameEl.textContent = nm ? esc(nm) : "Sign in";
+  };
+
   const css = `
   /* Fixed (not sticky): the game pages use body{display:flex}, where a sticky
      bar would become a side-by-side flex item. Fixed keeps it out of flow. */
