@@ -185,6 +185,9 @@
     <div class="section-head"><h2>Your games</h2><span style="display:flex;align-items:center;gap:12px"><span class="count" id="gamesCount"></span><button class="clear-all" id="clearAll" onclick="clearAllGames()" hidden>Clear all</button></span></div>
     <div class="games" id="games"></div>
 
+    <div class="section-head" style="margin-top:44px"><h2>Your play</h2><span class="count">Glassboard is learning your game</span></div>
+    <div id="profileCard" class="profile-card"></div>
+
     <div class="section-head" style="margin-top:44px"><h2>How the handicap works</h2><span class="count">Off → Autopilot</span></div>
     <p class="intro-lede">The wider the rating gap, the higher the assistance rung the lower-rated player receives — and the opponent sees exactly what help is given, every move. As the assisted player improves, the assistance falls away.</p>
     <div class="ladder" id="ladder"></div>
@@ -310,7 +313,7 @@
       document.getElementById('idOverlay').classList.remove('open');
       btn.disabled = false; btn.textContent = label;
       toast(data.returning ? 'Welcome back, ' + data.name : 'Player created — ' + data.name, data.returning ? 'Signed in on this device.' : 'Your name + PIN work on any device.');
-      renderMe(); pollGames();
+      renderMe(); pollGames(); renderProfile();
     }
     function renderMe() {
       if (!me) return;
@@ -319,6 +322,34 @@
     }
     // The nav's profile chip opens the identity modal on the portal.
     window.gbNavProfile = openIdentity;
+
+    // ---- Player Model: what Glassboard has learned about your game ----
+    async function renderProfile() {
+      const card = document.getElementById('profileCard');
+      if (!card || !me) return;
+      let p;
+      try { p = await (await fetch(SERVER_HTTP + '/profile?player=' + encodeURIComponent(me.id))).json(); }
+      catch { return; }
+      const moves = p.moves || 0, hung = p.hung || 0, missed = p.missed || 0;
+      if (moves < 3) {
+        card.innerHTML = `<div class="pf-empty">Play a few games and Glassboard starts learning your patterns — where you tend to slip, and where you're already sharp. Your help then adapts to <b>you</b>, not just your rating.</div>`;
+        return;
+      }
+      const hRate = Math.round((hung / moves) * 100);
+      const mRate = Math.round((missed / moves) * 100);
+      const tips = [];
+      if (hRate >= 6) tips.push(`you left a piece hanging on <b>${hRate}%</b> of your moves — keep an eye on what your opponent can take`);
+      if (mRate >= 6) tips.push(`you passed up winning free material on <b>${mRate}%</b> of your moves — scan for loose enemy pieces`);
+      const focus = tips.length ? tips.join('; and ') + '.' : `you're playing solidly — few hung pieces or missed wins. 👏`;
+      card.innerHTML =
+        `<div class="pf-stats">
+           <div class="pf-stat"><div class="pf-num">${moves}</div><div class="pf-lbl">moves seen</div></div>
+           <div class="pf-stat"><div class="pf-num">${hung}</div><div class="pf-lbl">pieces left hanging</div></div>
+           <div class="pf-stat"><div class="pf-num">${missed}</div><div class="pf-lbl">free wins missed</div></div>
+         </div>
+         <div class="pf-focus">Glassboard has noticed — ${focus}</div>
+         <div class="pf-note">This is the start of the Player Model: over time your assistance leans toward what you actually need, and fades where you're already strong.</div>`;
+    }
 
     // ---- create ----
     let createMode = 'match';
@@ -552,7 +583,8 @@
 
     // ---- init ----
     renderLadder(); renderGames();
-    if (me) { renderMe(); pollGames(); } else openIdentity();
+    if (me) { renderMe(); pollGames(); renderProfile(); } else openIdentity();
+    setInterval(renderProfile, 20000);
   </script>
 </body>
 </html>

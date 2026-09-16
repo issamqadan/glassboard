@@ -173,6 +173,15 @@ async fn build_store() -> Store {
             let _ = sqlx::query("ALTER TABLE games ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'match'")
                 .execute(&pool)
                 .await;
+            // Per-player profile — the Player Model's learning signal.
+            sqlx::query(
+                "CREATE TABLE IF NOT EXISTS profiles (\
+                   id TEXT PRIMARY KEY, moves BIGINT NOT NULL DEFAULT 0, \
+                   hung BIGINT NOT NULL DEFAULT 0, missed BIGINT NOT NULL DEFAULT 0)",
+            )
+            .execute(&pool)
+            .await
+            .expect("create profiles table");
             println!("Accounts + games: Postgres (durable)");
             Store::Pg(pool)
         }
@@ -305,6 +314,87 @@ async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
     out
 }
 
+// ---- Player Model: the per-move learning signal ----
+
+fn uci_to_sq(uci: &str) -> Option<u8> {
+    let b = uci.as_bytes();
+    if b.len() < 4 {
+        return None;
+    }
+    let f = b[2].wrapping_sub(b'a');
+    let r = b[3].wrapping_sub(b'1');
+    if f < 8 && r < 8 {
+        Some(r * 8 + f)
+    } else {
+        None
+    }
+}
+/// Did `mover` leave a (non-pawn) piece hanging after their move?
+fn left_piece_hanging(b: &engine::Board, mover: Color) -> bool {
+    let opp = mover.opp();
+    (0..64u8).any(|s| match b.squares[s as usize] {
+        Some(p) => {
+            p.color == mover
+                && p.kind != engine::PieceKind::Pawn
+                && p.kind != engine::PieceKind::King
+                && engine::is_attacked(b, s, opp)
+                && !engine::is_attacked(b, s, mover)
+        }
+        None => false,
+    })
+}
+/// Was a free (non-pawn) enemy piece available before the move that `mover` skipped?
+fn missed_free_capture(before: &engine::Board, mover: Color, played_to: u8) -> bool {
+    let opp = mover.opp();
+    (0..64u8).any(|s| match before.squares[s as usize] {
+        Some(p) => {
+            p.color == opp
+                && p.kind != engine::PieceKind::Pawn
+                && p.kind != engine::PieceKind::King
+                && s != played_to
+                && engine::is_attacked(before, s, mover)
+                && !engine::is_attacked(before, s, opp)
+        }
+        None => false,
+    })
+}
+async fn record_move(store: &Store, id: &str, hung: bool, missed: bool) {
+    if id.is_empty() {
+        return;
+    }
+    if let Store::Pg(pool) = store {
+        let _ = sqlx::query(
+            "INSERT INTO profiles (id, moves, hung, missed) VALUES ($1, 1, $2, $3) \
+             ON CONFLICT (id) DO UPDATE SET moves = profiles.moves + 1, hung = profiles.hung + $2, missed = profiles.missed + $3",
+        )
+        .bind(id)
+        .bind(hung as i64)
+        .bind(missed as i64)
+        .execute(pool)
+        .await;
+    }
+}
+async fn get_profile_row(store: &Store, id: &str) -> (i64, i64, i64) {
+    if let Store::Pg(pool) = store {
+        if let Ok(Some(r)) = sqlx::query("SELECT moves, hung, missed FROM profiles WHERE id = $1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await
+        {
+            return (r.get("moves"), r.get("hung"), r.get("missed"));
+        }
+    }
+    (0, 0, 0)
+}
+async fn profile(
+    State(store): State<Store>,
+    Query(q): Query<HashMap<String, String>>,
+) -> Json<serde_json::Value> {
+    let id = q.get("player").cloned().unwrap_or_default();
+    let (moves, hung, missed) = get_profile_row(&store, &id).await;
+    Json(serde_json::json!({ "moves": moves, "hung": hung, "missed": missed }))
+}
+
 #[derive(Clone)]
 struct AppState {
     rooms: Rooms,
@@ -406,6 +496,7 @@ async fn main() {
         .route("/games", get(list_games).post(create_game))
         .route("/games/delete", post(delete_game))
         .route("/account", post(account))
+        .route("/profile", get(profile))
         .layer(CorsLayer::permissive())
         .with_state(AppState { rooms, store });
 
@@ -722,11 +813,27 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                 if let Message::Text(t) = msg {
                     match serde_json::from_str::<ClientMsg>(&t) {
                         Ok(ClientMsg::Move { uci }) => {
-                            {
+                            // Apply the move and, if legal, read the Player-Model signal.
+                            let signal = {
                                 let mut map = rooms.lock().await;
                                 if let Some(rs) = map.get_mut(&room_code) {
-                                    let _ = rs.room.apply_move(color, &uci);
+                                    let before = rs.room.board;
+                                    let played_to = uci_to_sq(&uci);
+                                    if rs.room.apply_move(color, &uci).is_ok() {
+                                        let after = rs.room.board;
+                                        Some((
+                                            left_piece_hanging(&after, color),
+                                            played_to.map(|t| missed_free_capture(&before, color, t)).unwrap_or(false),
+                                        ))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
                                 }
+                            };
+                            if let Some((hung, missed)) = signal {
+                                record_move(&store, &player.id, hung, missed).await;
                             }
                             broadcast_state(&rooms, &room_code).await;
                             persist_game(&store, &rooms, &room_code).await;
