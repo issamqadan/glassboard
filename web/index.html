@@ -10,8 +10,10 @@
   <body>
     <main>
       <header>
-        <h1>Glassboard <span class="tag">Matched</span></h1>
-        <p class="tagline">Chess, in the open.</p>
+        <div class="topbar"><a href="./portal.html" class="backlink">← Lobby</a><span class="topbar-right"><button id="resignBtn" class="resign-btn" hidden>Resign</button></span></div>
+        <h1>Glassboard <span class="tag">vs AI</span></h1>
+        <p class="tagline">Chess, in the open — play the engine with a transparent handicap.</p>
+        <div id="players" class="players" hidden></div>
       </header>
 
       <div class="ratings">
@@ -56,6 +58,20 @@
         your opponent to see. Click a piece then a target, or click a suggested move.
       </p>
       <p class="foot"><a href="./portal.html" style="color: var(--accent)">Play a friend online — create &amp; invite →</a> · <a href="./twoplayer.html" style="color: var(--accent)">Two-player (same screen) →</a> · <a href="./learn.html" style="color: var(--accent)">Find your level →</a></p>
+      <div id="promoOverlay" class="promo-overlay" style="display:none">
+        <div class="promo-box"><div class="promo-title">Promote to</div><div class="promo-choices"></div></div>
+      </div>
+      <div id="overOverlay" class="promo-overlay" style="display:none">
+        <div class="over-box">
+          <div class="over-result" id="overResult">—</div>
+          <div class="over-reason" id="overReason"></div>
+          <div class="over-actions">
+            <button class="over-btn primary" id="overRematch">New game ↻</button>
+            <a class="over-btn" href="./portal.html">← Lobby</a>
+          </div>
+          <button class="over-close" id="overClose">Review the board</button>
+        </div>
+      </div>
     </main>
     <script src="./pieces.js"></script>
     <script src="./theme.js"></script>

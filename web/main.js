@@ -28,6 +28,7 @@ let hanging = [];
 let lastMove = null; // { from, to } of the most recent move
 let assistData = null; // parsed assist JSON for the current (White) turn
 let busy = false;
+let resigned = false;
 
 const depth = () => parseInt(depthEl.value, 10);
 const idx = (file, rank) => rank * 8 + file;
@@ -36,8 +37,15 @@ const isWhitePiece = (c) => c !== "." && c === c.toUpperCase();
 async function main() {
   await init();
   document.getElementById("new").addEventListener("click", newGame);
+  const rb = document.getElementById("resignBtn");
+  if (rb) rb.addEventListener("click", resign);
+  const orm = document.getElementById("overRematch");
+  if (orm) orm.addEventListener("click", () => { hideOver(); newGame(); });
+  const ocl = document.getElementById("overClose");
+  if (ocl) ocl.addEventListener("click", hideOver);
   newGame();
 }
+const hideOver = () => { const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; };
 
 function newGame() {
   game = new Game();
@@ -46,6 +54,9 @@ function newGame() {
   legalTargets = [];
   lastMove = null;
   busy = false;
+  resigned = false;
+  pickedStrategyId = null;
+  hideOver();
   levelEl.textContent = game.assistLevel();
   onPositionChanged();
 }
@@ -65,10 +76,53 @@ function onPositionChanged() {
 // Repaints board + panels from current state (no assistance recompute).
 function paint() {
   renderBoard();
+  renderPlayers();
   renderStrategy();
   renderAssist();
   renderGlass();
   renderStatus();
+  showGameOverIfNeeded();
+}
+
+function renderPlayers() {
+  const el = document.getElementById("players");
+  if (!el) return;
+  el.hidden = false;
+  const over = resigned || game.status() !== "ongoing";
+  const turn = over ? null : game.sideToMove();
+  el.innerHTML =
+    `<span class="pl"><span class="dot white"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span></span>` +
+    `<span class="vs">vs</span>` +
+    `<span class="pl"><span class="dot black"></span> <b>🤖 Glassboard</b> <span class="tnum">${engineEloEl.value}</span></span>` +
+    (turn ? `<span class="turn">${turn === "white" ? "Your move" : "Engine…"}</span>` : "");
+}
+
+function resign() {
+  if (resigned || game.status() !== "ongoing") return;
+  if (!confirm("Resign to the engine? It'll count as a loss.")) return;
+  resigned = true;
+  paint();
+}
+
+function showGameOverIfNeeded() {
+  const ov = document.getElementById("overOverlay");
+  if (!ov) return;
+  const st = game.status();
+  const over = resigned || st !== "ongoing";
+  const rb = document.getElementById("resignBtn");
+  if (rb) rb.hidden = over;
+  if (!over) { ov.style.display = "none"; return; }
+  let winner = "", reason = "";
+  if (resigned) { winner = "black"; reason = "resignation"; }        // you (White) resigned
+  else if (st === "checkmate") { winner = game.sideToMove() === "white" ? "black" : "white"; reason = "checkmate"; }
+  else if (st === "stalemate") { reason = "stalemate"; }
+  else if (st === "fifty-move") { reason = "fifty-move rule"; }
+  const draw = winner === "", won = winner === "white";
+  const res = document.getElementById("overResult"), rea = document.getElementById("overReason");
+  res.textContent = draw ? "Draw" : won ? "You win! 🎉" : "You lose";
+  res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss");
+  rea.textContent = "by " + reason;
+  ov.style.display = "grid";
 }
 
 // --- strategy layer (same UX as multiplayer; White orientation, plays vs AI) ---
@@ -265,21 +319,28 @@ function clearSelection() {
 }
 
 function playMove(from, to) {
-  let promo;
-  if (game.isPromotion(from, to)) {
-    const p = window.prompt("Promote to? (q, r, b, n)", "q");
-    promo = p && "qrbn".includes(p.toLowerCase()) ? p.toLowerCase() : "q";
-  }
+  if (game.isPromotion(from, to)) { showPromotion(from, to); return; }
+  doPlay(from, to, undefined);
+}
+function doPlay(from, to, promo) {
   const ok = game.makeMove(from, to, promo);
   selected = null;
   legalTargets = [];
-  if (!ok) {
-    paint();
-    return;
-  }
+  if (!ok) { paint(); return; }
   lastMove = { from, to };
   onPositionChanged(); // now Black to move → assist cleared
   setTimeout(engineReply, 150);
+}
+function showPromotion(from, to) {
+  const ov = document.getElementById("promoOverlay");
+  if (!ov) { doPlay(from, to, "q"); return; }
+  const choices = ov.querySelector(".promo-choices");
+  choices.innerHTML = ["q", "r", "b", "n"].map((p) => {
+    const g = typeof pieceSVG === "function" ? pieceSVG(p.toUpperCase()) : p.toUpperCase();
+    return `<button class="promo-pick" data-p="${p}"><span class="piece white">${g}</span></button>`;
+  }).join("");
+  choices.querySelectorAll(".promo-pick").forEach((b) => { b.onclick = () => { ov.style.display = "none"; doPlay(from, to, b.dataset.p); }; });
+  ov.style.display = "grid";
 }
 
 function engineReply() {
