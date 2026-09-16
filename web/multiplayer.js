@@ -111,6 +111,13 @@ async function main() {
   const learnLink = el("learnLink");
   if (learnLink) learnLink.href = "./learn.html?next=" + encodeURIComponent(location.href);
 
+  // The big "New to chess?" card — only for invited players (where beginners land).
+  const newHere = el("newHere");
+  if (newHere) {
+    if (isJoiner) newHere.href = "./learn.html?next=" + encodeURIComponent(location.href);
+    else newHere.style.display = "none";
+  }
+
   // Testing toggle: force assistance on even for the stronger side, so we can
   // experience the strategy UX from either seat. Transparent — still glass-boxed.
   const forceLevel = params.get("assist") || "guided";

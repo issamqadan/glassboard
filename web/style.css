@@ -558,3 +558,17 @@ button {
 .over-btn:hover { border-color: var(--accent); }
 .over-btn.primary { background: linear-gradient(140deg, #5cc9ec, #3a97bd); color: #04222d; border: 0; }
 .over-close { margin-top: 14px; background: none; border: 0; color: #7f92ab; font-size: 0.82rem; cursor: pointer; text-decoration: underline; }
+
+/* prominent "New to chess?" onboarding entry (unmissable for beginners) */
+.new-here { display:flex; align-items:center; gap:14px; padding:15px 16px; margin-bottom:20px; border-radius:16px; text-decoration:none; color:#e7ecf3;
+  background:linear-gradient(135deg, rgba(159,192,255,0.18), rgba(126,224,214,0.10)); border:1px solid rgba(159,192,255,0.45);
+  box-shadow:0 10px 30px -14px rgba(159,192,255,0.5); animation:nh-glow 2.6s ease-in-out infinite; transition:transform .15s, box-shadow .25s; }
+.new-here:hover { transform:translateY(-2px); box-shadow:0 16px 40px -14px rgba(159,192,255,0.7); animation:none; }
+@keyframes nh-glow { 0%,100% { box-shadow:0 10px 30px -14px rgba(159,192,255,0.5); } 50% { box-shadow:0 10px 34px -12px rgba(159,192,255,0.9); } }
+@media (prefers-reduced-motion: reduce) { .new-here { animation:none; } }
+.new-here .nh-icon { font-size:2rem; line-height:1; }
+.new-here .nh-text { flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.new-here .nh-text b { font-size:1.08rem; font-weight:680; }
+.new-here .nh-text small { color:#a9b7cf; font-size:0.83rem; }
+.new-here .nh-cta { flex-shrink:0; background:linear-gradient(140deg,#9fc0ff,#6aa8e6); color:#06121a; font-weight:680; font-size:0.85rem; padding:8px 14px; border-radius:10px; }
+@media (max-width:520px){ .new-here .nh-cta { display:none; } }
