@@ -168,10 +168,6 @@ async function main() {
   const rb = el("resignBtn");
   if (rb) rb.addEventListener("click", resign);
 
-  const stratChip = el("stratChip"), stratSheet = el("stratSheet"), stratClose = el("stratClose");
-  if (stratChip && stratSheet) stratChip.addEventListener("click", () => { stratSheetOpen = true; stratChip.classList.remove("has-new"); lastStratSig = curStratSig; stratSheet.style.display = "grid"; });
-  if (stratClose && stratSheet) stratClose.addEventListener("click", () => { stratSheetOpen = false; stratSheet.style.display = "none"; });
-  if (stratSheet) stratSheet.addEventListener("click", (e) => { if (e.target === stratSheet) { stratSheetOpen = false; stratSheet.style.display = "none"; } });
   const gsheet = el("glassSheet"), gchip = el("glassChip"), gclose = el("glassClose");
   if (gchip && gsheet) gchip.addEventListener("click", () => { gsheet.style.display = "grid"; });
   if (gclose && gsheet) gclose.addEventListener("click", () => { gsheet.style.display = "none"; });
@@ -499,67 +495,36 @@ function setBoardGlow(tone) {
   bw.classList.remove("glow-danger", "glow-gold", "glow-calm");
   if (tone === "danger" || tone === "gold" || tone === "calm") bw.classList.add("glow-" + tone);
 }
+// Transient safety net: speaks ONLY on real danger or a free opportunity;
+// silent (hidden) otherwise. No "you're safe" card, no reveal buttons.
 function renderCoach() {
   const elc = document.getElementById("coach");
   if (!elc) return;
-  if (!assistData) {
-    const waiting = state && state.status === "ongoing" && myColor && state.turn !== myColor;
-    elc.className = "coach idle";
-    elc.innerHTML = `<span class="co-ic">⏳</span><div class="co-body"><div class="co-head">${waiting ? "Waiting for your opponent…" : "No assistance right now"}</div></div>`;
-    setBoardGlow(null);
-    return;
-  }
   const a = assistData;
-  if (a.level === "off") {
-    elc.className = "coach idle";
-    elc.innerHTML = `<span class="co-ic">♟</span><div class="co-body"><div class="co-head">You play unassisted</div><div class="co-sub">You're the higher-rated side — your opponent gets the help, shown in the glass-box.</div></div>`;
-    setBoardGlow(null);
-    return;
-  }
-  let tone = "calm", ic = "✓", head = "You're safe", sub = "No immediate threats — improve a piece or make a plan.";
-  if (a.inCheck) {
+  let tone = null, ic = "", head = "", sub = "";
+  if (a && a.inCheck) {
     tone = "danger"; ic = "⚠"; head = "You're in check";
-    sub = "You must get your king out of check this move.";
-  } else if (a.hanging && a.hanging.length) {
+    sub = "Get your king out of check this move.";
+  } else if (a && a.hanging && a.hanging.length) {
     tone = "danger"; ic = "⚠";
     const sq = a.hanging[0];
     head = `Your ${pieceNameAt(sq)} on ${sqName(sq)} can be taken`;
     sub = a.hanging.length > 1
       ? `${a.hanging.length} of your pieces are undefended — move or protect them.`
       : "Defend it or move it to safety.";
-  } else if (a.freeCaptures && a.freeCaptures.length) {
+  } else if (a && a.freeCaptures && a.freeCaptures.length) {
     tone = "gold"; ic = "★";
     const sq = a.freeCaptures[0];
-    head = `Free material: win the ${pieceNameAt(sq)} on ${sqName(sq)}`;
-    sub = "Your opponent left it undefended — take it.";
+    head = `Free piece: the ${pieceNameAt(sq)} on ${sqName(sq)}`;
+    sub = "Your opponent left it undefended — you can take it.";
   }
-  // In Match, the best move is deeper help — reveal (spend) to see it. Casual
-  // keeps it free (unlimited help both sides).
-  const gate = !casualMode();
-  let action = "";
-  if (a.recommended) {
-    if (!gate || revealedBest) {
-      const rec = (a.candidates || []).find((c) => c.uci === a.recommended);
-      action = `<button class="co-play" id="coachPlay">Play ${escapeHtml(rec ? (rec.san || rec.uci) : a.recommended)} →</button>`;
-    } else {
-      action = `<button class="co-reveal" id="coachReveal">🎯 Reveal best move (−${COST_BEST})</button>`;
-    }
-  }
+  if (!tone) { elc.hidden = true; elc.innerHTML = ""; setBoardGlow(null); return; } // quiet when safe
+  elc.hidden = false;
   elc.className = "coach " + tone;
   elc.innerHTML =
     `<span class="co-ic">${ic}</span>` +
-    `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>` +
-    action;
+    `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>`;
   setBoardGlow(tone);
-  const toSq = (s) => (s.charCodeAt(0) - 97) + (s.charCodeAt(1) - 49) * 8;
-  if ((!gate || revealedBest) && a.recommended) {
-    const pb = document.getElementById("coachPlay");
-    const u = a.recommended;
-    if (pb) pb.addEventListener("click", () => sendMove(toSq(u.slice(0, 2)), toSq(u.slice(2, 4))));
-  } else if (gate && a.recommended) {
-    const rb = document.getElementById("coachReveal");
-    if (rb) rb.addEventListener("click", () => { spend(COST_BEST); revealedBest = true; revealedSugg = true; renderCoach(); renderAssist(); });
-  }
 }
 
 function renderPlayers() {
@@ -792,29 +757,21 @@ function drawPlan(strat) {
   ov.innerHTML = s;
 }
 
-// Strategy on the board (arrows/rings) + a compact chip in the game bar; the
-// picker + steps open on demand in a sheet. Board keeps the plan's arrows even
-// when the sheet is closed.
-let stratSheetOpen = false;
+// Strategy is the headline assistance: a visible panel. Pick a plan → the
+// step-by-step follows it (with progress) and its arrows draw on the board.
 function renderStrategy() {
-  const chip = document.getElementById("stratChip");
+  const wrap = document.getElementById("stratPanelWrap");
   const host = document.getElementById("strategy");
   const sr = assistData && assistData.strategy;
   if (!sr || !sr.strategies || !sr.strategies.length) {
-    if (chip) { chip.hidden = true; chip.classList.remove("has-new", "active"); }
+    if (wrap) wrap.hidden = true;
     if (host) host.innerHTML = "";
     drawPlan(null);
     return;
   }
-  if (chip) chip.hidden = false;
-  curStratSig = sr.phase + "|" + sr.strategies.map((s) => s.id).join(",");
-  if (stratSheetOpen) { lastStratSig = curStratSig; chip && chip.classList.remove("has-new"); }
-  else if (curStratSig !== lastStratSig && chip) chip.classList.add("has-new");
+  if (wrap) wrap.hidden = false;
   if (pickedStrategyId && !sr.strategies.some((s) => s.id === pickedStrategyId)) pickedStrategyId = null;
   const picked = sr.strategies.find((s) => s.id === pickedStrategyId);
-  const lbl = document.getElementById("stratChipLabel");
-  if (lbl) lbl.textContent = picked ? picked.name : "Plans";
-  if (chip) chip.classList.toggle("active", !!picked);
   const phaseEl = document.getElementById("stratPhase");
   if (phaseEl) phaseEl.textContent = sr.phase;
   if (host) {
