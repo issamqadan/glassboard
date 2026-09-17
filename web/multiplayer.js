@@ -49,6 +49,13 @@ let freeCaptures = [];
 let assistData = null;
 let lastStratSig = ""; // signature of strategies last seen while the fold was open
 let curStratSig = "";
+// Agency budget (soft) — Match mode only; Casual keeps help unlimited. Free
+// safety net (threats/glow) always on; seeing deeper help spends from a pool.
+const BUDGET_TOTAL = 40, COST_SUGG = 2, COST_BEST = 4;
+let budgetSpent = 0;
+let revealedSugg = false, revealedBest = false, helpWasAvailable = false;
+let lastRevealFen = "";
+const casualMode = () => (state && state.mode === "casual") || gameMode === "casual";
 let pickedStrategyId = null;
 let lastStratRelay = null;
 let forceAssist = null; // testing: force an assist rung even when you're stronger
@@ -281,6 +288,7 @@ function onMessage(msg) {
     case "joined": {
       myColor = msg.color;
       game = Game.fromFen(msg.fen);
+      budgetSpent = 0; helpWasAvailable = false; lastRevealFen = ""; // fresh agency budget
       const mc = document.getElementById("matchCard");
       if (mc) mc.style.display = "none"; // context card done its job — focus the board
       statusEl.textContent = `Joined as ${myColor}. Waiting for the other player…`;
@@ -383,6 +391,7 @@ function doRematch() {
   if (!ws || ws.readyState !== 1) return;
   if (!confirm("Start a rematch — a fresh game with the same opponent?")) return;
   const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none";
+  budgetSpent = 0; helpWasAvailable = false; lastRevealFen = ""; // fresh agency budget
   ws.send(JSON.stringify({ t: "reset" }));
 }
 
@@ -402,6 +411,8 @@ function computeAssist() {
   hanging = [];
   freeCaptures = [];
   if (game && state && state.status === "ongoing" && state.turn === myColor) {
+    // Deeper help must be re-revealed (and re-paid) each new position.
+    if (state.fen !== lastRevealFen) { revealedSugg = false; revealedBest = false; lastRevealFen = state.fen; }
     // Casual: both sides get the full assistance spectrum. Else honor the
     // testing override, otherwise the rating-derived handicap.
     const isCasual = (state && state.mode === "casual") || gameMode === "casual";
@@ -409,6 +420,7 @@ function computeAssist() {
     assistData = JSON.parse(game.assist(DEPTH));
     hanging = assistData.hanging || [];
     freeCaptures = assistData.freeCaptures || [];
+    if (!isCasual && (assistData.candidates || []).length) helpWasAvailable = true;
     if (assistData.level !== "off" && state.fen !== lastGlassFen) {
       ws.send(JSON.stringify({ t: "glass", summary: summarize(assistData) }));
       lastGlassFen = state.fen;
@@ -429,6 +441,43 @@ function paint() {
   renderStrategy();
   renderGlass();
   renderStatus();
+  renderBudget();
+}
+
+// End-of-game agency read: how much help you leaned on, and the trend.
+function agencySummaryHtml() {
+  if (!helpWasAvailable) return "";
+  const pct = Math.round((budgetSpent / BUDGET_TOTAL) * 100);
+  let prev = null;
+  try { prev = JSON.parse(localStorage.getItem("gb_lasthelp")); } catch {}
+  localStorage.setItem("gb_lasthelp", JSON.stringify(pct));
+  let body;
+  if (budgetSpent === 0) {
+    body = "You played this one <b>entirely on your own</b> — no help spent. 🎉";
+  } else {
+    let trend = "";
+    if (prev != null && isFinite(prev)) {
+      const d = pct - prev;
+      trend = d < 0 ? ` — down from ${prev}% last game 📉` : d > 0 ? ` — up from ${prev}% last game` : " — same as last game";
+    }
+    body = `You leaned on <b>${budgetSpent}</b> help points (<b>${pct}%</b> of budget)${trend}.`;
+  }
+  return `<div class="over-help">🪙 ${body}</div>`;
+}
+// Spend from the agency budget when the player reveals deeper help.
+function spend(n) { budgetSpent += n; renderBudget(); }
+function renderBudget() {
+  const elb = document.getElementById("budget");
+  if (!elb) return;
+  const on = assistData && !casualMode() && (assistData.candidates || []).length > 0;
+  elb.hidden = !on;
+  if (!on) return;
+  const pct = Math.min(100, Math.round((budgetSpent / BUDGET_TOTAL) * 100));
+  elb.classList.toggle("over", budgetSpent > BUDGET_TOTAL);
+  elb.innerHTML =
+    `<span class="bg-lab">🪙 Help used</span>` +
+    `<span class="bg-bar"><span class="bg-fill" style="width:${pct}%"></span></span>` +
+    `<span class="bg-num">${budgetSpent} / ${BUDGET_TOTAL}</span>`;
 }
 
 // The coach: one prominent, concrete piece of advice under the board — the
@@ -478,10 +527,17 @@ function renderCoach() {
     head = `Free material: win the ${pieceNameAt(sq)} on ${sqName(sq)}`;
     sub = "Your opponent left it undefended — take it.";
   }
+  // In Match, the best move is deeper help — reveal (spend) to see it. Casual
+  // keeps it free (unlimited help both sides).
+  const gate = !casualMode();
   let action = "";
   if (a.recommended) {
-    const rec = (a.candidates || []).find((c) => c.uci === a.recommended);
-    action = `<button class="co-play" id="coachPlay">Play ${escapeHtml(rec ? (rec.san || rec.uci) : a.recommended)} →</button>`;
+    if (!gate || revealedBest) {
+      const rec = (a.candidates || []).find((c) => c.uci === a.recommended);
+      action = `<button class="co-play" id="coachPlay">Play ${escapeHtml(rec ? (rec.san || rec.uci) : a.recommended)} →</button>`;
+    } else {
+      action = `<button class="co-reveal" id="coachReveal">🎯 Reveal best move (−${COST_BEST})</button>`;
+    }
   }
   elc.className = "coach " + tone;
   elc.innerHTML =
@@ -489,11 +545,14 @@ function renderCoach() {
     `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>` +
     action;
   setBoardGlow(tone);
-  const pb = document.getElementById("coachPlay");
-  if (pb && a.recommended) {
+  const toSq = (s) => (s.charCodeAt(0) - 97) + (s.charCodeAt(1) - 49) * 8;
+  if ((!gate || revealedBest) && a.recommended) {
+    const pb = document.getElementById("coachPlay");
     const u = a.recommended;
-    const toSq = (s) => (s.charCodeAt(0) - 97) + (s.charCodeAt(1) - 49) * 8;
-    pb.addEventListener("click", () => sendMove(toSq(u.slice(0, 2)), toSq(u.slice(2, 4))));
+    if (pb) pb.addEventListener("click", () => sendMove(toSq(u.slice(0, 2)), toSq(u.slice(2, 4))));
+  } else if (gate && a.recommended) {
+    const rb = document.getElementById("coachReveal");
+    if (rb) rb.addEventListener("click", () => { spend(COST_BEST); revealedBest = true; revealedSugg = true; renderCoach(); renderAssist(); });
   }
 }
 
@@ -604,7 +663,7 @@ function renderStatus() {
     const label = draw ? "Draw" : won ? "You win" : "You lose";
     const cls = draw ? "draw" : won ? "win" : "loss";
     statusEl.innerHTML = `<span class="result ${cls}">${label}</span> — by ${escapeHtml(reason)}. ` +
-      `<a href="./portal.html" style="color:var(--accent)">Back to lobby →</a>`;
+      `<a href="./portal.html" style="color:var(--accent)">Back to lobby →</a>` + agencySummaryHtml();
     return;
   }
   if (state.turn === myColor) statusEl.textContent = `Your move (you are ${myColor})` + (game.inCheck() ? " — check!" : "");
@@ -642,6 +701,20 @@ function renderAssist() {
       `</div><span class="score">plan</span>`;
     if (q) sm.addEventListener("click", () => sendMove(q.from, q.to));
     assistEl.appendChild(sm);
+  }
+  // Match: candidate moves are deeper help — gate behind a small spend. Casual
+  // keeps them free. The coach's safety warnings above are always free.
+  if (a.candidates.length && !casualMode() && !revealedSugg && !revealedBest) {
+    const btn = document.createElement("button");
+    btn.className = "reveal-btn";
+    btn.textContent = `💡 Show ${a.candidates.length} suggested move${a.candidates.length > 1 ? "s" : ""} (−${COST_SUGG})`;
+    btn.addEventListener("click", () => { spend(COST_SUGG); revealedSugg = true; renderAssist(); });
+    assistEl.appendChild(btn);
+    const note = document.createElement("div");
+    note.className = "reveal-note";
+    note.textContent = "The coach's safety warnings above are always free.";
+    assistEl.appendChild(note);
+    return;
   }
   a.candidates.forEach((c) => {
     const isRec = a.recommended && c.uci === a.recommended;
