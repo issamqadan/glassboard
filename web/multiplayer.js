@@ -428,6 +428,9 @@ function computeAssist() {
       lastGlassFen = state.fen;
     }
   }
+  // Auto-expand the Suggested-moves fold when it has moves; collapse when empty.
+  const fold = document.getElementById("movesFold");
+  if (fold) fold.open = !!(assistData && (assistData.candidates || []).length);
 }
 
 const myElo = () => (myColor === "white" ? state.white_elo : state.black_elo);
@@ -797,6 +800,7 @@ function renderStrategy() {
   if (!sr || !sr.strategies || !sr.strategies.length) {
     if (wrap) wrap.hidden = true;
     if (host) host.innerHTML = "";
+    linkPlanPanels(null);
     drawPlan(null);
     return;
   }
@@ -836,7 +840,19 @@ function renderStrategy() {
       host.appendChild(hint);
     }
   }
+  linkPlanPanels(picked);
   drawPlan(picked || null);
+}
+// Tie the Strategy + Suggested-moves panels together once a plan is picked.
+function linkPlanPanels(picked) {
+  const sc = picked ? (STRAT_COLOR[picked.id] || "#5cc9ec") : "";
+  [document.getElementById("stratPanelWrap"), document.getElementById("movesFold")].forEach((elp) => {
+    if (!elp) return;
+    if (picked) { elp.classList.add("plan-linked"); elp.style.setProperty("--sc", sc); }
+    else { elp.classList.remove("plan-linked"); elp.style.removeProperty("--sc"); }
+  });
+  const mp = document.getElementById("movesPlan");
+  if (mp) mp.textContent = picked ? "→ " + picked.name : "";
 }
 function pickStrategy(id) {
   pickedStrategyId = id;

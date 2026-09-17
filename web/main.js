@@ -192,6 +192,10 @@ function onPositionChanged() {
     freeCaptures = assistData.freeCaptures || [];
     if ((assistData.candidates || []).length) helpWasAvailable = true;
   }
+  // Auto-expand the Suggested-moves fold when it has moves; collapse when empty.
+  // Set per position (not per repaint) so it doesn't fight a mid-turn collapse.
+  const fold = document.getElementById("movesFold");
+  if (fold) fold.open = !!(assistData && (assistData.candidates || []).length);
   paint();
 }
 
@@ -361,6 +365,7 @@ function renderStrategy() {
   if (!sr || !sr.strategies || !sr.strategies.length) {
     if (wrap) wrap.hidden = true;
     if (host) host.innerHTML = "";
+    linkPlanPanels(null);
     drawPlan(null);
     return;
   }
@@ -392,7 +397,21 @@ function renderStrategy() {
       host.appendChild(hint);
     }
   }
-  drawPlan(picked || null); // arrows stay on the board even with the sheet closed
+  linkPlanPanels(picked);
+  drawPlan(picked || null);
+}
+// Once a plan is picked, visually tie the Strategy panel and the Suggested-moves
+// panel together — a shared accent stripe + the plan's name on the moves fold —
+// so it reads as "these moves serve this plan," not two separate things.
+function linkPlanPanels(picked) {
+  const sc = picked ? (STRAT_COLOR[picked.id] || "#5cc9ec") : "";
+  [document.getElementById("stratPanelWrap"), document.getElementById("movesFold")].forEach((elp) => {
+    if (!elp) return;
+    if (picked) { elp.classList.add("plan-linked"); elp.style.setProperty("--sc", sc); }
+    else { elp.classList.remove("plan-linked"); elp.style.removeProperty("--sc"); }
+  });
+  const mp = document.getElementById("movesPlan");
+  if (mp) mp.textContent = picked ? "→ " + picked.name : "";
 }
 
 function renderBoard() {

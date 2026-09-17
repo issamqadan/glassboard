@@ -846,3 +846,9 @@ main.game .status:empty { display: none; }
 .gb-chip.active { border-color: #e0be79; color: #f0d9a8; background: rgba(224,190,121,0.12); }
 @media (prefers-reduced-motion: reduce) { .gb-chip.has-new { animation: none; } }
 .sheet .strategy { padding: 12px 16px 16px; overflow-y: auto; }
+
+/* Visually link the Strategy + Suggested-moves panels once a plan is picked:
+   a shared accent stripe in the plan's colour, and the plan's name on the fold. */
+.panel.plan-linked { border-color: color-mix(in srgb, var(--sc, #5cc9ec) 50%, var(--glass-line, rgba(255,255,255,0.08)));
+  box-shadow: inset 3px 0 0 var(--sc, #5cc9ec); }
+.moves-plan { color: var(--sc, #5cc9ec); font-weight: 640; font-size: 0.82rem; }
