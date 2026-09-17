@@ -162,6 +162,40 @@
     .footlinks { margin-top:56px; padding-top:22px; border-top:1px solid var(--line); display:flex; gap:20px; flex-wrap:wrap; color:var(--faint); font-size:0.9rem; }
     .footlinks a:hover { color:var(--accent); }
     @media (max-width:760px) { .ladder { grid-template-columns:1fr 1fr; } }
+    /* ---- Rivals roster (platform-agnostic social layer) ---- */
+    .rivals { display:flex; flex-direction:column; gap:12px; }
+    .rival { padding:15px 17px; border-radius:var(--radius); border:1px solid var(--line);
+      background:linear-gradient(165deg,var(--glass-hi),var(--glass)); }
+    .rival-row { display:flex; align-items:flex-start; gap:13px; }
+    .rival-av { position:relative; width:46px; height:46px; border-radius:13px; flex-shrink:0; display:grid; place-items:center;
+      font-weight:750; font-size:1.1rem; color:#06121a; background:linear-gradient(140deg,var(--accent-2),var(--accent)); }
+    .rival-dot { position:absolute; right:-2px; bottom:-2px; width:13px; height:13px; border-radius:50%; background:var(--good);
+      border:2.5px solid var(--bg-2); box-shadow:0 0 8px var(--good); }
+    .rival-main { flex:1; min-width:0; }
+    .rival-name { font-weight:680; font-size:1.02rem; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .rival-sub { font-size:0.8rem; color:var(--faint); margin-top:2px; }
+    .streak { font-size:0.68rem; font-weight:700; padding:2px 8px; border-radius:999px; letter-spacing:0.02em; }
+    .streak.win { background:rgba(69,200,110,0.16); color:#5fd98a; border:1px solid rgba(69,200,110,0.35); }
+    .streak.loss { background:rgba(242,109,122,0.14); color:#f28c96; border:1px solid rgba(242,109,122,0.32); }
+    .streak.draw { background:rgba(147,162,192,0.14); color:var(--muted); border:1px solid var(--line-2); }
+    .h2h { margin-top:9px; }
+    .h2h-bar { display:flex; height:7px; border-radius:999px; overflow:hidden; background:rgba(255,255,255,0.06); }
+    .h2h-seg.w { background:linear-gradient(90deg,#45c86e,#3aa85c); }
+    .h2h-seg.d { background:#5d6c8c; }
+    .h2h-seg.l { background:linear-gradient(90deg,#f26d7a,#c9505c); }
+    .h2h-lab { display:inline-block; margin-top:6px; font-size:0.8rem; font-weight:640; }
+    .h2h.lead .h2h-lab { color:#5fd98a; } .h2h.trail .h2h-lab { color:#f28c96; } .h2h.even .h2h-lab { color:var(--muted); }
+    .rival-actions { display:flex; gap:8px; margin-top:13px; }
+    .rival-actions button { background:var(--glass); border:1px solid var(--line-2); color:var(--text); border-radius:9px; padding:8px 14px; font-size:0.82rem; font-weight:620; }
+    .rival-actions .challenge { background:linear-gradient(140deg,var(--accent),#3a97bd); color:var(--accent-ink); border:0; }
+    .rival-actions .challenge:hover { transform:translateY(-1px); }
+    .rival-actions .ghost:hover { border-color:var(--accent); color:var(--accent); }
+    .rival-history { margin-top:12px; padding-top:11px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:6px; }
+    .rh-row { display:flex; align-items:center; justify-content:space-between; font-size:0.82rem; }
+    .rh-res { font-weight:680; }
+    .rh-res.win { color:#5fd98a; } .rh-res.loss { color:#f28c96; } .rh-res.draw { color:var(--muted); } .rh-res.live { color:var(--accent); }
+    .rh-meta { color:var(--faint); font-size:0.78rem; }
+    .rh-empty { color:var(--faint); font-size:0.82rem; }
   </style>
 </head>
 <body>
@@ -184,6 +218,9 @@
 
     <div class="section-head"><h2>Your games</h2><span style="display:flex;align-items:center;gap:12px"><span class="count" id="gamesCount"></span><button class="clear-all" id="clearAll" onclick="clearAllGames()" hidden>Clear all</button></span></div>
     <div class="games" id="games"></div>
+
+    <div class="section-head" id="rivalsHead" style="margin-top:44px" hidden><h2>Rivals</h2><span class="count" id="rivalsCount"></span></div>
+    <div class="rivals" id="rivals"></div>
 
     <div class="section-head" style="margin-top:44px"><h2>Your play</h2><span class="count">Glassboard is learning your game</span></div>
     <div id="profileCard" class="profile-card"></div>
@@ -242,6 +279,7 @@
   <div class="toasts" id="toasts"></div>
 
   <script src="./pieces.js"></script>
+  <script src="./social.js"></script>
   <script>
     const TIERS = [
       { max:100, name:'Off',        text:'An even match — no assistance.' },
@@ -313,7 +351,7 @@
       document.getElementById('idOverlay').classList.remove('open');
       btn.disabled = false; btn.textContent = label;
       toast(data.returning ? 'Welcome back, ' + data.name : 'Player created — ' + data.name, data.returning ? 'Signed in on this device.' : 'Your name + PIN work on any device.');
-      renderMe(); pollGames(); renderProfile();
+      renderMe(); pollGames(); renderProfile(); renderRivals();
     }
     function renderMe() {
       if (!me) return;
@@ -419,6 +457,7 @@
           g = {
             id: r.id, joined: r.color === 'black', color: r.color, status: r.status,
             myRating: r.my_rating, oppName: r.opp_name || 'Opponent', oppRating: r.opp_rating,
+            oppId: r.opp_id || null,
             fen: r.fen, turn: r.turn, started: r.started, mode: r.mode || 'match',
             over: r.over, winner: r.winner, reason: r.reason, notified: true,
           };
@@ -427,6 +466,7 @@
         }
         if (r.started && g.started !== r.started) { g.started = r.started; changed = true; }
         if (r.opp_name && g.oppName !== r.opp_name) { g.oppName = r.opp_name; changed = true; }
+        if (r.opp_id && g.oppId !== r.opp_id) { g.oppId = r.opp_id; changed = true; }
         if (r.opp_rating && g.oppRating !== r.oppRating) { g.oppRating = r.opp_rating; changed = true; }
         if (r.color && g.color !== r.color) { g.color = r.color; changed = true; }
         if (r.fen && g.fen !== r.fen) { g.fen = r.fen; changed = true; }       // live preview
@@ -441,7 +481,7 @@
           changed = true;
         }
       });
-      if (changed) { saveGames(games); renderGames(); }
+      if (changed) { saveGames(games); renderGames(); renderRivals(); }
     }
     setInterval(pollGames, 4000);
 
@@ -536,6 +576,106 @@
         </div>`;
       }).join('');
     }
+    // ---- Rivals: everyone you've played, via the platform-agnostic social layer ----
+    function renderRivals() {
+      const host = document.getElementById('rivals');
+      const head = document.getElementById('rivalsHead');
+      if (!host || !window.gbSocial) return;
+      const games = loadGames();
+      const rivals = gbSocial.rivals(games);
+      if (head) head.hidden = rivals.length === 0;
+      const rc = document.getElementById('rivalsCount'); if (rc) rc.textContent = rivals.length ? '· ' + rivals.length : '';
+      host.innerHTML = rivals.map(rivalCard).join('');
+    }
+    function h2hLabel(r) {
+      const dec = r.wins + r.losses;
+      if (!dec && !r.draws) return 'No games finished yet';
+      const d = r.draws ? ` · ${r.draws}d` : '';
+      if (r.wins > r.losses) return `You lead ${r.wins}–${r.losses}${d}`;
+      if (r.wins < r.losses) return `You trail ${r.wins}–${r.losses}${d}`;
+      return `All square ${r.wins}–${r.losses}${d}`;
+    }
+    // Presence-aware status. Default provider has no live presence, so it falls
+    // back to "last played". A presence-capable provider fills online/lastSeen.
+    function streakBadge(r) {
+      if (!r.streak || r.streak.n < 2) return '';
+      if (r.streak.type === 'W') return ` <span class="streak win">🔥 ${r.streak.n}W</span>`;
+      if (r.streak.type === 'L') return ` <span class="streak loss">💢 ${r.streak.n}L</span>`;
+      return ` <span class="streak draw">🤝 ${r.streak.n}D</span>`;
+    }
+    function rivalPresence(r) {
+      if (r.online) return '🟢 Online now';
+      if (r.lastSeen) return 'last online ' + (ago({ started: Math.floor(r.lastSeen / 1000) }) || 'recently');
+      const rel = r.lastPlayed ? ago({ started: Math.floor(r.lastPlayed / 1000) }) : '';
+      return rel ? 'last played ' + rel : 'no games yet';
+    }
+    function rivalHandicap(r) {
+      if (!me || !me.rating || !r.rating) return 'Rating set when you play';
+      const gap = me.rating - r.rating, t = tierFor(gap);
+      if (t.name === 'Off') return 'Even match — no assistance';
+      return gap < 0 ? `You're assisted: ${t.name}` : `${firstName(r.name)} is assisted: ${t.name}`;
+    }
+    function rivalCard(r) {
+      const init = (r.name || '?').trim().charAt(0).toUpperCase();
+      const tot = Math.max(1, r.wins + r.draws + r.losses);
+      const seg = (n, cls) => n ? `<span class="h2h-seg ${cls}" style="flex:${n}"></span>` : '';
+      const lead = r.wins > r.losses ? 'lead' : r.wins < r.losses ? 'trail' : 'even';
+      return `<div class="rival" data-id="${escapeHtml(r.id)}">
+        <div class="rival-row">
+          <div class="rival-av">${escapeHtml(init)}${r.online ? '<span class="rival-dot" title="Online now"></span>' : ''}</div>
+          <div class="rival-main">
+            <div class="rival-name">${escapeHtml(r.name)}${r.rating ? ` <span class="g-elo">${r.rating}</span>` : ''}${streakBadge(r)}</div>
+            <div class="rival-sub">${escapeHtml(rivalPresence(r))} · played ${r.played} · ${escapeHtml(rivalHandicap(r))}</div>
+            <div class="h2h ${lead}">
+              <div class="h2h-bar">${seg(r.wins, 'w')}${seg(r.draws, 'd')}${seg(r.losses, 'l')}</div>
+              <span class="h2h-lab">${h2hLabel(r)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="rival-actions">
+          <button class="challenge" onclick="challengeRival('${escapeHtml(r.id)}')">${r.lastResult === 'L' ? '⚔ Avenge' : '⚔ Challenge'}</button>
+          <button class="ghost" onclick="toggleRivalHistory(this)">History</button>
+        </div>
+        <div class="rival-history" hidden>${rivalHistoryHtml(r.id)}</div>
+      </div>`;
+    }
+    function rivalHistoryHtml(id) {
+      const rows = gbSocial.historyWith(loadGames(), id);
+      if (!rows.length) return '<div class="rh-empty">No past games recorded.</div>';
+      return rows.map(g => {
+        let res = 'ongoing', cls = 'live';
+        if (g.over) {
+          const my = g.color || 'white';
+          if (!g.winner) { res = 'draw'; cls = 'draw'; }
+          else if (g.winner === my) { res = 'you won'; cls = 'win'; }
+          else { res = 'you lost'; cls = 'loss'; }
+        } else if (g.status === 'active') { res = 'in progress'; }
+        const when = ago(g) || '';
+        const mode = g.mode === 'casual' ? 'Casual' : 'Match';
+        return `<div class="rh-row"><span class="rh-res ${cls}">${res}</span><span class="rh-meta">${mode}${when ? ' · ' + when : ''}</span></div>`;
+      }).join('');
+    }
+    function toggleRivalHistory(btn) {
+      const card = btn.closest('.rival'); if (!card) return;
+      const h = card.querySelector('.rival-history'); if (!h) return;
+      h.hidden = !h.hidden;
+      btn.textContent = h.hidden ? 'History' : 'Hide history';
+    }
+    // Challenge a rival: create a Match game addressed to them and copy the
+    // invite link. (A directInvite-capable provider — e.g. Game Center — could
+    // deliver this without a link; capabilities() flags that.)
+    function challengeRival(id) {
+      if (!me) { openIdentity(); return; }
+      const r = gbSocial.rivals(loadGames()).find(x => x.id === id);
+      if (!r) return;
+      const gid = Math.random().toString(36).slice(2, 6) + Math.random().toString(36).slice(2, 5);
+      const g = { id: gid, oppName: r.name, oppId: r.id.indexOf('name:') === 0 ? null : r.id, myRating: me.rating, status: 'waiting', created: Date.now(), mode: 'match' };
+      const games = loadGames(); games.unshift(g); saveGames(games);
+      registerGame(g);
+      renderGames(); renderRivals();
+      copy(gameLink(g), `Challenge ready — send the link to ${firstName(r.name)}`);
+    }
+
     const gameById = id => loadGames().find(g => g.id === id);
     // Retrieve the opponent's invite link for a game (e.g. an active one whose
     // invite box is no longer shown) and copy it to the clipboard.
@@ -604,8 +744,8 @@
     }
 
     // ---- init ----
-    renderLadder(); renderGames();
-    if (me) { renderMe(); pollGames(); renderProfile(); } else openIdentity();
+    renderLadder(); renderGames(); renderRivals();
+    if (me) { renderMe(); pollGames(); renderProfile(); renderRivals(); } else openIdentity();
     setInterval(renderProfile, 20000);
   </script>
 </body>

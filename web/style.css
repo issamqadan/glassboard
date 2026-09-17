@@ -761,3 +761,9 @@ main.game .first-game .fg-dot.on { background: #7ee0d6; }
   box-shadow: inset 0 0 0 3px #7ee0d6, 0 0 16px 2px rgba(126,224,214,0.7); animation: sq-pulse 1.25s ease-in-out infinite; pointer-events: none; }
 @keyframes sq-pulse { 0%,100% { opacity: 0.55; transform: scale(0.94); } 50% { opacity: 1; transform: scale(1.02); } }
 @media (prefers-reduced-motion: reduce) { .sq.hint::after { animation: none; opacity: 0.9; } }
+
+/* in-game rivalry chip (players strip) */
+.players .rivalry { display:inline-flex; align-items:center; gap:4px; font-size:0.75rem; font-weight:640; padding:3px 10px; border-radius:999px; }
+.players .rivalry.lead { color:#5fd98a; background:rgba(69,200,110,0.14); border:1px solid rgba(69,200,110,0.3); }
+.players .rivalry.trail { color:#f28c96; background:rgba(242,109,122,0.13); border:1px solid rgba(242,109,122,0.3); }
+.players .rivalry.even { color:#b9c6da; background:rgba(147,162,192,0.12); border:1px solid rgba(255,255,255,0.1); }

@@ -562,6 +562,8 @@ struct GameSummary {
     my_rating: i32,
     opp_name: Option<String>,
     opp_rating: Option<i32>,
+    /// Opponent's stable identity — so rivalries key by player, not by name.
+    opp_id: Option<String>,
     /// Current board position, so the lobby can render a live preview.
     fen: String,
     /// Whose move it is: "white" | "black".
@@ -662,6 +664,7 @@ async fn list_games(
             my_rating: me.as_ref().map(|p| p.rating).unwrap_or(0),
             opp_name: opp.as_ref().map(|p| p.name.clone()),
             opp_rating: opp.as_ref().map(|p| p.rating),
+            opp_id: opp.as_ref().map(|p| p.id.clone()),
             fen: rs.room.fen(),
             turn: rs.room.turn().to_string(),
             started: rs.started,

@@ -575,7 +575,23 @@ function renderPlayers() {
     (oppSeated
       ? `<div class="pl"><span class="dot ${opp.color}"></span> <b>${escapeHtml(opp.name)}</b> <span class="tnum">${opp.elo}</span></div>`
       : `<div class="pl"><span class="waiting-dot"></span> Waiting for opponent…</div>`) +
-    turnHtml;
+    turnHtml +
+    (oppSeated ? rivalryChip(opp.name) : "");
+}
+
+// Reflect the rivalry in-game: head-to-head record vs the current opponent,
+// read through the platform-agnostic social layer.
+function rivalryChip(oppName) {
+  if (!window.gbSocial || !oppName) return "";
+  let games = [];
+  try { games = JSON.parse(localStorage.getItem("gb_games")) || []; } catch {}
+  const r = gbSocial.rivals(games).find((x) => x.name.toLowerCase() === oppName.trim().toLowerCase());
+  if (!r || (r.wins + r.losses + r.draws) === 0) return "";
+  const lead = r.wins > r.losses ? "lead" : r.wins < r.losses ? "trail" : "even";
+  const streak = r.streak && r.streak.n >= 2
+    ? ` · ${r.streak.type === "W" ? "🔥" : r.streak.type === "L" ? "💢" : "🤝"}${r.streak.n}` : "";
+  const word = lead === "lead" ? "You lead" : lead === "trail" ? "You trail" : "All square";
+  return `<span class="rivalry ${lead}">⚔ ${word} ${r.wins}–${r.losses}${r.draws ? " (" + r.draws + "d)" : ""}${streak}</span>`;
 }
 
 function orientedSquares() {
