@@ -290,7 +290,7 @@ function onMessage(msg) {
     case "joined": {
       myColor = msg.color;
       game = Game.fromFen(msg.fen);
-      budgetSpent = 0; helpWasAvailable = false; lastRevealFen = ""; // fresh agency budget
+      budgetSpent = 0; helpWasAvailable = false; lastRevealFen = ""; animMoveKey = null; // fresh agency budget
       const mc = document.getElementById("matchCard");
       if (mc) mc.style.display = "none"; // context card done its job — focus the board
       statusEl.textContent = `Joined as ${myColor}. Waiting for the other player…`;
@@ -393,7 +393,7 @@ function doRematch() {
   if (!ws || ws.readyState !== 1) return;
   if (!confirm("Start a rematch — a fresh game with the same opponent?")) return;
   const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none";
-  budgetSpent = 0; helpWasAvailable = false; lastRevealFen = ""; // fresh agency budget
+  budgetSpent = 0; helpWasAvailable = false; lastRevealFen = ""; animMoveKey = null; // fresh agency budget
   ws.send(JSON.stringify({ t: "reset" }));
 }
 
@@ -616,6 +616,37 @@ function renderBoard() {
     sq.addEventListener("click", () => onSquareClick(i));
     boardEl.appendChild(sq);
   }
+  animateLastMove();
+}
+
+// Glide the moving piece from its old square to the new one (respects board
+// orientation — black at the bottom when you're Black). Gives the opponent's
+// move character instead of just appearing.
+let animMoveKey = null;
+function renderedRC(sq) {
+  const file = sq % 8, rank = Math.floor(sq / 8);
+  return myColor === "black" ? { col: 7 - file, row: rank } : { col: file, row: 7 - rank };
+}
+function animateLastMove() {
+  if (!lastMove) return;
+  const key = lastMove.from + "-" + lastMove.to;
+  if (key === animMoveKey) return;
+  animMoveKey = key;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const to = renderedRC(lastMove.to), from = renderedRC(lastMove.from);
+  const toEl = boardEl.children[to.row * 8 + to.col];
+  const piece = toEl && toEl.querySelector(".piece");
+  if (!piece) return;
+  const cell = toEl.getBoundingClientRect().width || 0;
+  if (!cell) return;
+  piece.classList.add("moving");
+  piece.style.transition = "none";
+  piece.style.transform = `translate(${(from.col - to.col) * cell}px, ${(from.row - to.row) * cell}px)`;
+  requestAnimationFrame(() => {
+    piece.style.transition = "transform .26s cubic-bezier(.34,1.4,.5,1)";
+    piece.style.transform = "translate(0, 0)";
+    setTimeout(() => piece.classList.remove("moving"), 280);
+  });
 }
 
 function coord(kind, text) {

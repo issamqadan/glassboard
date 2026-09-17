@@ -153,6 +153,7 @@ function newGame() {
   pickedStrategyId = null;
   budgetSpent = 0;
   helpWasAvailable = false;
+  animMoveKey = null;
   hideOver();
   setLevelPill(game.assistLevel());
   onPositionChanged();
@@ -425,6 +426,35 @@ function renderBoard() {
       boardEl.appendChild(sq);
     }
   }
+  animateLastMove();
+}
+
+// Give the moving piece character: glide it from its old square to the new one
+// with a lift-and-settle, instead of just appearing. Runs once per move (guarded
+// so repaints — selection, etc. — don't re-animate). White is at the bottom.
+let animMoveKey = null;
+function animateLastMove() {
+  if (!lastMove) return;
+  const key = lastMove.from + "-" + lastMove.to;
+  if (key === animMoveKey) return;
+  animMoveKey = key;
+  const rIdx = (sq) => (7 - Math.floor(sq / 8)) * 8 + (sq % 8); // square → rendered cell index
+  const toEl = boardEl.children[rIdx(lastMove.to)];
+  const piece = toEl && toEl.querySelector(".piece");
+  if (!piece) return;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const cell = toEl.getBoundingClientRect().width || 0;
+  if (!cell) return;
+  const dCol = (lastMove.from % 8) - (lastMove.to % 8);
+  const dRow = (7 - Math.floor(lastMove.from / 8)) - (7 - Math.floor(lastMove.to / 8));
+  piece.classList.add("moving");
+  piece.style.transition = "none";
+  piece.style.transform = `translate(${dCol * cell}px, ${dRow * cell}px)`;
+  requestAnimationFrame(() => {
+    piece.style.transition = "transform .26s cubic-bezier(.34,1.4,.5,1)";
+    piece.style.transform = "translate(0, 0)";
+    setTimeout(() => piece.classList.remove("moving"), 280);
+  });
 }
 
 function coord(kind, text) {

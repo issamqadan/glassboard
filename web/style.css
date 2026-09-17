@@ -250,16 +250,15 @@ button {
   color: #141a26; /* fallback */
   -webkit-text-stroke: 1.1px rgba(233, 237, 242, 0.5);
 }
-/* Gentle pop on the piece that just moved. */
-@keyframes place {
-  from { transform: scale(0.72); opacity: 0.4; }
-  to { transform: none; opacity: 1; }
-}
-.sq.lastmove .piece {
-  animation: place 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+/* The moving piece glides (JS sets the transform); while travelling it lifts —
+   a bigger shadow + on top — then settles with the eased transform. This is
+   what gives the opponent's move character instead of just appearing. */
+.piece.moving {
+  z-index: 5;
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.5));
 }
 @media (prefers-reduced-motion: reduce) {
-  .sq.lastmove .piece, .sq.target::after { animation: none; }
+  .sq.target::after { animation: none; }
 }
 
 .panels {
