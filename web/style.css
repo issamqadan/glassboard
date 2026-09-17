@@ -682,14 +682,19 @@ details.panel > *:not(summary) { padding: 12px 15px; }
   main.game .players { margin-top: 6px; padding: 7px 12px; gap: 10px; }
   main.game .controls { margin-bottom: 6px; }
   main.game #status { margin: 0 0 4px; font-size: 0.9rem; }
-  main.game .layout { flex-wrap: nowrap; align-items: flex-start; gap: 18px; }
-  /* Board fits the space that's actually left: capped by width (52vw) AND by
-     height (viewport minus the top chrome and the coach/meter beneath it), so
-     it never falls below the fold on a laptop. */
-  main.game .board-col { width: min(52vw, calc(100vh - 300px)); flex: 0 0 auto; }
-  /* Panels scroll inside their own column (sticky), never pushing the page. */
-  main.game .panels { position: sticky; top: 70px; max-height: calc(100vh - 120px); overflow-y: auto;
-    min-width: 300px; padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent; }
+  main.game .layout { flex-wrap: nowrap; align-items: flex-start; gap: 20px; justify-content: center; }
+  /* The board is the largest square that fits BOTH the available height
+     (viewport − top chrome − the coach/meter beneath it) AND the available
+     width (viewport − the panel column). Whichever binds wins — height on a
+     short laptop, width on a narrow window — with a sane max on huge screens.
+     This is the real fix: it grows to fill height instead of being pinned to a
+     fraction of the width. */
+  main.game .board-col { width: min(920px, calc(100vh - 300px), calc(100vw - 430px)); flex: 0 0 auto; }
+  /* Panels take a fixed, readable column beside the board (not the whole
+     leftover width), and scroll inside themselves. */
+  main.game .panels { flex: 0 1 400px; min-width: 300px; align-self: stretch;
+    position: sticky; top: 70px; max-height: calc(100vh - 120px); overflow-y: auto;
+    padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent; }
   main.game .panels::-webkit-scrollbar { width: 8px; }
   main.game .panels::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 999px; }
 }
