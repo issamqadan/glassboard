@@ -669,15 +669,29 @@ details.panel > *:not(summary) { padding: 12px 15px; }
 .strat-fold > summary::before { content: "◆"; color: #e0be79; }
 .glass-fold > summary::before { content: "▤"; color: #8ea0b8; }
 
-/* Desktop: board and panels side by side, board larger */
+/* Desktop / laptop: a viewport-LOCKED game view — the whole screen fits with
+   no page scroll. The board is sized to the space actually available (width AND
+   height, accounting for the top chrome + the coach/meter beneath it), and the
+   side panels scroll inside their own column instead of pushing the page. This
+   is what fixes the "board falls below the fold, have to scroll" problem on a
+   13" laptop. */
 @media (min-width: 900px) {
-  main.game { padding: 22px 24px 40px; }
-  main.game .layout { flex-wrap: nowrap; }
-  /* Size the board to the screen: capped by width AND height so it never
-     overflows the window on short or wide displays. (vh is universally
-     supported; an unsupported unit inside min() would void the whole rule.) */
-  main.game .board-col { width: min(560px, 52vw, calc(100vh - 200px)); flex: 0 0 auto; }
-  main.game .panels { position: sticky; top: 72px; }
+  main.game { max-width: 1180px; padding: 14px 24px 18px; }
+  main.game .game-head { margin-bottom: 6px; }
+  main.game .game-head h1 { font-size: 1.3rem; }
+  main.game .players { margin-top: 6px; padding: 7px 12px; gap: 10px; }
+  main.game .controls { margin-bottom: 6px; }
+  main.game #status { margin: 0 0 4px; font-size: 0.9rem; }
+  main.game .layout { flex-wrap: nowrap; align-items: flex-start; gap: 18px; }
+  /* Board fits the space that's actually left: capped by width (52vw) AND by
+     height (viewport minus the top chrome and the coach/meter beneath it), so
+     it never falls below the fold on a laptop. */
+  main.game .board-col { width: min(52vw, calc(100vh - 300px)); flex: 0 0 auto; }
+  /* Panels scroll inside their own column (sticky), never pushing the page. */
+  main.game .panels { position: sticky; top: 70px; max-height: calc(100vh - 120px); overflow-y: auto;
+    min-width: 300px; padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent; }
+  main.game .panels::-webkit-scrollbar { width: 8px; }
+  main.game .panels::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 999px; }
 }
 /* Landscape phones/tablets: keep the square board within the viewport height. */
 @media (max-width: 899px) and (orientation: landscape) {
