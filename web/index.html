@@ -45,12 +45,12 @@
             <div id="board" class="board" aria-label="chess board"></div>
             <svg id="planOverlay" class="plan-overlay" viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg>
           </div>
-          <!-- The coach: concrete, in-the-moment help, right under the board. -->
-          <div id="coach" class="coach" aria-live="polite"></div>
-          <!-- Agency meter: free safety net always on; deeper help spends here. -->
-          <div id="budget" class="budget" hidden></div>
         </div>
         <aside class="panels">
+          <!-- Coach + agency meter head the rail: beside the board on desktop
+               (board keeps its full height), stacked under it on mobile. -->
+          <div id="coach" class="coach" aria-live="polite"></div>
+          <div id="budget" class="budget" hidden></div>
           <section class="panel" id="assistPanel">
             <h2>Suggested moves <span id="level" class="pill">—</span></h2>
             <div id="assist" class="assist"></div>

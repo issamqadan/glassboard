@@ -681,15 +681,13 @@ details.panel > *:not(summary) { padding: 12px 15px; }
   main.game .game-head h1 { font-size: 1.3rem; }
   main.game .players { margin-top: 6px; padding: 7px 12px; gap: 10px; }
   main.game .controls { margin-bottom: 6px; }
-  main.game #status { margin: 0 0 4px; font-size: 0.9rem; }
+  main.game #status { display: none; } /* turn shows in the players strip + coach */
   main.game .layout { flex-wrap: nowrap; align-items: flex-start; gap: 20px; justify-content: center; }
-  /* The board is the largest square that fits BOTH the available height
-     (viewport − top chrome − the coach/meter beneath it) AND the available
-     width (viewport − the panel column). Whichever binds wins — height on a
-     short laptop, width on a narrow window — with a sane max on huge screens.
-     This is the real fix: it grows to fill height instead of being pinned to a
-     fraction of the width. */
-  main.game .board-col { width: min(920px, calc(100vh - 300px), calc(100vw - 430px)); flex: 0 0 auto; }
+  /* The board now owns its whole column (coach/meter moved to the right rail),
+     so it's the largest square that fits the height left after the slim top
+     chrome, OR the width left beside the panel — whichever binds. It grows big
+     on a roomy screen and shrinks to fit a short laptop, never scrolling. */
+  main.game .board-col { width: min(900px, calc(100vh - 210px), calc(100vw - 460px)); flex: 0 0 auto; }
   /* Panels take a fixed, readable column beside the board (not the whole
      leftover width), and scroll inside themselves. */
   main.game .panels { flex: 0 1 400px; min-width: 300px; align-self: stretch;
@@ -703,14 +701,23 @@ details.panel > *:not(summary) { padding: 12px 15px; }
   main.game .board-col { width: min(100%, calc(100vh - 150px)); margin: 0 auto; }
 }
 
-/* Phones: tighten everything, big touch targets, coach stays prominent */
+/* Phones: the board is sized so the coach (the primary help) stays on-screen
+   right under it — no scrolling to find your assistance. Chrome is trimmed to
+   give that budget back to the board. */
 @media (max-width: 640px) {
   .game-head .tagline, .foot { display: none; }
+  main.game { padding: 10px 12px 24px; }
+  main.game #status { display: none; }         /* turn is in the players strip */
+  main.game .game-head { margin-bottom: 6px; }
+  main.game .controls { margin-bottom: 6px; }
+  main.game .btn-primary { flex: 1; white-space: nowrap; padding: 11px 14px; }
+  main.game .opts > summary { padding: 11px 12px; }
+  /* Board leaves room for the coach beneath it (reserve ≈ top chrome + coach). */
+  main.game .board-col { width: min(96vw, calc(100vh - 250px)); margin: 0 auto; }
   .coach { padding: 12px 13px; border-radius: 13px; }
   .coach .co-head { font-size: 0.96rem; }
   .coach .co-play { padding: 10px 13px; }
   .assist .cand { padding: 11px 12px; }
-  .btn-primary { flex: 1; }
 }
 
 /* ---- board as a status "bulb": ambient glow that reflects the coach state ---- */
