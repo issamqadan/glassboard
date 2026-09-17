@@ -56,6 +56,15 @@ let hanging = [];
 let freeCaptures = [];
 let lastStratSig = ""; // signature of strategies last seen while the fold was open
 let curStratSig = "";
+// Agency budget (soft): the free safety net (threats/glow) is always on; seeing
+// deeper help spends from a per-game pool. No cutoff — spend is a self-improvement
+// score, logged and summarized at game end. Costs: suggestions 2, best move 4.
+const BUDGET_TOTAL = 40;
+let budgetSpent = 0;
+let revealedSugg = false; // did we reveal the candidate list this position?
+let revealedBest = false; // did we reveal the single best move this position?
+let helpWasAvailable = false; // was move-level help on the table at all this game?
+const COST_SUGG = 2, COST_BEST = 4;
 let lastMove = null; // { from, to } of the most recent move
 let assistData = null; // parsed assist JSON for the current (White) turn
 let busy = false;
@@ -89,9 +98,28 @@ function newGame() {
   busy = false;
   resigned = false;
   pickedStrategyId = null;
+  budgetSpent = 0;
+  helpWasAvailable = false;
   hideOver();
   setLevelPill(game.assistLevel());
   onPositionChanged();
+}
+
+// Spend from the agency budget when the player reveals deeper help.
+function spend(n) { budgetSpent += n; renderBudget(); }
+function renderBudget() {
+  const el = document.getElementById("budget");
+  if (!el) return;
+  // Only meaningful when move-level help is on the table (Guide/Assist/Autopilot).
+  const on = assistData && (assistData.candidates || []).length > 0;
+  el.hidden = !on;
+  if (!on) return;
+  const pct = Math.min(100, Math.round((budgetSpent / BUDGET_TOTAL) * 100));
+  el.classList.toggle("over", budgetSpent > BUDGET_TOTAL);
+  el.innerHTML =
+    `<span class="bg-lab">🪙 Help used</span>` +
+    `<span class="bg-bar"><span class="bg-fill" style="width:${pct}%"></span></span>` +
+    `<span class="bg-num">${budgetSpent} / ${BUDGET_TOTAL}</span>`;
 }
 
 // Called once whenever the position changes (after a move). Computes assistance
@@ -100,10 +128,13 @@ function onPositionChanged() {
   hanging = [];
   freeCaptures = [];
   assistData = null;
+  revealedSugg = false; // deeper help must be re-revealed (and re-paid) each position
+  revealedBest = false;
   if (game.status() === "ongoing" && game.sideToMove() === "white") {
     assistData = JSON.parse(game.assist(depth())); // records to glass-box once
     hanging = assistData.hanging || [];
     freeCaptures = assistData.freeCaptures || [];
+    if ((assistData.candidates || []).length) helpWasAvailable = true;
   }
   paint();
 }
@@ -117,6 +148,7 @@ function paint() {
   renderStrategy();
   renderGlass();
   renderStatus();
+  renderBudget();
   showGameOverIfNeeded();
 }
 
@@ -166,10 +198,16 @@ function renderCoach() {
     sub = "Your opponent left it undefended — take it.";
   }
 
+  // The best move is deeper help: free safety net above, but seeing the move
+  // itself spends from the agency budget (reveal once per position).
   let action = "";
   if (a.recommended) {
-    const rec = (a.candidates || []).find((c) => c.uci === a.recommended);
-    action = `<button class="co-play" id="coachPlay">Play ${escapeHtml(rec ? (rec.san || rec.uci) : a.recommended)} →</button>`;
+    if (revealedBest) {
+      const rec = (a.candidates || []).find((c) => c.uci === a.recommended);
+      action = `<button class="co-play" id="coachPlay">Play ${escapeHtml(rec ? (rec.san || rec.uci) : a.recommended)} →</button>`;
+    } else {
+      action = `<button class="co-reveal" id="coachReveal">🎯 Reveal best move (−${COST_BEST})</button>`;
+    }
   }
   el.className = "coach " + tone;
   el.innerHTML =
@@ -177,10 +215,15 @@ function renderCoach() {
     `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>` +
     action;
   setBoardGlow(off ? null : tone);
-  const pb = document.getElementById("coachPlay");
-  if (pb && a.recommended) {
-    const q = uciSquares(a.recommended);
-    if (q) pb.addEventListener("click", () => playMove(q.from, q.to));
+  if (revealedBest) {
+    const pb = document.getElementById("coachPlay");
+    if (pb && a.recommended) {
+      const q = uciSquares(a.recommended);
+      if (q) pb.addEventListener("click", () => playMove(q.from, q.to));
+    }
+  } else {
+    const rb = document.getElementById("coachReveal");
+    if (rb) rb.addEventListener("click", () => { spend(COST_BEST); revealedBest = true; revealedSugg = true; renderCoach(); renderAssist(); });
   }
 }
 
@@ -226,8 +269,30 @@ function showGameOverIfNeeded() {
   const res = document.getElementById("overResult"), rea = document.getElementById("overReason");
   res.textContent = draw ? "Draw" : won ? "You win! 🎉" : "You lose";
   res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss");
-  rea.textContent = "by " + reason;
+  rea.innerHTML = "by " + reason + agencySummaryHtml();
   ov.style.display = "grid";
+}
+
+// End-of-game agency read: how much help you leaned on, and the trend. The
+// point of the whole system — needing less over time.
+function agencySummaryHtml() {
+  if (!helpWasAvailable) return "";
+  const pct = Math.round((budgetSpent / BUDGET_TOTAL) * 100);
+  let prev = null;
+  try { prev = JSON.parse(localStorage.getItem("gb_lasthelp")); } catch {}
+  localStorage.setItem("gb_lasthelp", JSON.stringify(pct));
+  let body;
+  if (budgetSpent === 0) {
+    body = "You played this one <b>entirely on your own</b> — no help spent. 🎉";
+  } else {
+    let trend = "";
+    if (prev != null && isFinite(prev)) {
+      const d = pct - prev;
+      trend = d < 0 ? ` — down from ${prev}% last game 📉` : d > 0 ? ` — up from ${prev}% last game` : " — same as last game";
+    }
+    body = `You leaned on <b>${budgetSpent}</b> help points (<b>${pct}%</b> of budget)${trend}. The less you need, the more you've learned.`;
+  }
+  return `<div class="over-help">🪙 ${body}</div>`;
 }
 
 // --- strategy layer (same UX as multiplayer; White orientation, plays vs AI) ---
@@ -373,6 +438,20 @@ function renderAssist() {
       `</div><span class="score">plan</span>`;
     if (q) sm.addEventListener("click", () => playMove(q.from, q.to));
     assistEl.appendChild(sm);
+  }
+  // Candidate moves are deeper help — gate them behind a small spend. The
+  // coach's safety warnings above stay free.
+  if (a.candidates.length && !revealedSugg && !revealedBest) {
+    const btn = document.createElement("button");
+    btn.className = "reveal-btn";
+    btn.textContent = `💡 Show ${a.candidates.length} suggested move${a.candidates.length > 1 ? "s" : ""} (−${COST_SUGG})`;
+    btn.addEventListener("click", () => { spend(COST_SUGG); revealedSugg = true; renderAssist(); });
+    assistEl.appendChild(btn);
+    const note = document.createElement("div");
+    note.className = "reveal-note";
+    note.textContent = "The coach's safety warnings above are always free.";
+    assistEl.appendChild(note);
+    return;
   }
   if (a.candidates.length) {
     a.candidates.forEach((c) => {

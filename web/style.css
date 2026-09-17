@@ -720,3 +720,23 @@ details.strat-fold.has-new > summary .hint::after { content: " · new ideas"; co
 /* ---- a picked strategy's move, surfaced at the top of Suggested moves ---- */
 .assist .cand.strat-move { border-color: var(--sc, #5cc9ec); background: color-mix(in srgb, var(--sc, #5cc9ec) 13%, rgba(20,32,54,.6)); }
 .assist .cand.strat-move .cand-tag { display: block; font-size: 0.68rem; color: var(--sc, #5cc9ec); font-weight: 680; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+
+/* ---- Agency meter: free safety net + a soft per-game help budget ---- */
+main.game .budget { display: flex; align-items: center; gap: 10px; padding: 9px 13px; border-radius: 12px;
+  border: 1px solid var(--glass-line); background: var(--glass-card); font-size: 0.8rem; color: #a9b7cf; }
+main.game .budget .bg-lab { flex-shrink: 0; font-weight: 600; color: #cdd8e8; }
+main.game .budget .bg-bar { flex: 1; height: 8px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+main.game .budget .bg-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #6fd3b0, #5cc9ec); transition: width .3s ease; }
+main.game .budget.over .bg-fill { background: linear-gradient(90deg, #f0c674, #f2707e); }
+main.game .budget .bg-num { flex-shrink: 0; font-variant-numeric: tabular-nums; color: #8ea0b8; }
+/* reveal (spend) buttons — deeper help is opt-in */
+.coach .co-reveal, .assist .reveal-btn { border: 1px dashed rgba(92,201,236,0.55); background: rgba(92,201,236,0.08);
+  color: #bfe8f7; border-radius: 10px; padding: 9px 14px; font-weight: 620; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+.coach .co-reveal:hover, .assist .reveal-btn:hover { background: rgba(92,201,236,0.18); }
+.assist .reveal-btn { display: block; width: 100%; text-align: center; margin: 2px 0; }
+.assist .reveal-note { font-size: 0.78rem; color: #8ea0b8; margin-top: 6px; text-align: center; }
+
+/* end-of-game agency read */
+.over-help { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--glass-line, rgba(255,255,255,0.08));
+  font-size: 0.88rem; color: #cdd8e8; line-height: 1.5; max-width: 340px; }
+.over-help b { color: #7ee0d6; }
