@@ -13,6 +13,7 @@
       <div class="gamebar">
         <div id="players" class="players" hidden></div>
         <div class="gb-actions">
+          <button id="stratChip" class="gb-chip" title="Strategic plans — see an idea on the board" hidden>◆ <span id="stratChipLabel">Plans</span></button>
           <button id="glassChip" class="gb-chip" title="Transparency ledger — every bit of assistance, visible to both players" hidden>🔍 <span class="gpips"></span><span id="glassCount">0</span></button>
           <span id="level" class="pill" title="Assistance level">—</span>
           <details class="opts gb-opts" id="setupFold">
@@ -53,10 +54,6 @@
             <h2>Suggested moves</h2>
             <div id="assist" class="assist"></div>
           </section>
-          <details class="panel strat-fold" id="stratPanel" hidden>
-            <summary>Strategic ideas <span class="hint" id="stratPhase"></span></summary>
-            <div id="strategy" class="strategy"></div>
-          </details>
         </aside>
       </div>
 
@@ -65,6 +62,12 @@
         the glass-box for your opponent to see. Tap a piece, then a highlighted
         square — or tap a suggested move.
       </p>
+      <div id="stratSheet" class="sheet-overlay" style="display:none">
+        <div class="sheet">
+          <div class="sheet-head"><span>◆ Strategic ideas</span><span class="sheet-sub" id="stratPhase"></span><button class="sheet-close" id="stratClose">✕</button></div>
+          <div id="strategy" class="strategy"></div>
+        </div>
+      </div>
       <div id="glassSheet" class="sheet-overlay" style="display:none">
         <div class="sheet">
           <div class="sheet-head"><span>🔍 Transparency ledger</span><span class="sheet-sub">every bit of assistance — visible to both players</span><button class="sheet-close" id="glassClose">✕</button></div>

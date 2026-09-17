@@ -132,8 +132,10 @@ async function main() {
   await init();
   detectFirstGame();
   document.getElementById("new").addEventListener("click", () => { firstGame = false; newGame(); });
-  const sp = document.getElementById("stratPanel");
-  if (sp) sp.addEventListener("toggle", () => { if (sp.open) { sp.classList.remove("has-new"); lastStratSig = curStratSig; } });
+  const stratChip = document.getElementById("stratChip"), stratSheet = document.getElementById("stratSheet"), stratClose = document.getElementById("stratClose");
+  if (stratChip && stratSheet) stratChip.addEventListener("click", () => { stratSheetOpen = true; stratChip.classList.remove("has-new"); lastStratSig = curStratSig; stratSheet.style.display = "grid"; });
+  if (stratClose && stratSheet) stratClose.addEventListener("click", () => { stratSheetOpen = false; stratSheet.style.display = "none"; });
+  if (stratSheet) stratSheet.addEventListener("click", (e) => { if (e.target === stratSheet) { stratSheetOpen = false; stratSheet.style.display = "none"; } });
   const gsheet = document.getElementById("glassSheet");
   const gchip = document.getElementById("glassChip");
   if (gchip && gsheet) gchip.addEventListener("click", () => { gsheet.style.display = "grid"; });
@@ -388,43 +390,56 @@ function drawPlan(strat) {
   (strat.arrows || []).forEach((a, i) => { s += planArrow(a.from, a.to, PLAN_COLOR[a.kind] || "#5cc9ec", i); });
   ov.innerHTML = s;
 }
+// Strategy lives ON THE BOARD (arrows/rings) + a compact chip in the game bar
+// that pulses when new ideas appear and shows the active plan's name. The plan
+// picker + steps open on demand in a sheet; the board keeps the plan's arrows
+// even when the sheet is closed.
+let stratSheetOpen = false;
 function renderStrategy() {
-  const panel = document.getElementById("stratPanel"), host = document.getElementById("strategy");
-  if (!panel || !host) return;
+  const chip = document.getElementById("stratChip");
+  const host = document.getElementById("strategy");
   const sr = assistData && assistData.strategy;
-  if (!sr || !sr.strategies || !sr.strategies.length) { panel.hidden = true; panel.classList.remove("has-new"); host.innerHTML = ""; drawPlan(null); return; }
-  panel.hidden = false;
-  // Badge the collapsed fold when the set of ideas changes, so a change is
-  // never silent. Opening the fold acknowledges it (see the toggle listener).
-  curStratSig = sr.phase + "|" + sr.strategies.map((s) => s.id).join(",");
-  if (panel.open) { lastStratSig = curStratSig; panel.classList.remove("has-new"); }
-  else if (curStratSig !== lastStratSig) { panel.classList.add("has-new"); }
-  document.getElementById("stratPhase").textContent = sr.phase;
-  host.innerHTML = "";
-  if (sr.opponent) { const o = document.createElement("div"); o.className = "opp-read"; o.innerHTML = `<span>👁</span><span>${escapeHtml(sr.opponent)}</span>`; host.appendChild(o); }
-  if (pickedStrategyId && !sr.strategies.some((s) => s.id === pickedStrategyId)) pickedStrategyId = null;
-  sr.strategies.forEach((s) => {
-    const card = document.createElement("div");
-    card.className = "scard" + (s.id === pickedStrategyId ? " on" : "");
-    card.style.setProperty("--sc", STRAT_COLOR[s.id] || "#5cc9ec");
-    card.innerHTML = `<span class="sic">${STRAT_ICON[s.id] || "◆"}</span><div><div class="sname">${escapeHtml(s.name)}</div><div class="sidea">${escapeHtml(s.idea)}</div></div>`;
-    card.addEventListener("click", () => { pickedStrategyId = s.id; renderStrategy(); renderAssist(); });
-    host.appendChild(card);
-  });
-  const picked = sr.strategies.find((s) => s.id === pickedStrategyId);
-  if (picked) {
-    const d = document.createElement("div"); d.className = "sdetail"; d.style.setProperty("--sc", STRAT_COLOR[picked.id] || "#5cc9ec");
-    const steps = picked.steps.map((st) => `<div class="step ${st.done ? "done" : ""}"><span class="sd">${st.done ? "✓" : "•"}</span><span>${escapeHtml(st.text)}</span></div>`).join("");
-    d.innerHTML = `<div class="snext">Next — <b>your move</b><span class="smove" title="Click to play">${escapeHtml(picked.moveSan || picked.moveUci)}</span>${escapeHtml(picked.moveNote)}</div><div class="steps">${steps}</div>`;
-    host.appendChild(d);
-    const mv = d.querySelector(".smove");
-    if (mv) { mv.style.cursor = "pointer"; mv.addEventListener("click", () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to); }); }
-    drawPlan(picked);
-  } else {
+  if (!sr || !sr.strategies || !sr.strategies.length) {
+    if (chip) { chip.hidden = true; chip.classList.remove("has-new", "active"); }
+    if (host) host.innerHTML = "";
     drawPlan(null);
-    const hint = document.createElement("div"); hint.className = "shint"; hint.textContent = "Pick a plan to see it on the board.";
-    host.appendChild(hint);
+    return;
   }
+  if (chip) chip.hidden = false;
+  curStratSig = sr.phase + "|" + sr.strategies.map((s) => s.id).join(",");
+  if (stratSheetOpen) { lastStratSig = curStratSig; chip && chip.classList.remove("has-new"); }
+  else if (curStratSig !== lastStratSig && chip) chip.classList.add("has-new");
+  if (pickedStrategyId && !sr.strategies.some((s) => s.id === pickedStrategyId)) pickedStrategyId = null;
+  const picked = sr.strategies.find((s) => s.id === pickedStrategyId);
+  const lbl = document.getElementById("stratChipLabel");
+  if (lbl) lbl.textContent = picked ? picked.name : "Plans";
+  if (chip) chip.classList.toggle("active", !!picked);
+  const phaseEl = document.getElementById("stratPhase");
+  if (phaseEl) phaseEl.textContent = sr.phase;
+  if (host) {
+    host.innerHTML = "";
+    if (sr.opponent) { const o = document.createElement("div"); o.className = "opp-read"; o.innerHTML = `<span>👁</span><span>${escapeHtml(sr.opponent)}</span>`; host.appendChild(o); }
+    sr.strategies.forEach((s) => {
+      const card = document.createElement("div");
+      card.className = "scard" + (s.id === pickedStrategyId ? " on" : "");
+      card.style.setProperty("--sc", STRAT_COLOR[s.id] || "#5cc9ec");
+      card.innerHTML = `<span class="sic">${STRAT_ICON[s.id] || "◆"}</span><div><div class="sname">${escapeHtml(s.name)}</div><div class="sidea">${escapeHtml(s.idea)}</div></div>`;
+      card.addEventListener("click", () => { pickedStrategyId = s.id; renderStrategy(); renderAssist(); });
+      host.appendChild(card);
+    });
+    if (picked) {
+      const d = document.createElement("div"); d.className = "sdetail"; d.style.setProperty("--sc", STRAT_COLOR[picked.id] || "#5cc9ec");
+      const steps = picked.steps.map((st) => `<div class="step ${st.done ? "done" : ""}"><span class="sd">${st.done ? "✓" : "•"}</span><span>${escapeHtml(st.text)}</span></div>`).join("");
+      d.innerHTML = `<div class="snext">Next — <b>your move</b><span class="smove" title="Click to play">${escapeHtml(picked.moveSan || picked.moveUci)}</span>${escapeHtml(picked.moveNote)}</div><div class="steps">${steps}</div>`;
+      host.appendChild(d);
+      const mv = d.querySelector(".smove");
+      if (mv) { mv.style.cursor = "pointer"; mv.addEventListener("click", () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to); }); }
+    } else {
+      const hint = document.createElement("div"); hint.className = "shint"; hint.textContent = "Pick a plan to see it on the board.";
+      host.appendChild(hint);
+    }
+  }
+  drawPlan(picked || null); // arrows stay on the board even with the sheet closed
 }
 
 function renderBoard() {

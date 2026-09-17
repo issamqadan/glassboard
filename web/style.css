@@ -840,3 +840,10 @@ main.game .status:empty { display: none; }
   .sheet-overlay { align-items: end; }
   .sheet { width: 100%; border-radius: 18px 18px 0 0; max-height: 72vh; }
 }
+
+/* strategy chip states (game bar) + strategy content inside its sheet */
+@keyframes chip-newpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(92,201,236,0); } 50% { box-shadow: 0 0 0 4px rgba(92,201,236,0.28); } }
+.gb-chip.has-new { border-color: rgba(92,201,236,0.6); color: #eaf0fb; animation: chip-newpulse 1.5s ease-in-out infinite; }
+.gb-chip.active { border-color: #e0be79; color: #f0d9a8; background: rgba(224,190,121,0.12); }
+@media (prefers-reduced-motion: reduce) { .gb-chip.has-new { animation: none; } }
+.sheet .strategy { padding: 12px 16px 16px; overflow-y: auto; }
