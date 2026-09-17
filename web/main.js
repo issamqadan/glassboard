@@ -416,12 +416,14 @@ function linkPlanPanels(picked) {
 
 function renderBoard() {
   const s = game.boardString();
+  const chkKing = (game.status() === "ongoing" && game.inCheck()) ? (game.sideToMove() === "white" ? "K" : "k") : null;
   boardEl.innerHTML = "";
   for (let rank = 7; rank >= 0; rank--) {
     for (let file = 0; file < 8; file++) {
       const i = idx(file, rank);
       const sq = document.createElement("div");
       sq.className = "sq " + ((file + rank) % 2 === 1 ? "light" : "dark");
+      if (chkKing && s[i] === chkKing) sq.classList.add("check");
       if (selected === i) sq.classList.add("selected");
       if (legalTargets.includes(i)) { sq.classList.add("target"); if (s[i] !== ".") sq.classList.add("capture"); }
       if (hanging.includes(i)) sq.classList.add("hanging");

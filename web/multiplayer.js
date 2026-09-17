@@ -593,12 +593,14 @@ function renderBoard() {
   const s = game.boardString();
   const bottomRank = myColor === "black" ? 7 : 0;
   const leftFile = myColor === "black" ? 7 : 0;
+  const chkKing = (state && state.status === "ongoing" && game.inCheck()) ? (state.turn === "white" ? "K" : "k") : null;
 
   boardEl.innerHTML = "";
   for (const { file, rank } of orientedSquares()) {
     const i = idx(file, rank);
     const sq = document.createElement("div");
     sq.className = "sq " + ((file + rank) % 2 === 1 ? "light" : "dark");
+    if (chkKing && s[i] === chkKing) sq.classList.add("check");
     if (selected === i) sq.classList.add("selected");
     if (legalTargets.includes(i)) { sq.classList.add("target"); if (s[i] !== ".") sq.classList.add("capture"); }
     if (hanging.includes(i)) sq.classList.add("hanging");
