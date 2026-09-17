@@ -818,8 +818,9 @@ function renderStrategy() {
   if (picked) {
     const d = document.createElement("div"); d.className = "sdetail"; d.style.setProperty("--sc", STRAT_COLOR[picked.id] || "#5cc9ec");
     const steps = picked.steps.map((st) => `<div class="step ${st.done ? "done" : ""}"><span class="sd">${st.done ? "✓" : "•"}</span><span>${escapeHtml(st.text)}</span></div>`).join("");
-    d.innerHTML = `<div class="steps">${steps}</div>` +
+    d.innerHTML =
       `<div class="snext">Next — <b>your move</b><span class="smove" title="Click to play">${escapeHtml(picked.moveSan || picked.moveUci)}</span>${escapeHtml(picked.moveNote)}</div>` +
+      `<div class="steps">${steps}</div>` +
       `<div class="glassmini">🔍 This plan is shown to your opponent too.</div>`;
     host.appendChild(d);
     const mv = d.querySelector(".smove");
