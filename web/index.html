@@ -13,8 +13,6 @@
       <div class="gamebar">
         <div id="players" class="players" hidden></div>
         <div class="gb-actions">
-          <button id="stratChip" class="gb-chip" title="Strategic plans — see an idea on the board" hidden>◆ <span id="stratChipLabel">Plans</span></button>
-          <button id="glassChip" class="gb-chip" title="Transparency ledger — every bit of assistance, visible to both players" hidden>🔍 <span class="gpips"></span><span id="glassCount">0</span></button>
           <span id="level" class="pill" title="Assistance level">—</span>
           <details class="opts gb-opts" id="setupFold">
             <summary title="Difficulty">⚙</summary>
@@ -46,14 +44,18 @@
           </div>
         </div>
         <aside class="panels">
-          <!-- Coach + agency meter head the rail: beside the board on desktop
-               (board keeps its full height), stacked under it on mobile. -->
-          <div id="coach" class="coach" aria-live="polite"></div>
-          <div id="budget" class="budget" hidden></div>
-          <section class="panel" id="assistPanel">
-            <h2>Suggested moves</h2>
-            <div id="assist" class="assist"></div>
+          <!-- Coach: transient safety net — speaks only for real danger/opportunity. -->
+          <div id="coach" class="coach" aria-live="polite" hidden></div>
+          <!-- Strategy is the headline: pick a plan, follow it step-by-step, see progress. -->
+          <section class="panel strat-panel" id="stratPanelWrap" hidden>
+            <h2>Strategy <span class="hint" id="stratPhase"></span></h2>
+            <div id="strategy" class="strategy"></div>
           </section>
+          <!-- Move-by-move help is secondary — collapsed until you want it. -->
+          <details class="panel" id="movesFold">
+            <summary>Suggested moves</summary>
+            <div id="assist" class="assist"></div>
+          </details>
         </aside>
       </div>
 
@@ -62,18 +64,6 @@
         the glass-box for your opponent to see. Tap a piece, then a highlighted
         square — or tap a suggested move.
       </p>
-      <div id="stratSheet" class="sheet-overlay" style="display:none">
-        <div class="sheet">
-          <div class="sheet-head"><span>◆ Strategic ideas</span><span class="sheet-sub" id="stratPhase"></span><button class="sheet-close" id="stratClose">✕</button></div>
-          <div id="strategy" class="strategy"></div>
-        </div>
-      </div>
-      <div id="glassSheet" class="sheet-overlay" style="display:none">
-        <div class="sheet">
-          <div class="sheet-head"><span>🔍 Transparency ledger</span><span class="sheet-sub">every bit of assistance — visible to both players</span><button class="sheet-close" id="glassClose">✕</button></div>
-          <div id="glass" class="glass"></div>
-        </div>
-      </div>
       <div id="promoOverlay" class="promo-overlay" style="display:none">
         <div class="promo-box"><div class="promo-title">Promote to</div><div class="promo-choices"></div></div>
       </div>

@@ -132,16 +132,6 @@ async function main() {
   await init();
   detectFirstGame();
   document.getElementById("new").addEventListener("click", () => { firstGame = false; newGame(); });
-  const stratChip = document.getElementById("stratChip"), stratSheet = document.getElementById("stratSheet"), stratClose = document.getElementById("stratClose");
-  if (stratChip && stratSheet) stratChip.addEventListener("click", () => { stratSheetOpen = true; stratChip.classList.remove("has-new"); lastStratSig = curStratSig; stratSheet.style.display = "grid"; });
-  if (stratClose && stratSheet) stratClose.addEventListener("click", () => { stratSheetOpen = false; stratSheet.style.display = "none"; });
-  if (stratSheet) stratSheet.addEventListener("click", (e) => { if (e.target === stratSheet) { stratSheetOpen = false; stratSheet.style.display = "none"; } });
-  const gsheet = document.getElementById("glassSheet");
-  const gchip = document.getElementById("glassChip");
-  if (gchip && gsheet) gchip.addEventListener("click", () => { gsheet.style.display = "grid"; });
-  const gclose = document.getElementById("glassClose");
-  if (gclose && gsheet) gclose.addEventListener("click", () => { gsheet.style.display = "none"; });
-  if (gsheet) gsheet.addEventListener("click", (e) => { if (e.target === gsheet) gsheet.style.display = "none"; });
   const rb = document.getElementById("resignBtn");
   if (rb) rb.addEventListener("click", resign);
   const orm = document.getElementById("overRematch");
@@ -231,66 +221,37 @@ function setBoardGlow(tone) {
   bw.classList.remove("glow-danger", "glow-gold", "glow-calm");
   if (tone === "danger" || tone === "gold" || tone === "calm") bw.classList.add("glow-" + tone);
 }
+// The coach is a transient safety net: it speaks ONLY when there's real danger
+// or a free opportunity. When you're safe, it says nothing (hidden) — no "you're
+// safe" spam, no permanent card. Help is free; no reveal buttons.
 function renderCoach() {
   const el = document.getElementById("coach");
   if (!el) return;
-  if (!assistData) {
-    el.className = "coach idle";
-    el.innerHTML = `<span class="co-ic">🤖</span><div class="co-body"><div class="co-head">Engine is thinking…</div></div>`;
-    setBoardGlow(null);
-    return;
-  }
   const a = assistData;
-  const off = a.level === "off";
-  let tone = off ? "idle" : "calm";
-  let ic = off ? "♟" : "✓";
-  let head = off ? "Your move" : "You're safe";
-  let sub = off ? "Assistance is off for this game." : "No immediate threats — improve a piece or make a plan.";
-
-  if (a.inCheck) {
+  let tone = null, ic = "", head = "", sub = "";
+  if (a && a.inCheck) {
     tone = "danger"; ic = "⚠"; head = "You're in check";
-    sub = "You must get your king out of check this move.";
-  } else if (a.hanging && a.hanging.length) {
+    sub = "Get your king out of check this move.";
+  } else if (a && a.hanging && a.hanging.length) {
     tone = "danger"; ic = "⚠";
     const sq = a.hanging[0];
     head = `Your ${pieceNameAt(sq)} on ${sqName(sq)} can be taken`;
     sub = a.hanging.length > 1
       ? `${a.hanging.length} of your pieces are undefended — move or protect them.`
       : "Defend it or move it to safety.";
-  } else if (a.freeCaptures && a.freeCaptures.length) {
+  } else if (a && a.freeCaptures && a.freeCaptures.length) {
     tone = "gold"; ic = "★";
     const sq = a.freeCaptures[0];
-    head = `Free material: win the ${pieceNameAt(sq)} on ${sqName(sq)}`;
-    sub = "Your opponent left it undefended — take it.";
+    head = `Free piece: the ${pieceNameAt(sq)} on ${sqName(sq)}`;
+    sub = "Your opponent left it undefended — you can take it.";
   }
-
-  // The best move is deeper help: free safety net above, but seeing the move
-  // itself spends from the agency budget (reveal once per position).
-  let action = "";
-  if (a.recommended) {
-    if (firstGame || revealedBest) {
-      const rec = (a.candidates || []).find((c) => c.uci === a.recommended);
-      action = `<button class="co-play" id="coachPlay">Play ${escapeHtml(rec ? (rec.san || rec.uci) : a.recommended)} →</button>`;
-    } else {
-      action = `<button class="co-reveal" id="coachReveal">🎯 Reveal best move (−${COST_BEST})</button>`;
-    }
-  }
+  if (!tone) { el.hidden = true; el.innerHTML = ""; setBoardGlow(null); return; } // quiet when safe
+  el.hidden = false;
   el.className = "coach " + tone;
   el.innerHTML =
     `<span class="co-ic">${ic}</span>` +
-    `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>` +
-    action;
-  setBoardGlow(off ? null : tone);
-  if (firstGame || revealedBest) {
-    const pb = document.getElementById("coachPlay");
-    if (pb && a.recommended) {
-      const q = uciSquares(a.recommended);
-      if (q) pb.addEventListener("click", () => playMove(q.from, q.to));
-    }
-  } else {
-    const rb = document.getElementById("coachReveal");
-    if (rb) rb.addEventListener("click", () => { spend(COST_BEST); revealedBest = true; revealedSugg = true; renderCoach(); renderAssist(); });
-  }
+    `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>`;
+  setBoardGlow(tone);
 }
 
 function updateSetupSum() {
@@ -390,30 +351,21 @@ function drawPlan(strat) {
   (strat.arrows || []).forEach((a, i) => { s += planArrow(a.from, a.to, PLAN_COLOR[a.kind] || "#5cc9ec", i); });
   ov.innerHTML = s;
 }
-// Strategy lives ON THE BOARD (arrows/rings) + a compact chip in the game bar
-// that pulses when new ideas appear and shows the active plan's name. The plan
-// picker + steps open on demand in a sheet; the board keeps the plan's arrows
-// even when the sheet is closed.
-let stratSheetOpen = false;
+// Strategy is the headline assistance: a visible panel. Pick a plan → the
+// step-by-step follows it (with progress) and its arrows draw on the board.
 function renderStrategy() {
-  const chip = document.getElementById("stratChip");
+  const wrap = document.getElementById("stratPanelWrap");
   const host = document.getElementById("strategy");
   const sr = assistData && assistData.strategy;
   if (!sr || !sr.strategies || !sr.strategies.length) {
-    if (chip) { chip.hidden = true; chip.classList.remove("has-new", "active"); }
+    if (wrap) wrap.hidden = true;
     if (host) host.innerHTML = "";
     drawPlan(null);
     return;
   }
-  if (chip) chip.hidden = false;
-  curStratSig = sr.phase + "|" + sr.strategies.map((s) => s.id).join(",");
-  if (stratSheetOpen) { lastStratSig = curStratSig; chip && chip.classList.remove("has-new"); }
-  else if (curStratSig !== lastStratSig && chip) chip.classList.add("has-new");
+  if (wrap) wrap.hidden = false;
   if (pickedStrategyId && !sr.strategies.some((s) => s.id === pickedStrategyId)) pickedStrategyId = null;
   const picked = sr.strategies.find((s) => s.id === pickedStrategyId);
-  const lbl = document.getElementById("stratChipLabel");
-  if (lbl) lbl.textContent = picked ? picked.name : "Plans";
-  if (chip) chip.classList.toggle("active", !!picked);
   const phaseEl = document.getElementById("stratPhase");
   if (phaseEl) phaseEl.textContent = sr.phase;
   if (host) {
@@ -519,20 +471,8 @@ function renderAssist() {
     if (q) sm.addEventListener("click", () => playMove(q.from, q.to));
     assistEl.appendChild(sm);
   }
-  // Candidate moves are deeper help — gate them behind a small spend. The
-  // coach's safety warnings above stay free.
-  if (a.candidates.length && !firstGame && !revealedSugg && !revealedBest) {
-    const btn = document.createElement("button");
-    btn.className = "reveal-btn";
-    btn.textContent = `💡 Show ${a.candidates.length} suggested move${a.candidates.length > 1 ? "s" : ""} (−${COST_SUGG})`;
-    btn.addEventListener("click", () => { spend(COST_SUGG); revealedSugg = true; renderAssist(); });
-    assistEl.appendChild(btn);
-    const note = document.createElement("div");
-    note.className = "reveal-note";
-    note.textContent = "The coach's safety warnings above are always free.";
-    assistEl.appendChild(note);
-    return;
-  }
+  // Move-by-move help is free here (vs AI / casual). It's collapsed by default
+  // under "Suggested moves" — secondary to the strategy.
   if (a.candidates.length) {
     a.candidates.forEach((c) => {
       const isRec = a.recommended && c.uci === a.recommended;
