@@ -469,7 +469,7 @@ function spend(n) { budgetSpent += n; renderBudget(); }
 function renderBudget() {
   const elb = document.getElementById("budget");
   if (!elb) return;
-  const on = assistData && !casualMode() && (assistData.candidates || []).length > 0;
+  const on = assistData && !casualMode() && budgetSpent > 0 && (assistData.candidates || []).length > 0;
   elb.hidden = !on;
   if (!on) return;
   const pct = Math.min(100, Math.round((budgetSpent / BUDGET_TOTAL) * 100));

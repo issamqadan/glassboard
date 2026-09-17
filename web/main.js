@@ -165,9 +165,10 @@ function spend(n) { budgetSpent += n; renderBudget(); }
 function renderBudget() {
   const el = document.getElementById("budget");
   if (!el) return;
-  // Only meaningful when move-level help is on the table (Guide/Assist/Autopilot).
-  // Hidden during the first game — a beginner shouldn't juggle a budget yet.
-  const on = assistData && !firstGame && (assistData.candidates || []).length > 0;
+  // Appear only once you've actually spent help — a bar sitting at 0/40 is just
+  // noise. Then it's a glanceable tally for the rest of the game. (Also hidden
+  // during the first game — a beginner shouldn't juggle a budget yet.)
+  const on = assistData && !firstGame && budgetSpent > 0 && (assistData.candidates || []).length > 0;
   el.hidden = !on;
   if (!on) return;
   const pct = Math.min(100, Math.round((budgetSpent / BUDGET_TOTAL) * 100));
