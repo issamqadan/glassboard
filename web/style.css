@@ -812,3 +812,31 @@ main.game .gamebar .gb-actions { display: flex; align-items: center; gap: 8px; f
 main.game .status { margin: 6px 0 8px; min-height: 0; font-size: 0.92rem; }
 main.game .status:empty { display: none; }
 .gb-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ---- Glass-box: compact transparency trace (chip) + on-demand ledger (sheet) ---- */
+.gb-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--glass-card, rgba(255,255,255,0.035));
+  border: 1px solid var(--glass-line, rgba(255,255,255,0.08)); color: #cdd8e8; border-radius: 999px; padding: 6px 11px;
+  font-size: 0.82rem; font-weight: 620; cursor: pointer; }
+.gb-chip:hover { border-color: #5cc9ec; color: #eaf0fb; }
+.gb-chip .gpips { display: inline-flex; gap: 3px; }
+.gpip { width: 7px; height: 7px; border-radius: 50%; }
+.gpip.white { background: #eaf0fb; box-shadow: 0 0 0 1px rgba(0,0,0,0.35); }
+.gpip.black { background: #46608f; box-shadow: 0 0 0 1px rgba(255,255,255,0.28); }
+@keyframes gchip-pulse { 0% { box-shadow: 0 0 0 0 rgba(92,201,236,0.6); } 100% { box-shadow: 0 0 0 11px rgba(92,201,236,0); } }
+.gb-chip.pulse { animation: gchip-pulse 0.75s ease-out; }
+@media (prefers-reduced-motion: reduce) { .gb-chip.pulse { animation: none; } }
+
+.sheet-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+  background: rgba(6,10,18,0.62); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.sheet { background: #0c111b; border: 1px solid var(--glass-line, rgba(255,255,255,0.1)); border-radius: 16px;
+  width: min(460px, 92vw); max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;
+  box-shadow: 0 26px 64px -22px rgba(0,0,0,0.88); }
+.sheet-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--glass-line, rgba(255,255,255,0.08)); font-weight: 660; }
+.sheet-head .sheet-sub { color: #7f92ab; font-size: 0.76rem; font-weight: 400; flex: 1; }
+.sheet-close { background: none; border: 0; color: #8ea0b8; font-size: 1.05rem; cursor: pointer; line-height: 1; }
+.sheet-close:hover { color: #eaf0fb; }
+.sheet .glass { padding: 10px 16px 16px; overflow-y: auto; }
+@media (max-width: 640px) {
+  .sheet-overlay { align-items: end; }
+  .sheet { width: 100%; border-radius: 18px 18px 0 0; max-height: 72vh; }
+}

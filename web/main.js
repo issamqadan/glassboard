@@ -134,6 +134,12 @@ async function main() {
   document.getElementById("new").addEventListener("click", () => { firstGame = false; newGame(); });
   const sp = document.getElementById("stratPanel");
   if (sp) sp.addEventListener("toggle", () => { if (sp.open) { sp.classList.remove("has-new"); lastStratSig = curStratSig; } });
+  const gsheet = document.getElementById("glassSheet");
+  const gchip = document.getElementById("glassChip");
+  if (gchip && gsheet) gchip.addEventListener("click", () => { gsheet.style.display = "grid"; });
+  const gclose = document.getElementById("glassClose");
+  if (gclose && gsheet) gclose.addEventListener("click", () => { gsheet.style.display = "none"; });
+  if (gsheet) gsheet.addEventListener("click", (e) => { if (e.target === gsheet) gsheet.style.display = "none"; });
   const rb = document.getElementById("resignBtn");
   if (rb) rb.addEventListener("click", resign);
   const orm = document.getElementById("overRematch");
@@ -530,18 +536,28 @@ function renderAssist() {
   }
 }
 
+// The glass-box is a compact, glanceable trace (a row of pips + count in the
+// game bar) that pulses when help happens; the full ledger opens on demand.
+let lastGlassCount = 0;
 function renderGlass() {
   const events = JSON.parse(game.glassbox());
-  if (!events.length) {
-    glassEl.innerHTML = `<div class="none">No assistance used yet.</div>`;
-    return;
+  if (glassEl) {
+    glassEl.innerHTML = events.length
+      ? events.map((e) => `<div class="ev"><span class="who">${e.side}</span> · ${escapeHtml(e.summary)}</div>`).join("")
+      : `<div class="none">No assistance used yet.</div>`;
   }
-  glassEl.innerHTML = events
-    .map(
-      (e) =>
-        `<div class="ev"><span class="who">${e.side}</span> · ${escapeHtml(e.summary)}</div>`
-    )
-    .join("");
+  const chip = document.getElementById("glassChip");
+  if (!chip) return;
+  chip.hidden = events.length === 0;
+  if (!events.length) { lastGlassCount = 0; return; }
+  const pipsEl = chip.querySelector(".gpips");
+  if (pipsEl) pipsEl.innerHTML = events.slice(-6).map((e) => `<span class="gpip ${e.side}"></span>`).join("");
+  const countEl = document.getElementById("glassCount");
+  if (countEl) countEl.textContent = events.length;
+  if (events.length !== lastGlassCount) {
+    if (lastGlassCount > 0) { chip.classList.remove("pulse"); void chip.offsetWidth; chip.classList.add("pulse"); }
+    lastGlassCount = events.length;
+  }
 }
 
 function onSquareClick(i) {
