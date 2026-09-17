@@ -740,3 +740,24 @@ main.game .budget .bg-num { flex-shrink: 0; font-variant-numeric: tabular-nums; 
 .over-help { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--glass-line, rgba(255,255,255,0.08));
   font-size: 0.88rem; color: #cdd8e8; line-height: 1.5; max-width: 340px; }
 .over-help b { color: #7ee0d6; }
+
+/* ---- First Game Mode: learn-by-playing guidance ---- */
+main.game .first-game { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(126,224,214,0.16), rgba(92,201,236,0.10)); border: 1px solid rgba(126,224,214,0.45);
+  box-shadow: 0 10px 30px -16px rgba(126,224,214,0.6); }
+main.game .first-game .fg-ic { font-size: 1.6rem; line-height: 1; flex-shrink: 0; }
+main.game .first-game .fg-body { flex: 1; min-width: 0; }
+main.game .first-game .fg-text { font-size: 0.98rem; color: #eaf7f5; line-height: 1.45; font-weight: 500; }
+main.game .first-game .fg-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+main.game .first-game .fg-cta { background: linear-gradient(140deg, #7ee0d6, #5cc9ec); color: #04222d; border: 0;
+  font-weight: 680; font-size: 0.9rem; padding: 9px 16px; border-radius: 10px; cursor: pointer; }
+main.game .first-game .fg-skip { background: none; border: 0; color: #8fb7c4; font-size: 0.82rem; cursor: pointer; text-decoration: underline; }
+main.game .first-game .fg-dots { display: flex; gap: 5px; margin-left: auto; }
+main.game .first-game .fg-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.25); }
+main.game .first-game .fg-dot.on { background: #7ee0d6; }
+
+/* Pulsing hint on a tappable square (first game / tutorial). */
+.sq.hint::after { content: ""; position: absolute; inset: 8%; border-radius: 12px; z-index: 3;
+  box-shadow: inset 0 0 0 3px #7ee0d6, 0 0 16px 2px rgba(126,224,214,0.7); animation: sq-pulse 1.25s ease-in-out infinite; pointer-events: none; }
+@keyframes sq-pulse { 0%,100% { opacity: 0.55; transform: scale(0.94); } 50% { opacity: 1; transform: scale(1.02); } }
+@media (prefers-reduced-motion: reduce) { .sq.hint::after { animation: none; opacity: 0.9; } }

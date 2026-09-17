@@ -65,6 +65,17 @@ let revealedSugg = false; // did we reveal the candidate list this position?
 let revealedBest = false; // did we reveal the single best move this position?
 let helpWasAvailable = false; // was move-level help on the table at all this game?
 const COST_SUGG = 2, COST_BEST = 4;
+// First Game Mode: a learn-by-playing layer for a total beginner. Guides the
+// first couple of moves (pulse a piece → show its squares → tap), then fades.
+let firstGame = false, fgStep = 0, fgHintSquares = [];
+const FG = [
+  { ic: "👋", text: "Welcome! You'll learn chess just by playing. You're <b>White</b> — your pieces are along the bottom, and you move first.", cta: "Show me →" },
+  { ic: "👆", text: "Tap one of the <b>glowing</b> pieces to pick it up.", hint: "curated" },
+  { ic: "✨", text: "The <b>dots</b> show every square that piece can move to. Tap a dot to move there." },
+  { ic: "🤝", text: "Nice — that's a move! Your opponent (the computer) takes its turn now…" },
+  { ic: "♟", text: "Your turn again. Same idea: <b>tap a piece, then a dot</b>. If a piece is in danger, the coach under the board warns you." },
+  { ic: "🎉", text: "You've got it! Keep playing — help is always under the board. Have fun!", cta: "Play on", final: true },
+];
 let lastMove = null; // { from, to } of the most recent move
 let assistData = null; // parsed assist JSON for the current (White) turn
 let busy = false;
@@ -74,9 +85,53 @@ const depth = () => parseInt(depthEl.value, 10);
 const idx = (file, rank) => rank * 8 + file;
 const isWhitePiece = (c) => c !== "." && c === c.toUpperCase();
 
+// A total beginner's first visit (or ?first=1) starts in First Game Mode.
+function detectFirstGame() {
+  const forced = new URLSearchParams(location.search).get("first");
+  firstGame = forced ? forced !== "0" : !localStorage.getItem("gb_played");
+  fgStep = 0;
+}
+function fgExit() {
+  firstGame = false;
+  fgHintSquares = [];
+  try { localStorage.setItem("gb_played", "1"); } catch {}
+  renderFirstGame();
+  paint();
+}
+function fgGo(n) { fgStep = n; renderFirstGame(); paint(); }
+function fgOn(trigger) {
+  if (!firstGame) return;
+  const s = fgStep;
+  if (s === 1 && trigger === "select") fgGo(2);
+  else if (s === 2 && trigger === "move") fgGo(3);
+  else if (s === 3 && trigger === "engine") fgGo(4);
+  else if (s === 4 && trigger === "move") fgGo(5);
+}
+function renderFirstGame() {
+  const el = document.getElementById("firstGame");
+  if (!el) return;
+  if (!firstGame) { el.hidden = true; fgHintSquares = []; return; }
+  const step = FG[fgStep] || FG[FG.length - 1];
+  fgHintSquares = step.hint === "curated" ? [12, 11, 6, 1] : []; // e2 d2 g1 b1
+  const dots = FG.map((_, i) => `<span class="fg-dot${i <= fgStep ? " on" : ""}"></span>`).join("");
+  el.hidden = false;
+  el.innerHTML =
+    `<span class="fg-ic">${step.ic}</span>` +
+    `<div class="fg-body"><div class="fg-text">${step.text}</div>` +
+    `<div class="fg-row">` +
+    (step.cta ? `<button class="fg-cta" id="fgCta">${step.cta}</button>` : "") +
+    (step.final ? "" : `<button class="fg-skip" id="fgSkip">Skip — I know chess</button>`) +
+    `<span class="fg-dots">${dots}</span></div></div>`;
+  const cta = document.getElementById("fgCta");
+  if (cta) cta.addEventListener("click", () => { if (step.final) fgExit(); else fgGo(fgStep + 1); });
+  const skip = document.getElementById("fgSkip");
+  if (skip) skip.addEventListener("click", fgExit);
+}
+
 async function main() {
   await init();
-  document.getElementById("new").addEventListener("click", newGame);
+  detectFirstGame();
+  document.getElementById("new").addEventListener("click", () => { firstGame = false; newGame(); });
   const sp = document.getElementById("stratPanel");
   if (sp) sp.addEventListener("toggle", () => { if (sp.open) { sp.classList.remove("has-new"); lastStratSig = curStratSig; } });
   const rb = document.getElementById("resignBtn");
@@ -111,7 +166,8 @@ function renderBudget() {
   const el = document.getElementById("budget");
   if (!el) return;
   // Only meaningful when move-level help is on the table (Guide/Assist/Autopilot).
-  const on = assistData && (assistData.candidates || []).length > 0;
+  // Hidden during the first game — a beginner shouldn't juggle a budget yet.
+  const on = assistData && !firstGame && (assistData.candidates || []).length > 0;
   el.hidden = !on;
   if (!on) return;
   const pct = Math.min(100, Math.round((budgetSpent / BUDGET_TOTAL) * 100));
@@ -141,6 +197,7 @@ function onPositionChanged() {
 
 // Repaints board + panels from current state (no assistance recompute).
 function paint() {
+  renderFirstGame();
   renderBoard();
   renderPlayers();
   renderCoach();
@@ -202,7 +259,7 @@ function renderCoach() {
   // itself spends from the agency budget (reveal once per position).
   let action = "";
   if (a.recommended) {
-    if (revealedBest) {
+    if (firstGame || revealedBest) {
       const rec = (a.candidates || []).find((c) => c.uci === a.recommended);
       action = `<button class="co-play" id="coachPlay">Play ${escapeHtml(rec ? (rec.san || rec.uci) : a.recommended)} →</button>`;
     } else {
@@ -215,7 +272,7 @@ function renderCoach() {
     `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>` +
     action;
   setBoardGlow(off ? null : tone);
-  if (revealedBest) {
+  if (firstGame || revealedBest) {
     const pb = document.getElementById("coachPlay");
     if (pb && a.recommended) {
       const q = uciSquares(a.recommended);
@@ -375,6 +432,7 @@ function renderBoard() {
       if (legalTargets.includes(i)) { sq.classList.add("target"); if (s[i] !== ".") sq.classList.add("capture"); }
       if (hanging.includes(i)) sq.classList.add("hanging");
       if (freeCaptures.includes(i)) sq.classList.add("free");
+      if (firstGame && fgHintSquares.includes(i)) sq.classList.add("hint");
       if (lastMove && (lastMove.from === i || lastMove.to === i)) sq.classList.add("lastmove");
 
       // Coordinate labels on the edge squares.
@@ -441,7 +499,7 @@ function renderAssist() {
   }
   // Candidate moves are deeper help — gate them behind a small spend. The
   // coach's safety warnings above stay free.
-  if (a.candidates.length && !revealedSugg && !revealedBest) {
+  if (a.candidates.length && !firstGame && !revealedSugg && !revealedBest) {
     const btn = document.createElement("button");
     btn.className = "reveal-btn";
     btn.textContent = `💡 Show ${a.candidates.length} suggested move${a.candidates.length > 1 ? "s" : ""} (−${COST_SUGG})`;
@@ -508,6 +566,7 @@ function onSquareClick(i) {
 function selectSquare(i) {
   selected = i;
   legalTargets = Array.from(game.legalTo(i));
+  fgOn("select");
   paint();
 }
 
@@ -529,6 +588,7 @@ function doPlay(from, to, promo) {
   if (!ok) { paint(); return; }
   lastMove = { from, to };
   recordHumanMove(preFen, from, to, promo); // learn from this move too
+  fgOn("move");
   onPositionChanged(); // now Black to move → assist cleared
   setTimeout(engineReply, 150);
 }
@@ -556,6 +616,7 @@ function engineReply() {
     if (uci.length >= 4) lastMove = uciToSquares(uci);
     busy = false;
     onPositionChanged();
+    fgOn("engine");
   }, 20);
 }
 
