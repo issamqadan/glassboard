@@ -4,9 +4,12 @@
 (function () {
   const THEMES = [
     { id: "glass", label: "Glass", light: "#e6ecf5", dark: "#647d9e" },
+    { id: "classic", label: "Classic", light: "#ebecd0", dark: "#779556" },   // chess.com green
+    { id: "tournament", label: "Tournament", light: "#f0d9b5", dark: "#b58863" }, // lichess brown
     { id: "walnut", label: "Walnut", light: "#ead8b6", dark: "#a5763f" },
     { id: "emerald", label: "Emerald", light: "#eef1d6", dark: "#6f8f57" },
     { id: "midnight", label: "Midnight", light: "#7a8aa6", dark: "#3b4864" },
+    { id: "slate", label: "Slate", light: "#9aa6b8", dark: "#333c4d" },        // darker, moody
   ];
   const KEY = "gb_board";
   const saved = () => {

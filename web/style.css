@@ -24,9 +24,12 @@
 }
 
 /* Board themes — each overrides only tokens (glass is the :root default). */
-:root[data-board="walnut"] { --light: #ead8b6; --dark: #a5763f; }
-:root[data-board="emerald"] { --light: #eef1d6; --dark: #6f8f57; }
-:root[data-board="midnight"] { --light: #7a8aa6; --dark: #3b4864; }
+:root[data-board="classic"]    { --light: #ebecd0; --dark: #779556; } /* chess.com green */
+:root[data-board="tournament"] { --light: #f0d9b5; --dark: #b58863; } /* lichess brown */
+:root[data-board="walnut"]     { --light: #ead8b6; --dark: #a5763f; }
+:root[data-board="emerald"]    { --light: #eef1d6; --dark: #6f8f57; }
+:root[data-board="midnight"]   { --light: #7a8aa6; --dark: #3b4864; }
+:root[data-board="slate"]      { --light: #9aa6b8; --dark: #333c4d; } /* darker, moody */
 
 * {
   box-sizing: border-box;
@@ -453,16 +456,23 @@ button {
   position: fixed;
   bottom: 14px;
   right: 14px;
-  z-index: 50;
+  z-index: 66; /* above the mobile bottom tab bar (z-index 60) */
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 11px;
+  max-width: calc(100vw - 24px);
+  flex-wrap: wrap;
+  justify-content: flex-end;
   background: rgba(12, 17, 27, 0.82);
   backdrop-filter: blur(10px);
   border: 1px solid #2a3a58;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+/* On phones the bottom tab bar owns the bottom edge — float the switcher above it. */
+@media (max-width: 640px) {
+  .gb-theme { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); right: 10px; padding: 7px 10px; }
 }
 .gb-theme-lab {
   font-size: 0.72rem;
