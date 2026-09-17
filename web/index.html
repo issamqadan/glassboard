@@ -9,33 +9,30 @@
   </head>
   <body>
     <main class="game">
-      <header class="game-head">
-        <div class="gh-row">
-          <h1>Play <span class="tag">vs AI</span></h1>
-          <span class="topbar-right"><button id="resignBtn" class="resign-btn" hidden>Resign</button></span>
-        </div>
+      <!-- Game Mode: one slim glanceable bar. Board owns the rest of the space. -->
+      <div class="gamebar">
         <div id="players" class="players" hidden></div>
-      </header>
-
-      <div class="controls">
-        <button id="new" class="btn-primary">＋ New game</button>
-        <details class="opts" id="setupFold">
-          <summary>Difficulty <span id="setupSum" class="opts-sum"></span></summary>
-          <div class="opts-body">
-            <label>You (White) <input id="humanElo" type="number" value="1200" min="100" max="3200" /></label>
-            <label>Engine (Black) <input id="engineElo" type="number" value="1700" min="100" max="3200" /></label>
-            <label>Depth
-              <select id="depth">
-                <option value="2">2</option>
-                <option value="3" selected>3</option>
-                <option value="4">4</option>
-              </select>
-            </label>
-          </div>
-        </details>
+        <div class="gb-actions">
+          <span id="level" class="pill" title="Assistance level">—</span>
+          <details class="opts gb-opts" id="setupFold">
+            <summary title="Difficulty">⚙</summary>
+            <div class="opts-body">
+              <label>You (White) <input id="humanElo" type="number" value="1200" min="100" max="3200" /></label>
+              <label>Engine (Black) <input id="engineElo" type="number" value="1700" min="100" max="3200" /></label>
+              <label>Depth
+                <select id="depth">
+                  <option value="2">2</option>
+                  <option value="3" selected>3</option>
+                  <option value="4">4</option>
+                </select>
+              </label>
+            </div>
+          </details>
+          <button id="new" class="gb-btn" title="New game">＋ New</button>
+          <button id="resignBtn" class="gb-btn danger" hidden>Resign</button>
+        </div>
       </div>
-
-      <div id="status" class="status">Loading engine…</div>
+      <div id="status" class="status" hidden>Loading engine…</div>
 
       <div class="layout">
         <div class="board-col">
@@ -52,7 +49,7 @@
           <div id="coach" class="coach" aria-live="polite"></div>
           <div id="budget" class="budget" hidden></div>
           <section class="panel" id="assistPanel">
-            <h2>Suggested moves <span id="level" class="pill">—</span></h2>
+            <h2>Suggested moves</h2>
             <div id="assist" class="assist"></div>
           </section>
           <details class="panel strat-fold" id="stratPanel" hidden>

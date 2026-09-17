@@ -677,21 +677,16 @@ details.panel > *:not(summary) { padding: 12px 15px; }
    13" laptop. */
 @media (min-width: 900px) {
   main.game { max-width: 1180px; padding: 14px 24px 18px; }
-  main.game .game-head { margin-bottom: 6px; }
-  main.game .game-head h1 { font-size: 1.3rem; }
-  main.game .players { margin-top: 6px; padding: 7px 12px; gap: 10px; }
-  main.game .controls { margin-bottom: 6px; }
-  main.game #status { display: none; } /* turn shows in the players strip + coach */
+  main.game { padding: 10px 22px 16px; }
   main.game .layout { flex-wrap: nowrap; align-items: flex-start; gap: 20px; justify-content: center; }
-  /* The board now owns its whole column (coach/meter moved to the right rail),
-     so it's the largest square that fits the height left after the slim top
-     chrome, OR the width left beside the panel — whichever binds. It grows big
-     on a roomy screen and shrinks to fit a short laptop, never scrolling. */
-  main.game .board-col { width: min(900px, calc(100vh - 210px), calc(100vw - 460px)); flex: 0 0 auto; }
-  /* Panels take a fixed, readable column beside the board (not the whole
-     leftover width), and scroll inside themselves. */
-  main.game .panels { flex: 0 1 400px; min-width: 300px; align-self: stretch;
-    position: sticky; top: 70px; max-height: calc(100vh - 120px); overflow-y: auto;
+  /* BOARD FIRST. With the header collapsed into the slim game bar, the board
+     takes the largest square that fits the height left after (nav + game bar),
+     giving up width only for the leftover rail. Board grows big; the rail
+     negotiates for what remains. */
+  main.game .board-col { width: min(900px, calc(100vh - 132px), calc(100vw - 380px)); flex: 0 0 auto; }
+  /* The rail takes leftover width (not a reserved slab), and scrolls itself. */
+  main.game .panels { flex: 0 1 360px; min-width: 288px; align-self: stretch;
+    position: sticky; top: 66px; max-height: calc(100vh - 78px); overflow-y: auto;
     padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent; }
   main.game .panels::-webkit-scrollbar { width: 8px; }
   main.game .panels::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 999px; }
@@ -793,3 +788,21 @@ main.game .first-game .fg-dot.on { background: #7ee0d6; }
 .players .rivalry.lead { color:#5fd98a; background:rgba(69,200,110,0.14); border:1px solid rgba(69,200,110,0.3); }
 .players .rivalry.trail { color:#f28c96; background:rgba(242,109,122,0.13); border:1px solid rgba(242,109,122,0.3); }
 .players .rivalry.even { color:#b9c6da; background:rgba(147,162,192,0.12); border:1px solid rgba(255,255,255,0.1); }
+
+/* ---- Game Mode: one slim glanceable bar (players · turn · level + actions) ---- */
+main.game .gamebar { display: flex; align-items: center; gap: 12px; padding: 4px 0 8px; flex-wrap: wrap; }
+main.game .gamebar .players { flex: 1 1 auto; margin: 0; border: 0; background: none; padding: 0; min-width: 0; }
+main.game .gamebar .gb-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.gb-btn { background: var(--glass-card, rgba(255,255,255,0.035)); border: 1px solid var(--glass-line, rgba(255,255,255,0.08)); color: #cdd8e8;
+  border-radius: 10px; padding: 8px 13px; font-size: 0.85rem; font-weight: 620; cursor: pointer; white-space: nowrap; }
+.gb-btn:hover { border-color: #5cc9ec; color: #eaf0fb; }
+.gb-btn.danger { border-color: #6b3540; color: #f0808a; }
+.gb-btn.danger:hover { background: rgba(240,128,138,0.12); border-color: #f0808a; }
+.gb-opts { position: relative; }
+.gb-opts > summary { list-style: none; cursor: pointer; width: 38px; height: 36px; display: grid; place-items: center;
+  border: 1px solid var(--glass-line, rgba(255,255,255,0.08)); border-radius: 10px; background: var(--glass-card, rgba(255,255,255,0.035)); font-size: 1rem; }
+.gb-opts > summary::-webkit-details-marker { display: none; }
+.gb-opts[open] > summary { border-color: #5cc9ec; color: #eaf0fb; }
+.gb-opts .opts-body { position: absolute; right: 0; top: 42px; z-index: 30; display: flex; flex-direction: column; gap: 11px; padding: 14px; min-width: 230px;
+  background: #0c111b; border: 1px solid var(--glass-line, rgba(255,255,255,0.1)); border-radius: 12px; box-shadow: 0 22px 55px -22px rgba(0,0,0,0.85); }
+.gb-opts .opts-body label { font-size: 0.85rem; color: #b9c6da; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
