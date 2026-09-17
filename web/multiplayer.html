@@ -8,13 +8,16 @@
   </head>
   <body>
     <main class="game">
-      <header class="game-head">
-        <div class="gh-row">
-          <h1>Glassboard <span class="tag">Online</span></h1>
-          <span class="topbar-right"><button id="notifyBtn" class="topbtn" title="Get notified when it's your turn">🔔 Notify</button><button id="rematchBtn" class="topbtn" hidden>Rematch ↻</button><button id="resignBtn" class="resign-btn" hidden>Resign</button></span>
-        </div>
+      <!-- Game Mode: one slim glanceable bar. Board owns the rest of the space. -->
+      <div class="gamebar">
         <div id="players" class="players" hidden></div>
-      </header>
+        <div class="gb-actions">
+          <span id="level" class="pill" title="Assistance level">—</span>
+          <button id="notifyBtn" class="gb-btn" title="Get notified when it's your turn">🔔 Notify</button>
+          <button id="rematchBtn" class="gb-btn" hidden>Rematch ↻</button>
+          <button id="resignBtn" class="gb-btn danger" hidden>Resign</button>
+        </div>
+      </div>
 
       <div class="match-card" id="matchCard">
         <a class="new-here" id="newHere" href="./learn.html">
@@ -65,7 +68,7 @@
           <div id="coach" class="coach" aria-live="polite"></div>
           <div id="budget" class="budget" hidden></div>
           <section class="panel" id="assistPanel">
-            <h2>Suggested moves <span id="level" class="pill">—</span>
+            <h2>Suggested moves
               <label class="test-toggle" title="Testing: force assistance on even when you're the stronger side (still shown to your opponent)"><input type="checkbox" id="forceAssist"> force</label>
             </h2>
             <div id="assist" class="assist"></div>

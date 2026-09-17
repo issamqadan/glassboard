@@ -682,8 +682,10 @@ function renderStatus() {
       `<a href="./portal.html" style="color:var(--accent)">Back to lobby →</a>` + agencySummaryHtml();
     return;
   }
-  if (state.turn === myColor) statusEl.textContent = `Your move (you are ${myColor})` + (game.inCheck() ? " — check!" : "");
-  else statusEl.textContent = `Waiting for ${state.turn} to move…`;
+  // Turn lives in the players strip + coach — keep the status line clear during
+  // play so it collapses (:empty). It reappears only for connection messages
+  // (set on connect) and the game-over result above.
+  statusEl.textContent = "";
 }
 
 function resign() {

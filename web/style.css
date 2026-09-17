@@ -806,3 +806,9 @@ main.game .gamebar .gb-actions { display: flex; align-items: center; gap: 8px; f
 .gb-opts .opts-body { position: absolute; right: 0; top: 42px; z-index: 30; display: flex; flex-direction: column; gap: 11px; padding: 14px; min-width: 230px;
   background: #0c111b; border: 1px solid var(--glass-line, rgba(255,255,255,0.1)); border-radius: 12px; box-shadow: 0 22px 55px -22px rgba(0,0,0,0.85); }
 .gb-opts .opts-body label { font-size: 0.85rem; color: #b9c6da; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+/* Game-mode status line: slim, and collapses when empty (multiplayer uses it
+   only for connection messages + the game-over result). */
+main.game .status { margin: 6px 0 8px; min-height: 0; font-size: 0.92rem; }
+main.game .status:empty { display: none; }
+.gb-btn:disabled { opacity: 0.5; cursor: default; }
