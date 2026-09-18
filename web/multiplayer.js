@@ -504,7 +504,7 @@ function renderCoach() {
   const elc = document.getElementById("coach");
   if (!elc) return;
   const a = assistData;
-  let tone = null, ic = "", head = "", sub = "";
+  let tone = null, ic = "", head = "", sub = "", actSq = null, actLabel = "";
   if (a && a.inCheck) {
     tone = "danger"; ic = "⚠"; head = "You're in check";
     sub = "Get your king out of check this move.";
@@ -515,6 +515,7 @@ function renderCoach() {
     sub = a.hanging.length > 1
       ? `${a.hanging.length} of your pieces are undefended — move or protect them.`
       : "Defend it or move it to safety.";
+    actSq = sq; actLabel = "Show where it can go →";
   } else if (a && a.freeCaptures && a.freeCaptures.length) {
     tone = "gold"; ic = "★";
     const sq = a.freeCaptures[0];
@@ -526,8 +527,13 @@ function renderCoach() {
   elc.className = "coach " + tone;
   elc.innerHTML =
     `<span class="co-ic">${ic}</span>` +
-    `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>`;
+    `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>` +
+    (actSq != null ? `<button class="co-act" id="coachAct">${actLabel}</button>` : "");
   setBoardGlow(tone);
+  if (actSq != null) {
+    const act = document.getElementById("coachAct");
+    if (act) act.addEventListener("click", () => selectSquare(actSq));
+  }
 }
 
 function renderPlayers() {
@@ -741,12 +747,16 @@ function renderAssist() {
     assistEl.appendChild(note);
     return;
   }
+  const hangSq = (a.hanging && a.hanging.length) ? a.hanging[0] : -1;
   a.candidates.forEach((c) => {
     const isRec = a.recommended && c.uci === a.recommended;
+    const saves = c.from === hangSq;
     const div = document.createElement("div");
-    div.className = "cand" + (isRec ? " rec" : "");
+    div.className = "cand" + (isRec ? " rec" : "") + (saves ? " saves" : "");
     div.innerHTML =
-      `<div class="cand-main"><span class="cand-move">${c.san || c.uci}${isRec ? " ➤" : ""}</span>` +
+      `<div class="cand-main">` +
+      (saves ? `<span class="cand-tag saves-tag">🛡 moves your ${pieceNameAt(hangSq)} to safety</span>` : "") +
+      `<span class="cand-move">${c.san || c.uci}${isRec ? " ➤" : ""}</span>` +
       (c.note ? `<div class="cand-note">${escapeHtml(c.note)}</div>` : "") +
       `</div><span class="score">${fmtScore(c.score)}</span>`;
     div.addEventListener("click", () => sendMove(c.from, c.to));
