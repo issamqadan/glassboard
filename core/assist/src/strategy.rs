@@ -251,6 +251,16 @@ fn enemy_pawn_can_hit(b: &Board, sq: Square, side: Color) -> bool {
     }
     false
 }
+/// Back-rank home squares of `color`'s pieces (skip the king) — a piece still
+/// sitting here past the opening is likely the worst-placed one.
+fn home_pieces(color: Color) -> [(Square, PieceKind); 7] {
+    use PieceKind::*;
+    if color == Color::White {
+        [(0, Rook), (1, Knight), (2, Bishop), (3, Queen), (5, Bishop), (6, Knight), (7, Rook)]
+    } else {
+        [(56, Rook), (57, Knight), (58, Bishop), (59, Queen), (61, Bishop), (62, Knight), (63, Rook)]
+    }
+}
 /// A protected, unassailable advanced square is a knight outpost.
 fn is_outpost(b: &Board, sq: Square, side: Color) -> bool {
     let r = rank_of(sq);
@@ -644,6 +654,34 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
                     step("Double rooks on the 7th if you can", false),
                 ],
             ));
+        }
+    }
+
+    // --- Improve your worst piece (universal: activate a stuck piece) ---
+    if ph != "opening" {
+        let stuck = home_pieces(side).into_iter().find(|&(sq, k)| {
+            matches!(b.squares[sq as usize], Some(p) if p.color == side && p.kind == k)
+                && ranked.iter().any(|(m, _)| m.from == sq)
+        });
+        if let Some((sq, k)) = stuck {
+            let rec = plan_move(ranked, top_score, |m| m.from == sq);
+            if rec.from == sq {
+                out.push(mk(
+                    "improve",
+                    "Improve your worst piece",
+                    "The classic principle: find your least-active piece and give it a better square. Every piece should work.",
+                    27,
+                    rec,
+                    format!("Activates your {} — it was sitting idle; bring it into the game.", piece_word(k)),
+                    vec![PlanArrow { from: rec.from, to: rec.to, kind: ArrowKind::Dev }],
+                    vec![rec.to],
+                    vec![
+                        step("Spot your least-active piece", false),
+                        step("Find it a better square", false),
+                        step("Get every piece working", false),
+                    ],
+                ));
+            }
         }
     }
 
