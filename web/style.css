@@ -879,3 +879,14 @@ main.game .status:empty { display: none; }
 /* The suggested move that resolves the threat, tagged + highlighted green. */
 .assist .cand.saves { border-color: #2fa96b; background: color-mix(in srgb, #2fa96b 13%, rgba(20,32,54,0.6)); }
 .cand-tag.saves-tag { display: block; color: #5fd98a; font-size: 0.7rem; font-weight: 680; margin-bottom: 2px; }
+
+/* "It's your move" — a fun, glowing light-bulb pill; opponent's turn is quiet. */
+.players .turn.you { margin-left: auto; color: #5fd98a; background: rgba(69,200,110,0.14);
+  border: 1px solid rgba(69,200,110,0.4); border-radius: 999px; padding: 3px 11px; font-weight: 680;
+  animation: turn-glow 1.6s ease-in-out infinite; }
+.players .turn.wait { margin-left: auto; color: #7f92ab; font-weight: 500; }
+@keyframes turn-glow {
+  0%,100% { box-shadow: 0 0 0 0 rgba(69,200,110,0); }
+  50%     { box-shadow: 0 0 0 6px rgba(69,200,110,0.18); }
+}
+@media (prefers-reduced-motion: reduce) { .players .turn.you { animation: none; } }

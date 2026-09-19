@@ -282,7 +282,9 @@ function renderPlayers() {
     `<span class="pl"><span class="dot white"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span></span>` +
     `<span class="vs">vs</span>` +
     `<span class="pl"><span class="dot black"></span> <b>🤖 Glassboard</b> <span class="tnum">${engineEloEl.value}</span></span>` +
-    (turn ? `<span class="turn">${turn === "white" ? "Your move" : "Engine…"}</span>` : "");
+    (turn ? (turn === "white"
+      ? `<span class="turn you">💡 Your move</span>`
+      : `<span class="turn wait">Engine…</span>`) : "");
 }
 
 function resign() {

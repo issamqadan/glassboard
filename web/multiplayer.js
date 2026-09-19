@@ -548,7 +548,9 @@ function renderPlayers() {
   const opp = myColor === "white" ? b : w;
   const oppSeated = myColor === "white" ? !!state.black_name : !!state.white_name;
   const yourTurn = state.status === "ongoing" && state.turn === myColor;
-  const turnHtml = state.status === "ongoing" ? `<span class="turn">${yourTurn ? "Your move" : "Their move"}</span>` : "";
+  const turnHtml = state.status === "ongoing"
+    ? (yourTurn ? `<span class="turn you">💡 Your move</span>` : `<span class="turn wait">Their move</span>`)
+    : "";
   el.innerHTML =
     `<div class="pl"><span class="dot ${you.color}"></span> You · <b>${escapeHtml(you.name)}</b> <span class="tnum">${you.elo}</span></div>` +
     `<div class="vs">vs</div>` +

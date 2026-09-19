@@ -70,6 +70,14 @@ function gbnav() {
   .gbnav-me:hover { border-color: rgba(92,201,236,0.5); color: #eaf0fb; }
   .gbnav-av { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 0.78rem; color: #06121a;
     background: linear-gradient(140deg, #7ee0d6, #5cc9ec); }
+  /* turn-awareness badge on the Lobby link (other games that need your move) */
+  .gbnav-link, .gbtab { position: relative; }
+  .gbnav-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px;
+    border-radius: 999px; background: #45c86e; color: #04220f; font-size: 0.68rem; font-weight: 800; vertical-align: middle;
+    animation: gbnav-badge-p 1.6s ease-in-out infinite; }
+  .gbtab .gbnav-badge { position: absolute; top: 2px; right: 50%; margin: 0; transform: translateX(16px); }
+  @keyframes gbnav-badge-p { 0%,100% { box-shadow: 0 0 0 0 rgba(69,200,110,0); } 50% { box-shadow: 0 0 0 5px rgba(69,200,110,0.28); } }
+  @media (prefers-reduced-motion: reduce) { .gbnav-badge { animation: none; } }
   /* mobile bottom tab bar */
   .gbtabs { display: none; }
   @media (max-width: 640px) {
@@ -85,5 +93,38 @@ function gbnav() {
   const st = document.createElement("style");
   st.textContent = css;
   document.head.appendChild(st);
+
+  // Turn awareness across games: badge the Lobby link when OTHER active games
+  // are waiting on your move (so you know mid-game that another board needs you).
+  function setLobbyBadge(n) {
+    document.querySelectorAll(".gbnav-link, .gbtab").forEach((a) => {
+      if (!/portal\.html/.test(a.getAttribute("href") || "")) return;
+      let b = a.querySelector(".gbnav-badge");
+      if (n > 0) {
+        if (!b) { b = document.createElement("span"); b.className = "gbnav-badge"; a.appendChild(b); }
+        b.textContent = n > 9 ? "9+" : String(n);
+      } else if (b) { b.remove(); }
+    });
+  }
+  function gbTurnPoll() {
+    let me = null;
+    try { me = JSON.parse(localStorage.getItem("gb_me")); } catch {}
+    if (!me || !me.id) return;
+    const server = location.protocol === "https:"
+      ? "https://playglassboard.onrender.com"
+      : "http://" + (location.hostname || "localhost") + ":9001";
+    const curRoom = new URLSearchParams(location.search).get("room");
+    fetch(server + "/games?player=" + encodeURIComponent(me.id))
+      .then((r) => r.json())
+      .then((list) => {
+        const need = (list || []).filter(
+          (g) => g.status === "active" && !g.over && g.turn && g.turn === g.color && g.id !== curRoom
+        ).length;
+        setLobbyBadge(need);
+      })
+      .catch(() => {});
+  }
+  gbTurnPoll();
+  setInterval(gbTurnPoll, 12000);
 }
 gbnav();

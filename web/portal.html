@@ -162,6 +162,14 @@
     .footlinks { margin-top:56px; padding-top:22px; border-top:1px solid var(--line); display:flex; gap:20px; flex-wrap:wrap; color:var(--faint); font-size:0.9rem; }
     .footlinks a:hover { color:var(--accent); }
     @media (max-width:760px) { .ladder { grid-template-columns:1fr 1fr; } }
+    /* Your-move games glow and pulse to the top so you never miss your turn. */
+    .game.your-turn { border-color: rgba(69,200,110,0.5); animation: card-you 2.2s ease-in-out infinite; }
+    @keyframes card-you {
+      0%,100% { box-shadow: 0 0 0 1px rgba(69,200,110,0.28), 0 8px 24px -16px rgba(69,200,110,0.4); }
+      50%     { box-shadow: 0 0 0 1px rgba(69,200,110,0.6), 0 12px 34px -14px rgba(69,200,110,0.7); }
+    }
+    @media (prefers-reduced-motion: reduce) { .game.your-turn { animation: none; } }
+
     /* ---- Rivals roster (platform-agnostic social layer) ---- */
     .rivals { display:flex; flex-direction:column; gap:12px; }
     .rival { padding:15px 17px; border-radius:var(--radius); border:1px solid var(--line);
@@ -522,8 +530,11 @@
     function renderGames() {
       const hidden = loadHidden();
       const games = loadGames().filter(g => !hidden.has(g.id));
+      const yt = g => g.status === 'active' && !g.over && g.turn && g.turn === (g.color || 'white');
+      games.sort((a, b) => (yt(b) - yt(a)) || ((b.started || 0) - (a.started || 0))); // your-move games first
+      const need = games.filter(yt).length;
       const elx = document.getElementById('games');
-      document.getElementById('gamesCount').textContent = games.length ? '· ' + games.length : '';
+      document.getElementById('gamesCount').textContent = need ? '· 💡 ' + need + (need > 1 ? ' need you' : ' needs you') : (games.length ? '· ' + games.length : '');
       const ca = document.getElementById('clearAll'); if (ca) ca.hidden = !games.length;
       if (!games.length) { elx.innerHTML = '<div class="empty">No games yet. Hit <b>New game</b> to create one and share the link.</div>'; return; }
       elx.innerHTML = games.map((g) => {
@@ -555,7 +566,7 @@
           : ((active || over) && t
             ? `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">${t.name}</span></span>`
             : `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">set when they join</span></span>`);
-        return `<div class="game" style="--stripe:${over ? 'var(--faint)' : active ? 'var(--good)' : 'var(--warn)'}">
+        return `<div class="game${yourTurn ? ' your-turn' : ''}" style="--stripe:${over ? 'var(--faint)' : active ? 'var(--good)' : 'var(--warn)'}">
           <div class="g-row">
             <div class="g-preview" ${over ? '' : `onclick="enterGame('${g.id}')"`} title="Open game" role="button">${miniBoard(g.fen, myColor)}</div>
             <div class="g-main">
