@@ -306,3 +306,54 @@ feature (a visible panel; move-by-move is secondary). Fun/enjoyment is the metri
 
 Discipline: every plan hint is glass-boxed (visible to both players); strength/
 behaviour claims are validated with the strength tooling before they ship.
+
+## Transparency & the assistance game-loop (2026-09-20)
+
+The glass-box flaw: if assistance is *displayed*, a player can read the move and
+play it without the act being registered — help hidden in plain sight. Fix
+(Issam's insight): don't gate on the tap — **record MOVE PROVENANCE** (does the
+move played match the advice?). Unspoofable, and lets help stay generous/visible.
+
+- **Move provenance (the airtight core).** Each move is classified vs the live
+  assistance and logged to the glass-box: 🤖 followed (played a suggested move) ·
+  🧠 your own (not suggested; if the engine agrees it's strong → highlighted) ·
+  🛡 safety-only. Render a **provenance ribbon** in the glass-box — a per-move
+  story both players read ("followed the machine 6 straight" vs "playing their
+  own game"). This is the agency-retention IP as a live signal.
+- **Casual:** assistance proactive & open, revealed elegantly (moves, plans,
+  "⚠ their incoming move", danger). No cost/stigma — a learning sandbox.
+- **Match:** three separated tracks — (1) **safety net** (danger / opponent plan)
+  always free & shown; (2) **move help on a timed "thinking window"** (~20–30s):
+  move before it reveals → 🧠 *unassisted credit* (beating the coach is the flex);
+  let it run → moves fade in (🤖); plus "Show me now" and "I've got this"; (3)
+  **strategy** = the compound multi-move plan (following it shows its moves).
+- **Two scoreboards:** win the game, and separately win on **independence**
+  (provenance mix). "Beat a 1600 with 3 assisted moves" is the brag.
+- Innovations: a **thinking-window ring** around the board; the **off-book
+  moment** (own move celebrated for you, marked for them); asymmetry by skill.
+
+## Match = a negotiated agreement (2026-09-20)
+
+Match isn't just an auto-handicap — it's **whatever the two players agree to**,
+shown transparently. Terms at create/join: **None** (pure chess) · **Balanced**
+(both get the same rung) · **Handicap** (auto by rating gap — the default) ·
+**Custom** (per-side amounts). Host proposes, joiner accepts (later: counter-
+propose). The agreed contract is displayed in the glass-box header for the whole
+game ("Agreed: both on Guide" / "No assistance" / "Handicap: Maya on Coach").
+What matters is the agreement — fair because it's mutual and in the open.
+
+## Turn awareness (shipped 2026-09-20)
+
+Games last days, so "it's your move" is unmissable: a glowing 💡 "Your move" pill
+in-game; your-move games glow/pulse/sort-to-top in the lobby ("💡 N need you");
+and the shared nav badges the Lobby link with the count of OTHER active games
+waiting on your move (polled), so you know mid-game that another board needs you.
+
+## AI / LLM (clarification 2026-09-20)
+
+Today: 100% deterministic Rust (negamax + heuristic strategy library) — no ML/LLM.
+Vision: **neural inference** (PyTorch weights in the core) for *playing strength*.
+A **conversational-LLM coaching layer** (explain a move, narrate the opponent's
+plan, adapt to the player) is a candidate — but server-side only, non-deterministic,
+outside the offline WASM core, and gated so fair/measurable defaults never depend
+on it.
