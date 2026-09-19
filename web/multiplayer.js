@@ -39,6 +39,8 @@ const eloEl = el("elo");
 
 let ws = null;
 let myColor = null;
+let sim = false; // same-screen practice: play both sides locally to test the UI
+const orient = () => (sim ? "white" : myColor); // board orientation (fixed white-bottom in sim)
 let game = null;
 let state = null;
 let glassList = [];
@@ -110,9 +112,11 @@ function setInput(id, v) { const e = document.getElementById(id); if (e) { e.val
 
 async function main() {
   await init();
+  const params = new URLSearchParams(location.search);
+  // Same-screen practice: play both sides locally to test the full experience.
+  if (params.get("sim")) { startSim(); return; }
   // Allow a shareable link to pre-fill the server + room, e.g.
   //   multiplayer.html?server=wss://xxx.trycloudflare.com&room=test
-  const params = new URLSearchParams(location.search);
   serverEl.value = params.get("server") || defaultServer();
   if (params.get("room")) roomEl.value = params.get("room");
   if (params.get("elo")) eloEl.value = params.get("elo");
@@ -390,6 +394,7 @@ function showGameOver(rez) {
   ov.style.display = "grid";
 }
 function doRematch() {
+  if (sim) { const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; startSim(); return; }
   if (!ws || ws.readyState !== 1) return;
   if (!confirm("Start a rematch — a fresh game with the same opponent?")) return;
   const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none";
@@ -417,7 +422,7 @@ function computeAssist() {
     if (state.fen !== lastRevealFen) { revealedSugg = false; revealedBest = false; lastRevealFen = state.fen; }
     // Casual: both sides get the full assistance spectrum. Else honor the
     // testing override, otherwise the rating-derived handicap.
-    const isCasual = (state && state.mode === "casual") || gameMode === "casual";
+    const isCasual = (state && state.mode === "casual") || gameMode === "casual" || sim;
     game.setAssistOverride(isCasual ? "guided" : (forceAssist || ""));
     assistData = JSON.parse(game.assist(DEPTH));
     hanging = assistData.hanging || [];
@@ -576,7 +581,7 @@ function rivalryChip(oppName) {
 
 function orientedSquares() {
   const out = [];
-  if (myColor === "black") {
+  if (orient() === "black") {
     for (let rank = 0; rank < 8; rank++) for (let file = 7; file >= 0; file--) out.push({ file, rank });
   } else {
     for (let rank = 7; rank >= 0; rank--) for (let file = 0; file < 8; file++) out.push({ file, rank });
@@ -597,8 +602,8 @@ function renderBoardEmpty() {
 function renderBoard() {
   if (!game) return renderBoardEmpty();
   const s = game.boardString();
-  const bottomRank = myColor === "black" ? 7 : 0;
-  const leftFile = myColor === "black" ? 7 : 0;
+  const bottomRank = orient() === "black" ? 7 : 0;
+  const leftFile = orient() === "black" ? 7 : 0;
   const chkKing = (state && state.status === "ongoing" && game.inCheck()) ? (state.turn === "white" ? "K" : "k") : null;
 
   boardEl.innerHTML = "";
@@ -636,7 +641,7 @@ function renderBoard() {
 let animMoveKey = null;
 function renderedRC(sq) {
   const file = sq % 8, rank = Math.floor(sq / 8);
-  return myColor === "black" ? { col: 7 - file, row: rank } : { col: file, row: 7 - rank };
+  return orient() === "black" ? { col: 7 - file, row: rank } : { col: file, row: 7 - rank };
 }
 function animateLastMove() {
   if (!lastMove) return;
@@ -775,8 +780,8 @@ const PLAN_COLOR = { dev: "#5cc9ec", attack: "#f2707e", support: "#7ee0d6", cast
 // square index → centre in the 800×800 overlay, respecting board orientation.
 function planCxy(sq) {
   const f = sq % 8, r = Math.floor(sq / 8);
-  const col = myColor === "black" ? 7 - f : f;
-  const row = myColor === "black" ? r : 7 - r;
+  const col = orient() === "black" ? 7 - f : f;
+  const row = orient() === "black" ? r : 7 - r;
   return { x: (col + 0.5) * 100, y: (row + 0.5) * 100 };
 }
 function planArrow(fromSq, toSq, color, i) {
@@ -966,10 +971,56 @@ function moveProvenance(from, to) {
 function finishMove(from, to, promo) {
   const prov = moveProvenance(from, to);
   const uci = sqName(from) + sqName(to) + promo;
+  if (sim) { simMove(from, to, promo, prov, uci); return; }
   // Relay provenance (opaque summary, no server change) so BOTH players see it.
   ws.send(JSON.stringify({ t: "glass", summary: "prov:" + prov + ":" + uci }));
   ws.send(JSON.stringify({ t: "move", uci }));
   clearSelection(); // board updates when the server echoes the new state
+}
+
+// ---- Same-screen practice (sim): play both sides locally to test the UI. ----
+function startSim() {
+  sim = true;
+  gameMode = new URLSearchParams(location.search).get("mode") === "casual" ? "casual" : "match";
+  game = new Game(); // startpos
+  glassList = [];
+  lastGlassCount = 0;
+  const mc = el("matchCard"); if (mc) mc.style.display = "none";
+  if (!document.getElementById("simBadge")) {
+    const badge = document.createElement("div");
+    badge.id = "simBadge";
+    badge.textContent = "🧪 Practice — playing both sides";
+    badge.style.cssText = "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:70;" +
+      "background:rgba(126,224,214,.16);border:1px solid rgba(126,224,214,.5);color:#7ee0d6;" +
+      "padding:4px 13px;border-radius:999px;font-size:0.74rem;font-weight:640;white-space:nowrap;";
+    document.body.appendChild(badge);
+  }
+  simRefresh();
+}
+function simRefresh() {
+  const st = game.status();
+  const over = st !== "ongoing";
+  myColor = game.sideToMove();       // the mover is "you" (assist + provenance + piece-picking)
+  state = {
+    status: over ? st : "ongoing",
+    turn: game.sideToMove(),
+    fen: game.fen(),
+    mode: gameMode,
+    white_name: "White", black_name: "Black",
+    white_elo: 900, black_elo: 900,
+    winner: over ? (st === "checkmate" ? (game.sideToMove() === "white" ? "black" : "white") : "") : "",
+    reason: over ? (st === "checkmate" ? "checkmate" : st) : "",
+  };
+  computeAssist();
+  paint();
+  if (over) showGameOver({ winner: state.winner, reason: state.reason });
+}
+function simMove(from, to, promo, prov, uci) {
+  glassList.push({ side: game.sideToMove(), summary: "prov:" + prov + ":" + uci });
+  game.makeMove(from, to, promo || undefined);
+  lastMove = { from, to };
+  clearSelection();
+  simRefresh();
 }
 // Inline promotion picker (no ugly window.prompt).
 function showPromotion(from, to) {
