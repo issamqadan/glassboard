@@ -890,3 +890,10 @@ main.game .status:empty { display: none; }
   50%     { box-shadow: 0 0 0 6px rgba(69,200,110,0.18); }
 }
 @media (prefers-reduced-motion: reduce) { .players .turn.you { animation: none; } }
+
+/* Move-provenance pips + ledger rows (the glass-box as a per-move story). */
+.gpip.followed { background: #f0c674; box-shadow: 0 0 0 1px rgba(0,0,0,0.3); }  /* 🤖 followed the machine */
+.gpip.own { background: #5fd98a; box-shadow: 0 0 0 1px rgba(0,0,0,0.3); }        /* 🧠 played their own */
+.glass .ev .pm { color: #8ea0b8; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.82em; }
+.glass .ev.prov-own .who { color: #5fd98a; }
+.glass .ev.prov-followed .who { color: #f0c674; }

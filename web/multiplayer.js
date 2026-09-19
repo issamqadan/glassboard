@@ -423,10 +423,8 @@ function computeAssist() {
     hanging = assistData.hanging || [];
     freeCaptures = assistData.freeCaptures || [];
     if (!isCasual && (assistData.candidates || []).length) helpWasAvailable = true;
-    if (assistData.level !== "off" && state.fen !== lastGlassFen) {
-      ws.send(JSON.stringify({ t: "glass", summary: summarize(assistData) }));
-      lastGlassFen = state.fen;
-    }
+    // (Per-position "assist shown" logging is replaced by per-MOVE provenance —
+    // see finishMove: what's recorded is whether your move matched the advice.)
   }
   // Auto-expand the Suggested-moves fold when it has moves; collapse when empty.
   const fold = document.getElementById("movesFold");
@@ -885,25 +883,40 @@ function pickStrategy(id) {
 
 // Compact transparency trace (pips + count in the game bar, pulses on new
 // help); the full ledger opens on demand in a sheet.
+// Parse a glass entry into a move-provenance record, or null for legacy text.
+function parseProv(e) {
+  const m = /^prov:(followed|own):(\w+)/.exec(e.summary || "");
+  if (!m) return null;
+  return { side: e.side, prov: m[1], uci: m[2] };
+}
 let lastGlassCount = 0;
 function renderGlass() {
-  const events = glassList;
+  const provs = glassList.map(parseProv).filter(Boolean);
+  const legacy = glassList.filter((e) => !parseProv(e));
+  // Full ledger (sheet): a per-move story, plus any legacy notes.
   if (glassEl) {
-    glassEl.innerHTML = events.length
-      ? events.map((e) => `<div class="ev"><span class="who">${e.side}</span> · ${escapeHtml(e.summary)}</div>`).join("")
-      : `<div class="none">No assistance used yet.</div>`;
+    const rows = provs.map((p) => {
+      const icon = p.prov === "followed" ? "🤖" : "🧠";
+      const what = p.prov === "followed" ? "followed the suggestion" : "played their own move";
+      const side = p.side.charAt(0).toUpperCase() + p.side.slice(1);
+      return `<div class="ev prov-${p.prov}"><span class="who">${icon} ${side}</span> ${what} <span class="pm">${p.uci}</span></div>`;
+    });
+    const extra = legacy.map((e) => `<div class="ev"><span class="who">${e.side}</span> · ${escapeHtml(e.summary)}</div>`);
+    glassEl.innerHTML = (rows.concat(extra).join("")) || `<div class="none">No moves yet — every move is logged here as 🤖 followed or 🧠 your own.</div>`;
   }
   const chip = document.getElementById("glassChip");
   if (!chip) return;
-  chip.hidden = events.length === 0;
-  if (!events.length) { lastGlassCount = 0; return; }
+  chip.hidden = provs.length === 0;
+  if (!provs.length) { lastGlassCount = 0; return; }
+  // Compact ribbon: one pip per move, coloured by provenance (🤖 vs 🧠).
   const pipsEl = chip.querySelector(".gpips");
-  if (pipsEl) pipsEl.innerHTML = events.slice(-6).map((e) => `<span class="gpip ${e.side}"></span>`).join("");
+  if (pipsEl) pipsEl.innerHTML = provs.slice(-8).map((p) => `<span class="gpip ${p.prov}"></span>`).join("");
   const countEl = document.getElementById("glassCount");
-  if (countEl) countEl.textContent = events.length;
-  if (events.length !== lastGlassCount) {
+  const followed = provs.filter((p) => p.prov === "followed").length;
+  if (countEl) countEl.textContent = followed + "🤖";
+  if (provs.length !== lastGlassCount) {
     if (lastGlassCount > 0) { chip.classList.remove("pulse"); void chip.offsetWidth; chip.classList.add("pulse"); }
-    lastGlassCount = events.length;
+    lastGlassCount = provs.length;
   }
 }
 
@@ -937,8 +950,24 @@ function sendMove(from, to) {
   if (game.isPromotion(from, to)) { showPromotion(from, to); return; }
   finishMove(from, to, "");
 }
+// Move provenance (the airtight transparency signal): did the move I'm about to
+// play match the assistance that was live for me? Recorded on the actual move,
+// so it can't be spoofed by reading the suggestion without tapping.
+function moveProvenance(from, to) {
+  const a = assistData;
+  if (!a || a.level === "off") return "own"; // no help was on offer → my own move
+  const cands = a.candidates || [];
+  if (cands.some((c) => c.from === from && c.to === to)) return "followed";
+  const sr = a.strategy;
+  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  if (picked && picked.moveUci && picked.moveUci.slice(0, 4) === sqName(from) + sqName(to)) return "followed";
+  return "own"; // played something the assistance didn't suggest
+}
 function finishMove(from, to, promo) {
+  const prov = moveProvenance(from, to);
   const uci = sqName(from) + sqName(to) + promo;
+  // Relay provenance (opaque summary, no server change) so BOTH players see it.
+  ws.send(JSON.stringify({ t: "glass", summary: "prov:" + prov + ":" + uci }));
   ws.send(JSON.stringify({ t: "move", uci }));
   clearSelection(); // board updates when the server echoes the new state
 }
