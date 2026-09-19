@@ -714,9 +714,11 @@ fn forward_pawn(b: &Board, m: &Move, color: Color) -> bool {
         }
 }
 
-/// A plain read of what the opponent is doing — their most salient plan/threat.
+/// A plain read of what the opponent is up to — their most salient plan/threat.
+/// This is P3 (reading the opponent): surface an incoming plan before it lands.
 fn opponent_read(b: &Board, side: Color) -> Option<String> {
-    // Most urgent: one of our pieces is hanging → they're threatening it.
+    let opp = side.opp();
+    // 1. Most urgent: one of our pieces is hanging → they're threatening it.
     let hanging = own_hanging(b, side);
     if let Some(&s) = hanging
         .iter()
@@ -728,11 +730,51 @@ fn opponent_read(b: &Board, side: Color) -> Option<String> {
             sq_to_algebraic(s)
         ));
     }
-    // Their king is stuck in the centre → they're behind on safety.
-    let opp = side.opp();
-    if king_square(b, opp) == king_home(opp)
-        && phase(b) == "middlegame"
-    {
+    // 2. An attack is building on OUR king — pressure on its zone, or a pawn
+    //    storm rolling toward it. Warn before it breaks through.
+    if phase(b) != "opening" {
+        let myk = king_square(b, side);
+        let kf = file_of(myk);
+        let kr = rank_of(myk);
+        let zone_hits = (-1..=1i32)
+            .flat_map(|df| (-1..=1i32).map(move |dr| (df, dr)))
+            .filter(|&(df, dr)| {
+                let f = kf + df;
+                let r = kr + dr;
+                (0..8).contains(&f)
+                    && (0..8).contains(&r)
+                    && is_attacked(b, (r * 8 + f) as Square, opp)
+            })
+            .count();
+        let stormers = (0..64u8)
+            .filter(|&s| {
+                matches!(b.squares[s as usize], Some(p) if p.color == opp && p.kind == PieceKind::Pawn)
+                    && (file_of(s) - kf).abs() <= 2
+                    && if side == Color::White { rank_of(s) <= 4 } else { rank_of(s) >= 3 }
+            })
+            .count();
+        if zone_hits >= 3 || stormers >= 2 {
+            return Some(
+                "Your opponent is building an attack on your king — bring pieces back to defend and watch for a pawn break."
+                    .to_string(),
+            );
+        }
+    }
+    // 3. A rook bearing down an open file → invasion coming.
+    for f in 0..8i32 {
+        if open_file(b, f)
+            && (0..64u8).any(|s| {
+                matches!(b.squares[s as usize], Some(p) if p.color == opp && p.kind == PieceKind::Rook && file_of(s) == f)
+            })
+        {
+            let fc = (b'a' + f as u8) as char;
+            return Some(format!(
+                "Your opponent has a rook on the open {fc}-file — contest it before they invade."
+            ));
+        }
+    }
+    // 4. Their king is stuck in the centre → they're behind on safety.
+    if king_square(b, opp) == king_home(opp) && phase(b) == "middlegame" {
         return Some("Your opponent hasn't castled — their king is exposed in the centre.".to_string());
     }
     None
@@ -789,6 +831,18 @@ mod tests {
         let b = parse_fen("8/8/4k3/3p4/8/8/3RK3/8 w - - 0 1");
         let s = strategize(&b, &ranked(&b));
         assert!(s.strategies.iter().any(|x| x.id == "iso_attack"));
+    }
+
+    #[test]
+    fn opponent_king_attack_is_read() {
+        // Black pawns storming White's castled king on g1 → warn of the attack.
+        let b = parse_fen("6k1/8/8/8/6pp/8/8/6K1 w - - 0 1");
+        let s = strategize(&b, &ranked(&b));
+        assert!(
+            s.opponent.as_deref().map(|t| t.contains("attack on your king")).unwrap_or(false),
+            "expected a king-attack read, got {:?}",
+            s.opponent
+        );
     }
 
     #[test]
