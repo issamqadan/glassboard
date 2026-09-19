@@ -273,3 +273,36 @@ Next: **P1 — Lobby real** (this roadmap).
   + intro + what's-new), strategy-level assistance model (evolved spectrum + strategy layer),
   calibration mission, device-identity + Neon architecture, 4-phase build plan. Design concept
   published. Next up: Phase 1.
+
+## Strategy assistance — forward-thinking, context-based (2026-09-19)
+
+The differentiator: assistance isn't just "don't hang a piece" — it's a coach
+that thinks *ahead* with real chess plans, lets you **choose a plan at any point**,
+and warns you when the **opponent** is setting one up. Strategy is the headline
+feature (a visible panel; move-by-move is secondary). Fun/enjoyment is the metric
+(see docs/GAME-UX.md + memory). Build order:
+
+- **P1 — Deepen the plan library (in progress).** A context-fitted library scored
+  by how well each plan fits the position *now*, each with a concrete first move
+  (blunder-guarded), board arrows/rings, and a step checklist with progress.
+  Shipped plans: win-the-loose-piece, develop & castle, seize the centre, attack
+  the king, simplify (ahead), push the passer, attack the isolani, seize the open
+  file, kingside pawn storm, the long diagonal, **knight outpost (new)**, **rook
+  to the 7th (new)**. Now returns up to 5 so the player can pick one at any time.
+  *Next candidates:* minority attack, knight-vs-bad-bishop, space/expand, attack
+  the pawn-chain base, improve-your-worst-piece (universal, great for learners),
+  prophylaxis (defend their plan).
+- **P2 — Proactive, not a menu.** Surface the best-fitting plan *for this moment*
+  ("Now's the time to seize the centre") rather than a passive list; escalate the
+  strategy chip/panel when a strong plan appears.
+- **P3 — Read the opponent's incoming plan.** Infer intent from their recent moves
+  + pawn structure + piece flow ("⚠ they're massing on the kingside — attack
+  coming; castle or ...h6") and show the danger *region on the board*. The current
+  `opponent_read` is a stub to grow into this.
+- **P4 — Combinations, counter-plans & custom.** Blend compatible plans (e.g.
+  outpost + open file), suggest a counter-plan to the opponent's, and — for power
+  players / learners — a "compose your own plan" / pick-multiple mode. The Player
+  Model decides how much to reveal; assistance fades as you see it yourself.
+
+Discipline: every plan hint is glass-boxed (visible to both players); strength/
+behaviour claims are validated with the strength tooling before they ship.

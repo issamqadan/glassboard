@@ -217,6 +217,46 @@ fn fianchetto_bishop(b: &Board, color: Color) -> Option<Square> {
     sqs.into_iter()
         .find(|&s| matches!(b.squares[s as usize], Some(p) if p.color == color && p.kind == PieceKind::Bishop))
 }
+/// Is `sq` defended by one of `side`'s pawns (diagonally behind it)?
+fn pawn_defends(b: &Board, sq: Square, side: Color) -> bool {
+    let f = file_of(sq);
+    let br = if side == Color::White { rank_of(sq) - 1 } else { rank_of(sq) + 1 };
+    if !(0..8).contains(&br) {
+        return false;
+    }
+    [-1i32, 1].into_iter().any(|df| {
+        let nf = f + df;
+        (0..8).contains(&nf)
+            && matches!(b.squares[(br * 8 + nf) as usize], Some(p) if p.color == side && p.kind == PieceKind::Pawn)
+    })
+}
+/// Could any enemy pawn ever advance to attack `sq`? (No → it's a true outpost.)
+fn enemy_pawn_can_hit(b: &Board, sq: Square, side: Color) -> bool {
+    let f = file_of(sq);
+    let r = rank_of(sq);
+    let opp = side.opp();
+    for df in [-1i32, 1] {
+        let nf = f + df;
+        if !(0..8).contains(&nf) {
+            continue;
+        }
+        for rr in 0..8i32 {
+            let ahead = if side == Color::White { rr > r } else { rr < r };
+            if ahead
+                && matches!(b.squares[(rr * 8 + nf) as usize], Some(p) if p.color == opp && p.kind == PieceKind::Pawn)
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+/// A protected, unassailable advanced square is a knight outpost.
+fn is_outpost(b: &Board, sq: Square, side: Color) -> bool {
+    let r = rank_of(sq);
+    let advanced = if side == Color::White { r >= 4 } else { r <= 3 };
+    advanced && pawn_defends(b, sq, side) && !enemy_pawn_can_hit(b, sq, side)
+}
 
 fn pick(ranked: &[(Move, i32)], pred: impl Fn(&Move) -> bool) -> Option<Move> {
     ranked.iter().map(|(m, _)| *m).find(|m| pred(m))
@@ -558,8 +598,57 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
         ));
     }
 
+    // --- Establish a knight outpost (a protected, unassailable advanced square) ---
+    if ph != "opening" {
+        let is_outpost_move = |m: &Move| {
+            kind_at(b, m.from) == Some(PieceKind::Knight) && is_outpost(b, m.to, side)
+        };
+        let rec = plan_move(ranked, top_score, is_outpost_move);
+        if is_outpost_move(&rec) {
+            out.push(mk(
+                "outpost",
+                "Plant a knight outpost",
+                "A knight on a protected square no pawn can chase is a monster — park it deep in their position.",
+                42,
+                rec,
+                format!("Lands your knight on {} — a protected outpost that cramps their game.", sq_to_algebraic(rec.to)),
+                vec![PlanArrow { from: rec.from, to: rec.to, kind: ArrowKind::Support }],
+                vec![rec.to],
+                vec![
+                    step("Post the knight on the strong square", false),
+                    step("Support it with a pawn", pawn_defends(b, rec.to, side)),
+                    step("Use it to pressure weaknesses", false),
+                ],
+            ));
+        }
+    }
+
+    // --- Rook to the 7th (a rook that can reach the 7th/2nd rank) ---
+    if ph != "opening" && has_rook(b, side) {
+        let seventh = if side == Color::White { 6 } else { 1 };
+        let to_seventh = |m: &Move| kind_at(b, m.from) == Some(PieceKind::Rook) && rank_of(m.to) == seventh;
+        let rec = plan_move(ranked, top_score, to_seventh);
+        if to_seventh(&rec) {
+            out.push(mk(
+                "rook_seventh",
+                "Rook to the 7th",
+                "A rook on the 7th rank feasts on pawns and pins their king back — get one there.",
+                39,
+                rec,
+                "Swings a rook to the 7th rank — it attacks pawns and traps their king.".to_string(),
+                vec![PlanArrow { from: rec.from, to: rec.to, kind: ArrowKind::Attack }],
+                vec![rec.to],
+                vec![
+                    step("Get a rook to the 7th rank", false),
+                    step("Gobble the pawns there", false),
+                    step("Double rooks on the 7th if you can", false),
+                ],
+            ));
+        }
+    }
+
     out.sort_by(|a, b| b.fit.cmp(&a.fit));
-    out.truncate(3);
+    out.truncate(5); // present several plans so the player can choose one at any point
 
     StrategyRead { phase: ph, strategies: out, opponent: opponent_read(b, side) }
 }
