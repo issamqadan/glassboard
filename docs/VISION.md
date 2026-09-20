@@ -138,6 +138,11 @@ offsets a 900-Elo difference" requires a strong engine and a rigorous model of s
    playing strength.
 4. **Assistance is a ladder down, not a crutch.** The design goal is players who need less
    help over time.
+5. **Device-agnostic, first-class.** The *full* play experience — every feature, every bit of
+   assistance, the whole game loop — must work on **every device and screen size**: phone,
+   tablet, laptop, desktop, portrait and landscape. There is no degraded "mobile version"; the
+   board and the experience adapt to the device, never the reverse. (Enforced by the active-game
+   design doctrine, [GAME-UX.md](GAME-UX.md).) *(Added 2026-09-20.)*
 
 ---
 

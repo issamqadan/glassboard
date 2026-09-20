@@ -433,16 +433,22 @@ function computeAssist() {
     // (Per-position "assist shown" logging is replaced by per-MOVE provenance —
     // see finishMove: what's recorded is whether your move matched the advice.)
   }
-  // Move help arrives on a timed "thinking window" (see startThinkWindow).
+  // Move help arrives on a timed "thinking window" — by default nothing shows
+  // until HINT_DELAY / "Show now" / never. EXCEPTION: a picked multi-step
+  // strategy's step help shows immediately.
   const fold = document.getElementById("movesFold");
   if (fold) fold.open = false;
   const myTurn = state && state.status === "ongoing" && state.turn === myColor;
-  if (myTurn && assistData && (assistData.candidates || []).length) startThinkWindow();
-  else clearThinkWindow(true);
+  const followingPlan = assistData && assistData.strategy && assistData.strategy.strategies
+    && assistData.strategy.strategies.some((s) => s.id === pickedStrategyId);
+  if (myTurn && assistData && (assistData.candidates || []).length) {
+    if (followingPlan) revealHint();
+    else startThinkWindow();
+  } else clearThinkWindow(true);
 }
 
 // ---- Thinking window: give the player time before help appears ----
-const HINT_DELAY = 15;
+const HINT_DELAY = 30;
 let hintTick = null, hintSecs = 0, hintState = "off";
 const hintAutoOff = () => { try { return localStorage.getItem("gb_hint_auto") === "off"; } catch { return false; } };
 function clearThinkWindow(hide) {

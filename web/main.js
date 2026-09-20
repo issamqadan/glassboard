@@ -194,17 +194,23 @@ function onPositionChanged() {
     freeCaptures = assistData.freeCaptures || [];
     if ((assistData.candidates || []).length) helpWasAvailable = true;
   }
-  // Move help arrives on a timed "thinking window" — think first; a hint fades
-  // in after a delay unless you show it now or wave it off (see startThinkWindow).
+  // Move help arrives on a timed "thinking window" — by default nothing shows;
+  // a hint fades in after HINT_DELAY, or on "Show now", or never if you wave it
+  // off. EXCEPTION: if you're following a picked multi-step strategy, its step
+  // help shows immediately (you've opted into the plan).
   const fold = document.getElementById("movesFold");
   if (fold) fold.open = false;
-  if (assistData && (assistData.candidates || []).length && !firstGame) startThinkWindow();
-  else clearThinkWindow(true);
+  const followingPlan = assistData && assistData.strategy && assistData.strategy.strategies
+    && assistData.strategy.strategies.some((s) => s.id === pickedStrategyId);
+  if (assistData && (assistData.candidates || []).length && !firstGame) {
+    if (followingPlan) revealHint();
+    else startThinkWindow();
+  } else clearThinkWindow(true);
   paint();
 }
 
 // ---- Thinking window: give the player time before help appears ----
-const HINT_DELAY = 15; // seconds
+const HINT_DELAY = 30; // seconds (default; tune 30–60)
 let hintTick = null, hintSecs = 0, hintState = "off"; // off | pending | revealed | dismissed
 const hintAutoOff = () => { try { return localStorage.getItem("gb_hint_auto") === "off"; } catch { return false; } };
 function clearThinkWindow(hide) {
