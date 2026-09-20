@@ -175,8 +175,9 @@ async function main() {
   const mf = el("movesFold");
   if (mf) mf.addEventListener("toggle", () => { if (mf.open && hintState === "pending") revealHint(); });
   const psheet = el("pieceSheet"), pclose = el("pieceSheetClose");
-  if (pclose && psheet) pclose.addEventListener("click", () => { psheet.style.display = "none"; });
-  if (psheet) psheet.addEventListener("click", (e) => { if (e.target === psheet) psheet.style.display = "none"; });
+  const closePieceSheet = () => { psheet.style.display = "none"; resumeThinkWindow(); };
+  if (pclose && psheet) pclose.addEventListener("click", closePieceSheet);
+  if (psheet) psheet.addEventListener("click", (e) => { if (e.target === psheet) closePieceSheet(); });
   const gsheet = el("glassSheet"), gchip = el("glassChip"), gclose = el("glassClose");
   if (gchip && gsheet) gchip.addEventListener("click", () => { gsheet.style.display = "grid"; });
   if (gclose && gsheet) gclose.addEventListener("click", () => { gsheet.style.display = "none"; });
@@ -452,10 +453,12 @@ function computeAssist() {
 
 // ---- Thinking window: give the player time before help appears ----
 const HINT_DELAY = 30;
-let hintTick = null, hintSecs = 0, hintState = "off";
+let hintTick = null, hintSecs = 0, hintState = "off", hintPaused = false;
 const hintAutoOff = () => { try { return localStorage.getItem("gb_hint_auto") === "off"; } catch { return false; } };
+function hintStep() { hintSecs -= 1; if (hintSecs <= 0) revealHint(); else renderThinkWindow(); }
 function clearThinkWindow(hide) {
   if (hintTick) { clearInterval(hintTick); hintTick = null; }
+  hintPaused = false;
   if (hide) { hintState = "off"; renderThinkWindow(); }
 }
 function startThinkWindow() {
@@ -464,7 +467,18 @@ function startThinkWindow() {
   if (hintAutoOff()) { renderThinkWindow(); return; }
   hintSecs = HINT_DELAY;
   renderThinkWindow();
-  hintTick = setInterval(() => { hintSecs -= 1; if (hintSecs <= 0) revealHint(); else renderThinkWindow(); }, 1000);
+  hintTick = setInterval(hintStep, 1000);
+}
+// Pause/resume the countdown — used while a piece tip is open (don't rush a learner).
+function pauseThinkWindow() {
+  if (hintTick) { clearInterval(hintTick); hintTick = null; hintPaused = true; renderThinkWindow(); }
+}
+function resumeThinkWindow() {
+  if (hintState === "pending" && hintPaused) {
+    hintPaused = false;
+    if (!hintAutoOff() && hintSecs > 0) hintTick = setInterval(hintStep, 1000);
+    renderThinkWindow();
+  }
 }
 function revealHint() {
   clearThinkWindow();
@@ -483,11 +497,20 @@ function renderThinkWindow() {
   if (!el) return;
   if (hintState !== "pending") { el.hidden = true; el.innerHTML = ""; return; }
   el.hidden = false;
-  const lead = hintAutoOff() ? "Want a hint?" : `Take your time — a hint in <span class="tw-count">${hintSecs}s</span>`;
-  el.innerHTML =
-    `<span class="tw-lead">💡 ${lead}</span>` +
-    `<span class="tw-actions"><button class="tw-btn now" id="twNow">Show now</button>` +
-    `<button class="tw-btn ghost" id="twGot">I've got this</button></span>`;
+  if (hintAutoOff()) {
+    el.innerHTML =
+      `<div class="tw-top"><span class="tw-lead">💡 Want a hint?</span></div>` +
+      `<div class="tw-actions"><button class="tw-btn now" id="twNow">Show</button><button class="tw-btn ghost" id="twGot">No thanks</button></div>`;
+  } else {
+    const pct = Math.max(0, Math.min(100, Math.round((hintSecs / HINT_DELAY) * 100)));
+    const label = hintPaused ? "Paused — read the tip, no rush"
+      : hintSecs > HINT_DELAY * 0.5 ? "Take your time — think it through"
+      : hintSecs > 5 ? "A hint's on its way…" : "Hint almost here…";
+    el.innerHTML =
+      `<div class="tw-top"><span class="tw-lead">💡 ${label}</span><span class="tw-secs">${hintPaused ? "⏸" : hintSecs + "s"}</span></div>` +
+      `<div class="tw-bar"><div class="tw-fill${hintPaused ? " paused" : ""}" style="width:${pct}%"></div></div>` +
+      `<div class="tw-actions"><button class="tw-btn now" id="twNow">Show now</button><button class="tw-btn ghost" id="twGot">I've got this</button></div>`;
+  }
   const now = document.getElementById("twNow"); if (now) now.onclick = revealHint;
   const got = document.getElementById("twGot"); if (got) got.onclick = dismissHint;
 }
@@ -1024,9 +1047,10 @@ function renderPieceTip(sq) {
     seen.push(c);
     try { localStorage.setItem("gb_seen_pieces", seen.join(",")); } catch {}
     elp.className = "piece-tip first";
+    const diag = window.pieceMoveDiagram ? window.pieceMoveDiagram(c) : "";
     elp.innerHTML =
       `<div class="pt-head"><span class="pt-ic">${info.icon}</span> <b>${escapeHtml(info.name)}</b> <span class="pt-new">first time!</span></div>` +
-      `<div class="pt-moves">${escapeHtml(info.moves)}</div>` +
+      `<div class="pt-illus">${diag}<div class="pt-moves">${escapeHtml(info.moves)}</div></div>` +
       `<button class="pt-more" id="ptMore">Full tour of the ${escapeHtml(info.name.toLowerCase())} →</button>`;
   } else {
     elp.className = "piece-tip";
@@ -1041,13 +1065,16 @@ function openPieceSheet(c) {
   const title = document.getElementById("pieceSheetTitle");
   if (title) title.textContent = info.icon + " " + info.name;
   const body = document.getElementById("pieceSheetBody");
+  const diag = window.pieceMoveDiagram ? window.pieceMoveDiagram(c) : "";
   if (body) body.innerHTML =
-    `<div class="ps-row"><span class="ps-lab">How it moves</span><p>${escapeHtml(info.moves)}</p></div>` +
+    `<div class="ps-illus"><div class="ps-diagram">${diag}</div>` +
+      `<div class="ps-row hero"><span class="ps-lab">How it moves</span><p>${escapeHtml(info.moves)}</p></div></div>` +
     `<div class="ps-row"><span class="ps-lab">Its role</span><p>${escapeHtml(info.role)}</p></div>` +
     `<div class="ps-row"><span class="ps-lab">When it's strong</span><p>${escapeHtml(info.strong)}</p></div>` +
     `<div class="ps-row"><span class="ps-lab">Works well with</span><p>${escapeHtml(info.pairs)}</p></div>`;
   const sh = document.getElementById("pieceSheet");
   if (sh) sh.style.display = "grid";
+  if (typeof pauseThinkWindow === "function") pauseThinkWindow(); // don't rush a learner reading the tip
 }
 
 function sendMove(from, to) {

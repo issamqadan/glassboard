@@ -164,9 +164,10 @@ function renderPieceTip(sq) {
     seen.push(c);
     try { localStorage.setItem("gb_seen_pieces", seen.join(",")); } catch {}
     elp.className = "piece-tip first";
+    const diag = window.pieceMoveDiagram ? window.pieceMoveDiagram(c) : "";
     elp.innerHTML =
       `<div class="pt-head"><span class="pt-ic">${info.icon}</span> <b>${escapeHtml(info.name)}</b> <span class="pt-new">first time!</span></div>` +
-      `<div class="pt-moves">${escapeHtml(info.moves)}</div>` +
+      `<div class="pt-illus">${diag}<div class="pt-moves">${escapeHtml(info.moves)}</div></div>` +
       `<button class="pt-more" id="ptMore">Full tour of the ${escapeHtml(info.name.toLowerCase())} →</button>`;
   } else {
     elp.className = "piece-tip";
@@ -181,8 +182,10 @@ function openPieceSheet(c) {
   const title = document.getElementById("pieceSheetTitle");
   if (title) title.textContent = info.icon + " " + info.name;
   const body = document.getElementById("pieceSheetBody");
+  const diag = window.pieceMoveDiagram ? window.pieceMoveDiagram(c) : "";
   if (body) body.innerHTML =
-    `<div class="ps-row"><span class="ps-lab">How it moves</span><p>${escapeHtml(info.moves)}</p></div>` +
+    `<div class="ps-illus"><div class="ps-diagram">${diag}</div>` +
+      `<div class="ps-row hero"><span class="ps-lab">How it moves</span><p>${escapeHtml(info.moves)}</p></div></div>` +
     `<div class="ps-row"><span class="ps-lab">Its role</span><p>${escapeHtml(info.role)}</p></div>` +
     `<div class="ps-row"><span class="ps-lab">When it's strong</span><p>${escapeHtml(info.strong)}</p></div>` +
     `<div class="ps-row"><span class="ps-lab">Works well with</span><p>${escapeHtml(info.pairs)}</p></div>`;

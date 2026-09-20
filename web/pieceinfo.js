@@ -45,3 +45,43 @@ window.PIECE_INFO = {
     pairs: "Shelters behind its own pawns for safety; in the endgame it shepherds passed pawns to promotion.",
   },
 };
+
+// Illustrated move pattern: a 5×5 mini-board with the piece in the centre and
+// every square it can reach lit up (● move · ✕ capture). Far more intuitive
+// than a paragraph — you *see* the L of the knight, the rays of the bishop.
+// Returns an HTML string; shared by every gameplay mode.
+window.pieceMoveDiagram = function (kind) {
+  const N = 5, c = 2; // 5×5 grid, piece at centre (row c, file c)
+  const reach = new Set(), caps = new Set();
+  const add = (r, f, cap) => { if (r >= 0 && r < N && f >= 0 && f < N) (cap ? caps : reach).add(r * N + f); };
+  if (kind === "n") {
+    [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]].forEach(([dr, df]) => add(c + dr, c + df));
+  } else if (kind === "k") {
+    for (let dr = -1; dr <= 1; dr++) for (let df = -1; df <= 1; df++) if (dr || df) add(c + dr, c + df);
+  } else if (kind === "p") {
+    add(c - 1, c);            // one step forward (board drawn with your side at the bottom → forward is up)
+    add(c - 2, c);            // the two-square first move
+    add(c - 1, c - 1, true);  // diagonal captures
+    add(c - 1, c + 1, true);
+  } else {
+    const dirs = kind === "r" ? [[1, 0], [-1, 0], [0, 1], [0, -1]]
+      : kind === "b" ? [[1, 1], [1, -1], [-1, 1], [-1, -1]]
+      : [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]; // queen
+    dirs.forEach(([dr, df]) => { for (let s = 1; s < N; s++) { const r = c + dr * s, f = c + df * s; if (r < 0 || r >= N || f < 0 || f >= N) break; add(r, f); } });
+  }
+  const icon = (window.PIECE_INFO[kind] || {}).icon || "";
+  let html = '<div class="mv-grid" aria-hidden="true">';
+  for (let r = 0; r < N; r++) for (let f = 0; f < N; f++) {
+    const i = r * N + f, dark = (r + f) % 2 === 1;
+    let cls = "mv-cell" + (dark ? " d" : ""), inner = "";
+    if (r === c && f === c) { cls += " pc"; inner = `<span class="mv-pc">${icon}</span>`; }
+    else if (caps.has(i)) { cls += " cap"; inner = '<span class="mv-mark cap">✕</span>'; }
+    else if (reach.has(i)) { cls += " mov"; inner = '<span class="mv-mark">●</span>'; }
+    html += `<div class="${cls}">${inner}</div>`;
+  }
+  html += "</div>";
+  const legend = kind === "p"
+    ? '<div class="mv-legend"><span class="mv-mark">●</span> move &nbsp; <span class="mv-mark cap">✕</span> capture</div>'
+    : '<div class="mv-legend"><span class="mv-mark">●</span> where it can go</div>';
+  return html + legend;
+};

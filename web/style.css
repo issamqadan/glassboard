@@ -898,16 +898,25 @@ main.game .status:empty { display: none; }
 .glass .ev.prov-own .who { color: #5fd98a; }
 .glass .ev.prov-followed .who { color: #f0c674; }
 
-/* Thinking window — help arrives on a timer unless you summon or wave it off. */
-.think-window { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 11px 14px; border-radius: 13px;
+/* Thinking window — help arrives on a timer unless you summon or wave it off.
+   The countdown is an illustrative draining bar, not a bare number. */
+.think-window { display: flex; flex-direction: column; gap: 9px; padding: 11px 14px; border-radius: 13px;
   border: 1px dashed rgba(92,201,236,0.5); background: rgba(92,201,236,0.07); }
+.think-window .tw-top { display: flex; align-items: center; gap: 10px; }
 .think-window .tw-lead { flex: 1; min-width: 0; font-size: 0.9rem; color: #cdd8e8; }
+.think-window .tw-secs { font-variant-numeric: tabular-nums; font-weight: 800; color: #7ddcf5; font-size: 0.95rem; flex-shrink: 0; }
 .think-window .tw-count { font-variant-numeric: tabular-nums; font-weight: 700; color: #5cc9ec; }
-.think-window .tw-actions { display: flex; gap: 8px; flex-shrink: 0; }
+/* draining bar: width is set per-second in JS; the transition makes it glide */
+.think-window .tw-bar { height: 7px; border-radius: 999px; background: rgba(92,201,236,0.14); overflow: hidden; }
+.think-window .tw-fill { height: 100%; border-radius: 999px; width: 100%;
+  background: linear-gradient(90deg, #5cc9ec, #7ee0d6); transition: width 1s linear; }
+.think-window .tw-fill.paused { transition: none; background: linear-gradient(90deg, #8ea0b8, #b7c4dc); opacity: 0.7; }
+.think-window .tw-actions { display: flex; gap: 8px; }
 .think-window .tw-btn { border-radius: 9px; padding: 7px 12px; font-size: 0.82rem; font-weight: 640; cursor: pointer; }
-.think-window .tw-btn.now { background: rgba(92,201,236,0.16); color: #bfe8f7; border: 1px solid rgba(92,201,236,0.5); }
+.think-window .tw-btn.now { flex: 1; background: rgba(92,201,236,0.16); color: #bfe8f7; border: 1px solid rgba(92,201,236,0.5); }
 .think-window .tw-btn.ghost { background: transparent; color: #8ea0b8; border: 1px solid var(--glass-line, rgba(255,255,255,0.1)); }
 .think-window .tw-btn:hover { filter: brightness(1.15); }
+@media (prefers-reduced-motion: reduce) { .think-window .tw-fill { transition: none; } }
 
 /* redeploy trigger 1789863761 */
 
@@ -936,3 +945,33 @@ main.game .status:empty { display: none; }
 .piece-sheet-body .ps-row { display: flex; flex-direction: column; gap: 3px; }
 .piece-sheet-body .ps-lab { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #7ee0d6; font-weight: 700; }
 .piece-sheet-body p { margin: 0; font-size: 0.92rem; color: #cdd8e8; line-height: 1.5; }
+/* Sheet hero: the move diagram beside "how it moves" — illustration first. */
+.piece-sheet-body .ps-illus { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.piece-sheet-body .ps-diagram { flex-shrink: 0; }
+.piece-sheet-body .ps-illus .ps-row.hero { flex: 1; min-width: 160px; }
+
+/* ---- Illustrated move diagram: a mini-board that lights up where it can go ---- */
+.mv-grid { display: grid; grid-template-columns: repeat(5, 1fr); width: 150px; height: 150px; border-radius: 8px;
+  overflow: hidden; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
+.mv-cell { position: relative; display: flex; align-items: center; justify-content: center; background: #e9e2cf; }
+.mv-cell.d { background: #a9895f; }
+.mv-cell .mv-pc { font-size: 1.5rem; line-height: 1; color: #10121a; text-shadow: 0 1px 0 rgba(255,255,255,0.4); }
+.mv-cell.pc { box-shadow: inset 0 0 0 2px rgba(92,201,236,0.9); }
+.mv-mark { font-size: 0.8rem; color: rgba(30,120,90,0.9); font-weight: 900; }
+.mv-mark.cap { color: rgba(200,60,60,0.95); }
+.mv-cell.mov .mv-mark { color: rgba(26,140,96,0.95); }
+.mv-legend { margin-top: 7px; font-size: 0.72rem; color: #9fb0c6; text-align: center; }
+.mv-legend .mv-mark { font-size: 0.72rem; }
+.pt-illus { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+.pt-illus .mv-grid { width: 118px; height: 118px; }
+.pt-illus .mv-cell .mv-pc { font-size: 1.2rem; }
+.pt-illus .pt-moves { margin-top: 0; flex: 1; min-width: 120px; }
+@media (max-width: 520px) { .pt-illus { flex-direction: column; align-items: stretch; } .pt-illus .mv-grid { align-self: center; } }
+
+/* New players: make the first-touch tip catch the eye — it's the onboarding gem. */
+.piece-tip.first { animation: ptFirstGlow 2.4s ease-in-out 2; }
+@keyframes ptFirstGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(126,224,214,0); }
+  50% { box-shadow: 0 0 0 4px rgba(126,224,214,0.28); }
+}
+@media (prefers-reduced-motion: reduce) { .piece-tip.first { animation: none; } }
