@@ -174,6 +174,9 @@ async function main() {
 
   const mf = el("movesFold");
   if (mf) mf.addEventListener("toggle", () => { if (mf.open && hintState === "pending") revealHint(); });
+  const psheet = el("pieceSheet"), pclose = el("pieceSheetClose");
+  if (pclose && psheet) pclose.addEventListener("click", () => { psheet.style.display = "none"; });
+  if (psheet) psheet.addEventListener("click", (e) => { if (e.target === psheet) psheet.style.display = "none"; });
   const gsheet = el("glassSheet"), gchip = el("glassChip"), gclose = el("glassClose");
   if (gchip && gsheet) gchip.addEventListener("click", () => { gsheet.style.display = "grid"; });
   if (gclose && gsheet) gclose.addEventListener("click", () => { gsheet.style.display = "none"; });
@@ -996,12 +999,55 @@ function onSquareClick(i) {
 function selectSquare(i) {
   selected = i;
   legalTargets = Array.from(game.legalTo(i));
+  renderPieceTip(i);
   renderBoard();
 }
 function clearSelection() {
   selected = null;
   legalTargets = [];
+  renderPieceTip(null);
   renderBoard();
+}
+
+// Learn the pieces as you play: first-touch tip + a tap-anytime full tour.
+function renderPieceTip(sq) {
+  const elp = document.getElementById("pieceTip");
+  if (!elp || !game) return;
+  const c = sq == null ? "" : (game.boardString()[sq] || "").toLowerCase();
+  const info = c && window.PIECE_INFO && window.PIECE_INFO[c];
+  if (!info) { elp.hidden = true; elp.innerHTML = ""; return; }
+  elp.hidden = false;
+  let seen = [];
+  try { seen = (localStorage.getItem("gb_seen_pieces") || "").split(",").filter(Boolean); } catch {}
+  const first = !seen.includes(c);
+  if (first) {
+    seen.push(c);
+    try { localStorage.setItem("gb_seen_pieces", seen.join(",")); } catch {}
+    elp.className = "piece-tip first";
+    elp.innerHTML =
+      `<div class="pt-head"><span class="pt-ic">${info.icon}</span> <b>${escapeHtml(info.name)}</b> <span class="pt-new">first time!</span></div>` +
+      `<div class="pt-moves">${escapeHtml(info.moves)}</div>` +
+      `<button class="pt-more" id="ptMore">Full tour of the ${escapeHtml(info.name.toLowerCase())} →</button>`;
+  } else {
+    elp.className = "piece-tip";
+    elp.innerHTML = `<button class="pt-chip" id="ptMore">${info.icon} <b>${escapeHtml(info.name)}</b> — tap for tips ⓘ</button>`;
+  }
+  const more = document.getElementById("ptMore");
+  if (more) more.onclick = () => openPieceSheet(c);
+}
+function openPieceSheet(c) {
+  const info = window.PIECE_INFO && window.PIECE_INFO[c];
+  if (!info) return;
+  const title = document.getElementById("pieceSheetTitle");
+  if (title) title.textContent = info.icon + " " + info.name;
+  const body = document.getElementById("pieceSheetBody");
+  if (body) body.innerHTML =
+    `<div class="ps-row"><span class="ps-lab">How it moves</span><p>${escapeHtml(info.moves)}</p></div>` +
+    `<div class="ps-row"><span class="ps-lab">Its role</span><p>${escapeHtml(info.role)}</p></div>` +
+    `<div class="ps-row"><span class="ps-lab">When it's strong</span><p>${escapeHtml(info.strong)}</p></div>` +
+    `<div class="ps-row"><span class="ps-lab">Works well with</span><p>${escapeHtml(info.pairs)}</p></div>`;
+  const sh = document.getElementById("pieceSheet");
+  if (sh) sh.style.display = "grid";
 }
 
 function sendMove(from, to) {

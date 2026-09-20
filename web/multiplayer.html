@@ -66,6 +66,7 @@
         <aside class="panels">
           <!-- Coach: transient safety net — speaks only for real danger/opportunity. -->
           <div id="coach" class="coach" aria-live="polite" hidden></div>
+          <div id="pieceTip" class="piece-tip" hidden></div>
           <div id="budget" class="budget" hidden></div>
           <!-- Strategy is the headline: pick a plan, follow it step-by-step, see progress. -->
           <section class="panel strat-panel" id="stratPanelWrap" hidden>
@@ -87,6 +88,12 @@
         help is relayed to both players' glass-box. The server validates every move, so no one
         can cheat. On the same Wi-Fi, set the Server to <code>ws://YOUR-LAN-IP:9001</code>.
       </p>
+      <div id="pieceSheet" class="sheet-overlay" style="display:none">
+        <div class="sheet">
+          <div class="sheet-head"><span id="pieceSheetTitle">Piece</span><span class="sheet-sub">how it moves · strategy · when it shines</span><button class="sheet-close" id="pieceSheetClose">✕</button></div>
+          <div id="pieceSheetBody" class="piece-sheet-body"></div>
+        </div>
+      </div>
       <div id="glassSheet" class="sheet-overlay" style="display:none">
         <div class="sheet">
           <div class="sheet-head"><span>🔍 Glass-box</span><span class="sheet-sub">every bit of assistance — visible to both players</span><button class="sheet-close" id="glassClose">✕</button></div>
@@ -111,6 +118,7 @@
     <script src="./nav.js"></script>
     <script src="./pieces.js"></script>
     <script src="./theme.js"></script>
+    <script src="./pieceinfo.js"></script>
     <script src="./social.js"></script>
     <script type="module" src="./multiplayer.js"></script>
   </body>

@@ -74,7 +74,8 @@ const FG = [
   { ic: "✨", text: "The <b>dots</b> show every square that piece can move to. Tap a dot to move there." },
   { ic: "🤝", text: "Nice — that's a move! Your opponent (the computer) takes its turn now…" },
   { ic: "♟", text: "Your turn again. Same idea: <b>tap a piece, then a dot</b>. If a piece is in danger, the coach under the board warns you." },
-  { ic: "🎉", text: "You've got it! Keep playing — help is always under the board. Have fun!", cta: "Play on", final: true },
+  { ic: "💡", text: "One more thing: <b>tap any piece anytime</b> to learn how it moves, when it's strong, and what it works well with. The first time you touch each piece, a tip pops up automatically.", cta: "Got it" },
+  { ic: "🎉", text: "You've got it! Keep playing — help is always under the board, and every piece has tips a tap away. Have fun!", cta: "Play on", final: true },
 ];
 let lastMove = null; // { from, to } of the most recent move
 let assistData = null; // parsed assist JSON for the current (White) turn
