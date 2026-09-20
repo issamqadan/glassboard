@@ -47,6 +47,8 @@
         <aside class="panels">
           <!-- Coach: transient safety net — speaks only for real danger/opportunity. -->
           <div id="coach" class="coach" aria-live="polite" hidden></div>
+          <!-- Piece tip: teaches the piece the first time you touch it; tap for a full tour. -->
+          <div id="pieceTip" class="piece-tip" hidden></div>
           <!-- Strategy is the headline: pick a plan, follow it step-by-step, see progress. -->
           <section class="panel strat-panel" id="stratPanelWrap" hidden>
             <h2>Strategy <span class="hint" id="stratPhase"></span></h2>
@@ -67,6 +69,12 @@
         the glass-box for your opponent to see. Tap a piece, then a highlighted
         square — or tap a suggested move.
       </p>
+      <div id="pieceSheet" class="sheet-overlay" style="display:none">
+        <div class="sheet">
+          <div class="sheet-head"><span id="pieceSheetTitle">Piece</span><span class="sheet-sub">how it moves · strategy · when it shines</span><button class="sheet-close" id="pieceSheetClose">✕</button></div>
+          <div id="pieceSheetBody" class="piece-sheet-body"></div>
+        </div>
+      </div>
       <div id="promoOverlay" class="promo-overlay" style="display:none">
         <div class="promo-box"><div class="promo-title">Promote to</div><div class="promo-choices"></div></div>
       </div>
@@ -84,6 +92,7 @@
     </main>
     <script src="./nav.js"></script>
     <script src="./pieces.js"></script>
+    <script src="./pieceinfo.js"></script>
     <script src="./theme.js"></script>
     <script type="module" src="./main.js"></script>
   </body>

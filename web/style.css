@@ -916,3 +916,23 @@ main.game .status:empty { display: none; }
   padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(126,224,214,0.35); background: rgba(126,224,214,0.08); white-space: nowrap; }
 .gb-newhere:hover { border-color: #7ee0d6; color: #aef0e6; background: rgba(126,224,214,0.16); }
 @media (max-width: 640px) { .gb-newhere { font-size: 0.76rem; padding: 5px 9px; } }
+
+/* ---- Piece tips: learn each piece as you touch it; full tour on demand ---- */
+.piece-tip { border-radius: 13px; padding: 11px 14px; border: 1px solid var(--glass-line, rgba(255,255,255,0.08));
+  background: var(--glass-card, rgba(255,255,255,0.035)); }
+.piece-tip.first { border-color: rgba(126,224,214,0.5); background: linear-gradient(135deg, rgba(126,224,214,0.14), rgba(92,201,236,0.08)); }
+.piece-tip .pt-head { display: flex; align-items: center; gap: 8px; font-size: 1rem; color: #eaf7f5; }
+.piece-tip .pt-ic { font-size: 1.4rem; line-height: 1; }
+.piece-tip .pt-new { margin-left: auto; font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+  color: #04222d; background: #7ee0d6; padding: 2px 7px; border-radius: 999px; }
+.piece-tip .pt-moves { font-size: 0.88rem; color: #cdd8e8; line-height: 1.45; margin-top: 6px; }
+.piece-tip .pt-more { margin-top: 9px; background: rgba(126,224,214,0.16); color: #aef0e6; border: 1px solid rgba(126,224,214,0.5);
+  border-radius: 9px; padding: 8px 12px; font-size: 0.82rem; font-weight: 640; cursor: pointer; }
+.piece-tip .pt-more:hover { background: rgba(126,224,214,0.26); }
+.piece-tip .pt-chip { width: 100%; text-align: left; background: none; border: 0; color: #b7c4dc; font-size: 0.88rem; cursor: pointer; padding: 0; }
+.piece-tip .pt-chip b { color: #eaf0fb; }
+.piece-tip .pt-chip:hover { color: #eaf0fb; }
+.piece-sheet-body { padding: 14px 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.piece-sheet-body .ps-row { display: flex; flex-direction: column; gap: 3px; }
+.piece-sheet-body .ps-lab { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #7ee0d6; font-weight: 700; }
+.piece-sheet-body p { margin: 0; font-size: 0.92rem; color: #cdd8e8; line-height: 1.5; }
