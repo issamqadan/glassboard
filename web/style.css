@@ -897,3 +897,14 @@ main.game .status:empty { display: none; }
 .glass .ev .pm { color: #8ea0b8; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.82em; }
 .glass .ev.prov-own .who { color: #5fd98a; }
 .glass .ev.prov-followed .who { color: #f0c674; }
+
+/* Thinking window — help arrives on a timer unless you summon or wave it off. */
+.think-window { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 11px 14px; border-radius: 13px;
+  border: 1px dashed rgba(92,201,236,0.5); background: rgba(92,201,236,0.07); }
+.think-window .tw-lead { flex: 1; min-width: 0; font-size: 0.9rem; color: #cdd8e8; }
+.think-window .tw-count { font-variant-numeric: tabular-nums; font-weight: 700; color: #5cc9ec; }
+.think-window .tw-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.think-window .tw-btn { border-radius: 9px; padding: 7px 12px; font-size: 0.82rem; font-weight: 640; cursor: pointer; }
+.think-window .tw-btn.now { background: rgba(92,201,236,0.16); color: #bfe8f7; border: 1px solid rgba(92,201,236,0.5); }
+.think-window .tw-btn.ghost { background: transparent; color: #8ea0b8; border: 1px solid var(--glass-line, rgba(255,255,255,0.1)); }
+.think-window .tw-btn:hover { filter: brightness(1.15); }

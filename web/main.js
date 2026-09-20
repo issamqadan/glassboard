@@ -132,6 +132,8 @@ async function main() {
   await init();
   detectFirstGame();
   document.getElementById("new").addEventListener("click", () => { firstGame = false; newGame(); });
+  const mf = document.getElementById("movesFold");
+  if (mf) mf.addEventListener("toggle", () => { if (mf.open && hintState === "pending") revealHint(); });
   const rb = document.getElementById("resignBtn");
   if (rb) rb.addEventListener("click", resign);
   const orm = document.getElementById("overRematch");
@@ -192,11 +194,56 @@ function onPositionChanged() {
     freeCaptures = assistData.freeCaptures || [];
     if ((assistData.candidates || []).length) helpWasAvailable = true;
   }
-  // Auto-expand the Suggested-moves fold when it has moves; collapse when empty.
-  // Set per position (not per repaint) so it doesn't fight a mid-turn collapse.
+  // Move help arrives on a timed "thinking window" — think first; a hint fades
+  // in after a delay unless you show it now or wave it off (see startThinkWindow).
   const fold = document.getElementById("movesFold");
-  if (fold) fold.open = !!(assistData && (assistData.candidates || []).length);
+  if (fold) fold.open = false;
+  if (assistData && (assistData.candidates || []).length && !firstGame) startThinkWindow();
+  else clearThinkWindow(true);
   paint();
+}
+
+// ---- Thinking window: give the player time before help appears ----
+const HINT_DELAY = 15; // seconds
+let hintTick = null, hintSecs = 0, hintState = "off"; // off | pending | revealed | dismissed
+const hintAutoOff = () => { try { return localStorage.getItem("gb_hint_auto") === "off"; } catch { return false; } };
+function clearThinkWindow(hide) {
+  if (hintTick) { clearInterval(hintTick); hintTick = null; }
+  if (hide) { hintState = "off"; renderThinkWindow(); }
+}
+function startThinkWindow() {
+  clearThinkWindow();
+  hintState = "pending";
+  if (hintAutoOff()) { renderThinkWindow(); return; } // manual only — no countdown
+  hintSecs = HINT_DELAY;
+  renderThinkWindow();
+  hintTick = setInterval(() => { hintSecs -= 1; if (hintSecs <= 0) revealHint(); else renderThinkWindow(); }, 1000);
+}
+function revealHint() {
+  clearThinkWindow();
+  hintState = "revealed";
+  const fold = document.getElementById("movesFold");
+  if (fold) fold.open = true;
+  renderThinkWindow();
+}
+function dismissHint() {
+  clearThinkWindow();
+  hintState = "dismissed";
+  renderThinkWindow();
+}
+function renderThinkWindow() {
+  const el = document.getElementById("thinkWindow");
+  if (!el) return;
+  if (hintState !== "pending") { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  const count = hintAutoOff() ? "" : `<span class="tw-count">${hintSecs}s</span>`;
+  const lead = hintAutoOff() ? "Want a hint?" : `Take your time — a hint in ${count}`;
+  el.innerHTML =
+    `<span class="tw-lead">💡 ${lead}</span>` +
+    `<span class="tw-actions"><button class="tw-btn now" id="twNow">Show now</button>` +
+    `<button class="tw-btn ghost" id="twGot">I've got this</button></span>`;
+  const now = document.getElementById("twNow"); if (now) now.onclick = revealHint;
+  const got = document.getElementById("twGot"); if (got) got.onclick = dismissHint;
 }
 
 // Repaints board + panels from current state (no assistance recompute).
