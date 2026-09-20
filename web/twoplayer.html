@@ -36,6 +36,7 @@
       <div class="layout">
         <div id="board" class="board" aria-label="chess board"></div>
         <aside class="panels">
+          <div id="pieceTip" class="piece-tip" hidden></div>
           <section class="panel">
             <h2>Your Assistance <span id="level" class="pill">—</span></h2>
             <div id="assist" class="assist"></div>
@@ -54,9 +55,16 @@
         help appears in <em>both</em> windows' glass-box. Set ratings, then click <strong>New game</strong>
         (either window) to (re)start.
       </p>
+      <div id="pieceSheet" class="sheet-overlay" style="display:none">
+        <div class="sheet">
+          <div class="sheet-head"><span id="pieceSheetTitle">Piece</span><span class="sheet-sub">how it moves · strategy · when it shines</span><button class="sheet-close" id="pieceSheetClose">✕</button></div>
+          <div id="pieceSheetBody" class="piece-sheet-body"></div>
+        </div>
+      </div>
     </main>
     <script src="./nav.js"></script>
     <script src="./pieces.js"></script>
+    <script src="./pieceinfo.js"></script>
     <script src="./theme.js"></script>
     <script type="module" src="./twoplayer.js"></script>
   </body>
