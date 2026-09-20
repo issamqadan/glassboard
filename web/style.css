@@ -910,3 +910,9 @@ main.game .status:empty { display: none; }
 .think-window .tw-btn:hover { filter: brightness(1.15); }
 
 /* redeploy trigger 1789863761 */
+
+/* Discoverable "New to chess?" entry in the game bar — subtle, always reachable. */
+.gb-newhere { font-size: 0.82rem; font-weight: 600; color: #7ee0d6; text-decoration: none;
+  padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(126,224,214,0.35); background: rgba(126,224,214,0.08); white-space: nowrap; }
+.gb-newhere:hover { border-color: #7ee0d6; color: #aef0e6; background: rgba(126,224,214,0.16); }
+@media (max-width: 640px) { .gb-newhere { font-size: 0.76rem; padding: 5px 9px; } }

@@ -95,6 +95,8 @@ function fgExit() {
   firstGame = false;
   fgHintSquares = [];
   try { localStorage.setItem("gb_played", "1"); } catch {}
+  const nh = document.getElementById("newHereLink");
+  if (nh) nh.hidden = false; // re-show the entry so it can be re-launched anytime
   renderFirstGame();
   paint();
 }
@@ -131,6 +133,8 @@ function renderFirstGame() {
 async function main() {
   await init();
   detectFirstGame();
+  const nh = document.getElementById("newHereLink");
+  if (nh) nh.hidden = firstGame; // hidden while the guided game is running
   document.getElementById("new").addEventListener("click", () => { firstGame = false; newGame(); });
   const mf = document.getElementById("movesFold");
   if (mf) mf.addEventListener("toggle", () => { if (mf.open && hintState === "pending") revealHint(); });
