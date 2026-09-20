@@ -172,6 +172,8 @@ async function main() {
   const rb = el("resignBtn");
   if (rb) rb.addEventListener("click", resign);
 
+  const mf = el("movesFold");
+  if (mf) mf.addEventListener("toggle", () => { if (mf.open && hintState === "pending") revealHint(); });
   const gsheet = el("glassSheet"), gchip = el("glassChip"), gclose = el("glassClose");
   if (gchip && gsheet) gchip.addEventListener("click", () => { gsheet.style.display = "grid"; });
   if (gclose && gsheet) gclose.addEventListener("click", () => { gsheet.style.display = "none"; });
@@ -431,9 +433,54 @@ function computeAssist() {
     // (Per-position "assist shown" logging is replaced by per-MOVE provenance —
     // see finishMove: what's recorded is whether your move matched the advice.)
   }
-  // Auto-expand the Suggested-moves fold when it has moves; collapse when empty.
+  // Move help arrives on a timed "thinking window" (see startThinkWindow).
   const fold = document.getElementById("movesFold");
-  if (fold) fold.open = !!(assistData && (assistData.candidates || []).length);
+  if (fold) fold.open = false;
+  const myTurn = state && state.status === "ongoing" && state.turn === myColor;
+  if (myTurn && assistData && (assistData.candidates || []).length) startThinkWindow();
+  else clearThinkWindow(true);
+}
+
+// ---- Thinking window: give the player time before help appears ----
+const HINT_DELAY = 15;
+let hintTick = null, hintSecs = 0, hintState = "off";
+const hintAutoOff = () => { try { return localStorage.getItem("gb_hint_auto") === "off"; } catch { return false; } };
+function clearThinkWindow(hide) {
+  if (hintTick) { clearInterval(hintTick); hintTick = null; }
+  if (hide) { hintState = "off"; renderThinkWindow(); }
+}
+function startThinkWindow() {
+  clearThinkWindow();
+  hintState = "pending";
+  if (hintAutoOff()) { renderThinkWindow(); return; }
+  hintSecs = HINT_DELAY;
+  renderThinkWindow();
+  hintTick = setInterval(() => { hintSecs -= 1; if (hintSecs <= 0) revealHint(); else renderThinkWindow(); }, 1000);
+}
+function revealHint() {
+  clearThinkWindow();
+  hintState = "revealed";
+  const fold = document.getElementById("movesFold");
+  if (fold) fold.open = true;
+  renderThinkWindow();
+}
+function dismissHint() {
+  clearThinkWindow();
+  hintState = "dismissed";
+  renderThinkWindow();
+}
+function renderThinkWindow() {
+  const el = document.getElementById("thinkWindow");
+  if (!el) return;
+  if (hintState !== "pending") { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  const lead = hintAutoOff() ? "Want a hint?" : `Take your time — a hint in <span class="tw-count">${hintSecs}s</span>`;
+  el.innerHTML =
+    `<span class="tw-lead">💡 ${lead}</span>` +
+    `<span class="tw-actions"><button class="tw-btn now" id="twNow">Show now</button>` +
+    `<button class="tw-btn ghost" id="twGot">I've got this</button></span>`;
+  const now = document.getElementById("twNow"); if (now) now.onclick = revealHint;
+  const got = document.getElementById("twGot"); if (got) got.onclick = dismissHint;
 }
 
 const myElo = () => (myColor === "white" ? state.white_elo : state.black_elo);
