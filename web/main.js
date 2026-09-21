@@ -50,6 +50,61 @@ function recordHumanMove(preFen, from, to, promo) {
 }
 
 let game;
+// ---- vs-AI game persistence: start now, continue later, keep several going ----
+// AI games are solo, so they live in this device's localStorage (no server).
+const AI_STORE = "gb_ai_games";
+let aiGameId = null;   // the slot the current game saves into
+let aiSaved = false;   // becomes true once the game has a move worth keeping
+const loadAiGames = () => { try { return JSON.parse(localStorage.getItem(AI_STORE)) || []; } catch { return []; } };
+const saveAiGames = (g) => { try { localStorage.setItem(AI_STORE, JSON.stringify(g)); } catch {} };
+const newAiId = () => "ai" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+// Write the current game into its slot (created lazily on the first real move).
+function persistAiGame(over) {
+  if (!game || !aiGameId) return;
+  const games = loadAiGames();
+  const i = games.findIndex((g) => g.id === aiGameId);
+  const prev = i >= 0 ? games[i] : null;
+  const rec = {
+    id: aiGameId,
+    fen: game.fen(),
+    humanElo: parseInt(humanEloEl.value, 10),
+    engineElo: parseInt(engineEloEl.value, 10),
+    created: prev ? prev.created : Date.now(),
+    updated: Date.now(),
+    over: !!over,
+    result: over ? aiResultLabel() : "",
+  };
+  if (i >= 0) games[i] = rec; else games.unshift(rec);
+  saveAiGames(games);
+  aiSaved = true;
+}
+function aiResultLabel() {
+  if (resigned) return "You resigned";
+  const st = game.status();
+  if (st === "checkmate") return game.sideToMove() === "white" ? "You lost" : "You won";
+  if (st === "stalemate") return "Draw · stalemate";
+  if (st === "fifty-move") return "Draw · 50-move";
+  return "";
+}
+function resumeAiGame(id) {
+  const rec = loadAiGames().find((g) => g.id === id);
+  if (!rec) return false;
+  game = Game.fromFen(rec.fen);
+  if (humanEloEl) humanEloEl.value = rec.humanElo;
+  if (engineEloEl) engineEloEl.value = rec.engineElo;
+  game.setRatings(rec.humanElo, rec.engineElo);
+  aiGameId = id; aiSaved = true;
+  selected = null; legalTargets = []; lastMove = null; busy = false;
+  resigned = rec.over && rec.result === "You resigned";
+  pickedStrategyId = null; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
+  firstGame = false;
+  hideOver();
+  setLevelPill(game.assistLevel());
+  onPositionChanged();
+  // Resumed mid-cycle on the engine's move → let it reply.
+  if (game.status() === "ongoing" && game.sideToMove() === "black") setTimeout(engineReply, 300);
+  return true;
+}
 let selected = null;
 let legalTargets = [];
 let hanging = [];
@@ -151,6 +206,9 @@ async function main() {
   if (orm) orm.addEventListener("click", () => { hideOver(); newGame(); });
   const ocl = document.getElementById("overClose");
   if (ocl) ocl.addEventListener("click", hideOver);
+  // Resume a saved game if the lobby sent us here with ?g=<id>; else start fresh.
+  const gid = new URLSearchParams(location.search).get("g");
+  if (gid && !firstGame && resumeAiGame(gid)) return;
   newGame();
 }
 const hideOver = () => { const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; };
@@ -158,6 +216,8 @@ const hideOver = () => { const ov = document.getElementById("overOverlay"); if (
 function newGame() {
   game = new Game();
   game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
+  aiGameId = newAiId(); // a fresh slot; only saved once a move is played
+  aiSaved = false;
   selected = null;
   legalTargets = [];
   lastMove = null;
@@ -403,6 +463,7 @@ function resign() {
   if (resigned || game.status() !== "ongoing") return;
   if (!confirm("Resign to the engine? It'll count as a loss.")) return;
   resigned = true;
+  if (!firstGame && aiSaved) persistAiGame(true);
   paint();
 }
 
@@ -796,6 +857,7 @@ function doPlay(from, to, promo) {
   lastMove = { from, to };
   recordHumanMove(preFen, from, to, promo); // learn from this move too
   fgOn("move");
+  if (!firstGame) persistAiGame(game.status() !== "ongoing"); // save progress (skip the guided game)
   onPositionChanged(); // now Black to move → assist cleared
   setTimeout(engineReply, 150);
 }
@@ -822,6 +884,7 @@ function engineReply() {
     const uci = game.engineMove(depth());
     if (uci.length >= 4) lastMove = uciToSquares(uci);
     busy = false;
+    if (!firstGame) persistAiGame(game.status() !== "ongoing");
     onPositionChanged();
     fgOn("engine");
   }, 20);

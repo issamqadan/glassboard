@@ -225,6 +225,9 @@
       </div>
     </section>
 
+    <div class="section-head" id="aiHead" hidden><h2>Your AI games</h2><span style="display:flex;align-items:center;gap:12px"><span class="count" id="aiCount"></span><a class="link-quiet" href="./index.html">+ New AI game</a></span></div>
+    <div class="games" id="aiGames"></div>
+
     <div class="section-head"><h2>Your games</h2><span style="display:flex;align-items:center;gap:12px"><span class="count" id="gamesCount"></span><button class="clear-all" id="clearAll" onclick="clearAllGames()" hidden>Clear all</button></span></div>
     <div class="games" id="games"></div>
 
@@ -749,6 +752,49 @@
     }
     function escapeHtml(s){ return (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
+    // ---- Your AI games: solo games saved on this device; resume any, anytime ----
+    const loadAiGames = () => { try { return JSON.parse(localStorage.getItem('gb_ai_games')) || []; } catch { return []; } };
+    const saveAiGames = g => { try { localStorage.setItem('gb_ai_games', JSON.stringify(g)); } catch {} };
+    function deleteAiGame(id) { saveAiGames(loadAiGames().filter(g => g.id !== id)); renderAiGames(); }
+    window.deleteAiGame = deleteAiGame;
+    function renderAiGames() {
+      const host = document.getElementById('aiGames');
+      const head = document.getElementById('aiHead');
+      if (!host) return;
+      const games = loadAiGames().sort((a, b) => (a.over - b.over) || ((b.updated || 0) - (a.updated || 0)));
+      if (head) head.hidden = games.length === 0;
+      const cnt = document.getElementById('aiCount');
+      if (cnt) cnt.textContent = games.length ? '· ' + games.length : '';
+      if (!games.length) { host.innerHTML = ''; return; }
+      host.innerHTML = games.map(g => {
+        const over = !!g.over;
+        const turn = (g.fen || '').split(' ')[1] === 'b' ? 'black' : 'white';
+        const yourTurn = !over && turn === 'white';
+        const started = (() => { const t = g.updated || g.created; if (!t) return ''; const s = Math.max(0, Math.floor((Date.now() - t) / 1000)); if (s < 60) return 'just now'; const m = Math.floor(s / 60); if (m < 60) return m + 'm ago'; const h = Math.floor(m / 60); if (h < 24) return h + 'h ago'; return Math.floor(h / 24) + 'd ago'; })();
+        const statusHtml = over
+          ? `<div class="status g-fin ${/won/i.test(g.result) ? 'win' : /lost|resign/i.test(g.result) ? 'loss' : 'draw'}"><span class="sd"></span> ${escapeHtml(g.result || 'Finished')}</div>`
+          : `<div class="status" style="color:var(--good);background:rgba(69,200,110,0.12)"><span class="sd" style="background:var(--good);box-shadow:0 0 8px var(--good)"></span> In progress</div>`;
+        const meta = [];
+        if (!over) meta.push(yourTurn ? '<span class="mv-you">● Your move</span>' : '<span class="mv-them">○ Engine…</span>');
+        if (started) meta.push('played ' + started);
+        return `<div class="game${yourTurn ? ' your-turn' : ''}" style="--stripe:${over ? 'var(--faint)' : 'var(--good)'}">
+          <div class="g-row">
+            <div class="g-preview" onclick="location.href='./index.html?g=${g.id}'" title="Resume game" role="button">${miniBoard(g.fen, 'white')}</div>
+            <div class="g-main">
+              <div class="g-name">🤖 Glassboard AI <span class="g-elo">${g.engineElo || ''}</span> <span class="mode-chip">vs AI</span></div>
+              <div class="g-sub">You ${g.humanElo || ''} · solo game on this device</div>
+              ${statusHtml}
+              ${meta.length ? `<div class="g-meta">${meta.join(' · ')}</div>` : ''}
+            </div>
+          </div>
+          <div class="g-actions">
+            <button class="enter" onclick="location.href='./index.html?g=${g.id}'">${over ? 'Review →' : 'Resume game →'}</button>
+            <button class="del" onclick="deleteAiGame('${g.id}')">Delete</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
     function renderLadder() {
       const colors = ['var(--line-2)','#5c6f8c','#6f86ac','var(--accent)','#8fd0e0','var(--gold)'];
       document.getElementById('ladder').innerHTML = TIERS.map((t, i) =>
@@ -756,7 +802,7 @@
     }
 
     // ---- init ----
-    renderLadder(); renderGames(); renderRivals();
+    renderLadder(); renderAiGames(); renderGames(); renderRivals();
     if (me) { renderMe(); pollGames(); renderProfile(); renderRivals(); } else openIdentity();
     setInterval(renderProfile, 20000);
   </script>
