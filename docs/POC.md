@@ -39,6 +39,22 @@ native apps, the neural net / LLM. (Handicap stays a heuristic seed for now.)
 2. **Roadmap work** — planned items; often aligns with (1).
 
 ### Field-input log (newest first)
+- **2026-09-21 — Lobby preview should show the game's board colour.** *(Shipped: mini-board
+  renders each game's per-game palette.)*
+- **2026-09-21 — Board selection was global, not per-game.** Each game should keep its own
+  board; new games inherit your latest pick. *(Shipped.)*
+- **2026-09-21 — Losing was abrupt: no build-up warning, and no illustration of how.**
+  *(Shipped: engine mate-threat detection → coach shouts "Checkmate threat!" + amber king halo
+  on your turn; on mate, the king is ringed, an arrow marks the mating piece, and the overlay
+  names how it happened.)*
+- **2026-09-21 — Captured pieces need a better, fun visual (not two side trays).** *(Shipped:
+  a material "tug" bar above the board — captured pieces flank a beam that slides to the leader.)*
+- **2026-09-21 — vs-AI games must persist like online games (DB, cross-device), gone when
+  finished.** *(Shipped: ai_games table + REST; syncs per account; removed on finish.)*
+- **2026-09-21 — Assistance must re-prioritise move-by-move; a threatened queen must interrupt
+  the plan.** *(Shipped: value-aware threats, safety outranks the strategy step.)*
+- **2026-09-21 — Piece tips should be illustrated, not plain text.** *(Shipped: move-pattern
+  mini-diagrams; timer illustrative + pauses while reading a tip.)*
 - **2026-09-20 — Timer / thinking-window spec (firm this up).** By default assistance
   does **not** appear. It appears by (a) **waiting X seconds** (default **30**, tune
   30–60), (b) tapping **"Show now,"** or (c) **never this turn** via **"Don't show."**
