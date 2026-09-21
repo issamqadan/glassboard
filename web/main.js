@@ -51,18 +51,45 @@ function recordHumanMove(preFen, from, to, promo) {
 
 let game;
 // ---- vs-AI game persistence: start now, continue later, keep several going ----
-// AI games are solo, so they live in this device's localStorage (no server).
+// AI games are solo and client-driven, but persisted BOTH ways: localStorage for
+// instant/offline use, and the server (keyed by player) so they're durable and
+// resumable on any device — just like online games. A finished game is removed.
 const AI_STORE = "gb_ai_games";
+const AI_SERVER = "https://playglassboard.onrender.com";
 let aiGameId = null;   // the slot the current game saves into
 let aiSaved = false;   // becomes true once the game has a move worth keeping
 const loadAiGames = () => { try { return JSON.parse(localStorage.getItem(AI_STORE)) || []; } catch { return []; } };
 const saveAiGames = (g) => { try { localStorage.setItem(AI_STORE, JSON.stringify(g)); } catch {} };
 const newAiId = () => "ai" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+// Stable player id: the signed-in account if present, else this device's id.
+function aiPlayerId() {
+  try { const me = JSON.parse(localStorage.getItem("gb_me")); if (me && me.id) return me.id; } catch {}
+  let id = localStorage.getItem("gb_pid");
+  if (!id) { id = "p" + Math.random().toString(36).slice(2, 10); try { localStorage.setItem("gb_pid", id); } catch {} }
+  return id;
+}
+function aiUpsertRemote(rec) {
+  fetch(AI_SERVER + "/ai-games", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: rec.id, pid: aiPlayerId(), fen: rec.fen, human_elo: rec.humanElo, engine_elo: rec.engineElo }),
+  }).catch(() => {});
+}
+function aiDeleteRemote(id) {
+  fetch(AI_SERVER + "/ai-games/delete", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }),
+  }).catch(() => {});
+}
 // Write the current game into its slot (created lazily on the first real move).
+// When the game finishes, it's removed from both stores — finished games don't linger.
 function persistAiGame(over) {
   if (!game || !aiGameId) return;
   const games = loadAiGames();
   const i = games.findIndex((g) => g.id === aiGameId);
+  if (over) {
+    if (i >= 0) { games.splice(i, 1); saveAiGames(games); }
+    if (aiSaved) aiDeleteRemote(aiGameId);
+    return;
+  }
   const prev = i >= 0 ? games[i] : null;
   const rec = {
     id: aiGameId,
@@ -71,31 +98,29 @@ function persistAiGame(over) {
     engineElo: parseInt(engineEloEl.value, 10),
     created: prev ? prev.created : Date.now(),
     updated: Date.now(),
-    over: !!over,
-    result: over ? aiResultLabel() : "",
   };
   if (i >= 0) games[i] = rec; else games.unshift(rec);
   saveAiGames(games);
   aiSaved = true;
+  aiUpsertRemote(rec);
 }
-function aiResultLabel() {
-  if (resigned) return "You resigned";
-  const st = game.status();
-  if (st === "checkmate") return game.sideToMove() === "white" ? "You lost" : "You won";
-  if (st === "stalemate") return "Draw · stalemate";
-  if (st === "fifty-move") return "Draw · 50-move";
-  return "";
-}
-function resumeAiGame(id) {
-  const rec = loadAiGames().find((g) => g.id === id);
+// Resume from local cache if present, else fetch the snapshot from the server.
+async function resumeAiGame(id) {
+  let rec = loadAiGames().find((g) => g.id === id);
+  if (!rec) {
+    try {
+      const list = await (await fetch(AI_SERVER + "/ai-games?player=" + encodeURIComponent(aiPlayerId()))).json();
+      const r = (list || []).find((x) => x.id === id);
+      if (r) rec = { id: r.id, fen: r.fen, humanElo: r.human_elo, engineElo: r.engine_elo };
+    } catch {}
+  }
   if (!rec) return false;
   game = Game.fromFen(rec.fen);
   if (humanEloEl) humanEloEl.value = rec.humanElo;
   if (engineEloEl) engineEloEl.value = rec.engineElo;
   game.setRatings(rec.humanElo, rec.engineElo);
   aiGameId = id; aiSaved = true;
-  selected = null; legalTargets = []; lastMove = null; busy = false;
-  resigned = rec.over && rec.result === "You resigned";
+  selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false;
   pickedStrategyId = null; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
   firstGame = false;
   hideOver();
@@ -208,7 +233,7 @@ async function main() {
   if (ocl) ocl.addEventListener("click", hideOver);
   // Resume a saved game if the lobby sent us here with ?g=<id>; else start fresh.
   const gid = new URLSearchParams(location.search).get("g");
-  if (gid && !firstGame && resumeAiGame(gid)) return;
+  if (gid && !firstGame && await resumeAiGame(gid)) return;
   newGame();
 }
 const hideOver = () => { const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; };

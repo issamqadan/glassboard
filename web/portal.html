@@ -225,7 +225,7 @@
       </div>
     </section>
 
-    <div class="section-head" id="aiHead" hidden><h2>Your AI games</h2><span style="display:flex;align-items:center;gap:12px"><span class="count" id="aiCount"></span><a class="link-quiet" href="./index.html">+ New AI game</a></span></div>
+    <div class="section-head" id="aiHead" style="display:none"><h2>Your AI games</h2><span style="display:flex;align-items:center;gap:12px"><span class="count" id="aiCount"></span><a class="link-quiet" href="./index.html">+ New AI game</a></span></div>
     <div class="games" id="aiGames"></div>
 
     <div class="section-head"><h2>Your games</h2><span style="display:flex;align-items:center;gap:12px"><span class="count" id="gamesCount"></span><button class="clear-all" id="clearAll" onclick="clearAllGames()" hidden>Clear all</button></span></div>
@@ -363,7 +363,7 @@
       document.getElementById('idOverlay').classList.remove('open');
       btn.disabled = false; btn.textContent = label;
       toast(data.returning ? 'Welcome back, ' + data.name : 'Player created — ' + data.name, data.returning ? 'Signed in on this device.' : 'Your name + PIN work on any device.');
-      renderMe(); pollGames(); renderProfile(); renderRivals();
+      renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames();
     }
     function renderMe() {
       if (!me) return;
@@ -752,19 +752,38 @@
     }
     function escapeHtml(s){ return (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
-    // ---- Your AI games: solo games saved on this device; resume any, anytime ----
+    // ---- Your AI games: solo games, durable on the server (keyed by player) with
+    // a localStorage cache for instant/offline. Resume any, on any device. ----
     const loadAiGames = () => { try { return JSON.parse(localStorage.getItem('gb_ai_games')) || []; } catch { return []; } };
     const saveAiGames = g => { try { localStorage.setItem('gb_ai_games', JSON.stringify(g)); } catch {} };
-    function deleteAiGame(id) { saveAiGames(loadAiGames().filter(g => g.id !== id)); renderAiGames(); }
+    function deleteAiGame(id) {
+      saveAiGames(loadAiGames().filter(g => g.id !== id));
+      fetch(SERVER_HTTP + '/ai-games/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).catch(() => {});
+      renderAiGames();
+    }
     window.deleteAiGame = deleteAiGame;
-    function renderAiGames() {
+    // Merge the server's games (authoritative, cross-device) over the local cache.
+    async function fetchAiGames() {
+      const byId = {};
+      loadAiGames().forEach(g => { byId[g.id] = g; });
+      if (me) {
+        try {
+          const remote = await (await fetch(SERVER_HTTP + '/ai-games?player=' + encodeURIComponent(me.id))).json();
+          (remote || []).forEach(r => { byId[r.id] = { id: r.id, fen: r.fen, humanElo: r.human_elo, engineElo: r.engine_elo, updated: (r.updated || 0) * 1000 }; });
+        } catch {}
+      }
+      const merged = Object.values(byId);
+      saveAiGames(merged); // keep the local cache in sync with the server truth
+      return merged;
+    }
+    async function renderAiGames() {
       const host = document.getElementById('aiGames');
       const head = document.getElementById('aiHead');
       if (!host) return;
-      const games = loadAiGames().sort((a, b) => (a.over - b.over) || ((b.updated || 0) - (a.updated || 0)));
-      if (head) head.hidden = games.length === 0;
+      const games = (await fetchAiGames()).sort((a, b) => (b.updated || 0) - (a.updated || 0));
       const cnt = document.getElementById('aiCount');
       if (cnt) cnt.textContent = games.length ? '· ' + games.length : '';
+      if (head) head.style.display = games.length ? 'flex' : 'none'; // [hidden] is overridden by .section-head display
       if (!games.length) { host.innerHTML = ''; return; }
       host.innerHTML = games.map(g => {
         const over = !!g.over;
@@ -803,7 +822,7 @@
 
     // ---- init ----
     renderLadder(); renderAiGames(); renderGames(); renderRivals();
-    if (me) { renderMe(); pollGames(); renderProfile(); renderRivals(); } else openIdentity();
+    if (me) { renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames(); } else openIdentity();
     setInterval(renderProfile, 20000);
   </script>
 </body>

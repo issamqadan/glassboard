@@ -182,6 +182,16 @@ async fn build_store() -> Store {
             .execute(&pool)
             .await
             .expect("create profiles table");
+            // Solo vs-AI games: durable so a player can resume on any device. Only
+            // in-progress games live here; a finished game is deleted by the client.
+            sqlx::query(
+                "CREATE TABLE IF NOT EXISTS ai_games (\
+                   id TEXT PRIMARY KEY, pid TEXT NOT NULL, fen TEXT NOT NULL, \
+                   human_elo INT NOT NULL, engine_elo INT NOT NULL, updated BIGINT NOT NULL)",
+            )
+            .execute(&pool)
+            .await
+            .expect("create ai_games table");
             println!("Accounts + games: Postgres (durable)");
             Store::Pg(pool)
         }
@@ -520,6 +530,8 @@ async fn main() {
         .route("/", get(root))
         .route("/games", get(list_games).post(create_game))
         .route("/games/delete", post(delete_game))
+        .route("/ai-games", get(list_ai_games).post(upsert_ai_game))
+        .route("/ai-games/delete", post(delete_ai_game))
         .route("/account", post(account))
         .route("/profile", get(profile))
         .route("/record", post(record))
@@ -675,6 +687,83 @@ async fn list_games(
         });
     }
     Json(out)
+}
+
+// ---- solo vs-AI games: durable, cross-device, client-driven ----
+
+#[derive(Deserialize)]
+struct AiUpsert {
+    id: String,
+    #[serde(default)]
+    pid: String,
+    fen: String,
+    #[serde(default)]
+    human_elo: i32,
+    #[serde(default)]
+    engine_elo: i32,
+}
+
+#[derive(Serialize)]
+struct AiGameOut {
+    id: String,
+    fen: String,
+    human_elo: i32,
+    engine_elo: i32,
+    updated: i64,
+}
+
+/// Create or update a solo AI game's snapshot. Keyed by id; owned by pid.
+async fn upsert_ai_game(State(store): State<Store>, Json(b): Json<AiUpsert>) -> Json<serde_json::Value> {
+    if let Store::Pg(pool) = &store {
+        let _ = sqlx::query(
+            "INSERT INTO ai_games (id,pid,fen,human_elo,engine_elo,updated) VALUES ($1,$2,$3,$4,$5,$6) \
+             ON CONFLICT (id) DO UPDATE SET fen=EXCLUDED.fen, human_elo=EXCLUDED.human_elo, \
+             engine_elo=EXCLUDED.engine_elo, updated=EXCLUDED.updated",
+        )
+        .bind(&b.id)
+        .bind(&b.pid)
+        .bind(&b.fen)
+        .bind(b.human_elo)
+        .bind(b.engine_elo)
+        .bind(now_secs() as i64)
+        .execute(pool)
+        .await;
+    }
+    Json(serde_json::json!({ "ok": true }))
+}
+
+/// List a player's in-progress AI games (most recently played first).
+async fn list_ai_games(State(store): State<Store>, Query(q): Query<HashMap<String, String>>) -> Json<Vec<AiGameOut>> {
+    let player = q.get("player").cloned().unwrap_or_default();
+    let mut out = Vec::new();
+    if let Store::Pg(pool) = &store {
+        if let Ok(rows) = sqlx::query(
+            "SELECT id,fen,human_elo,engine_elo,updated FROM ai_games WHERE pid=$1 ORDER BY updated DESC",
+        )
+        .bind(&player)
+        .fetch_all(pool)
+        .await
+        {
+            for r in rows {
+                out.push(AiGameOut {
+                    id: r.get("id"),
+                    fen: r.get("fen"),
+                    human_elo: r.get("human_elo"),
+                    engine_elo: r.get("engine_elo"),
+                    updated: r.get("updated"),
+                });
+            }
+        }
+    }
+    Json(out)
+}
+
+/// Remove a finished (or abandoned) AI game.
+async fn delete_ai_game(State(store): State<Store>, Json(b): Json<DeleteReq>) -> Json<serde_json::Value> {
+    if let Store::Pg(pool) = &store {
+        let _ = sqlx::query("DELETE FROM ai_games WHERE id=$1").bind(&b.id).execute(pool).await;
+    }
+    Json(serde_json::json!({ "deleted": true }))
 }
 
 #[derive(Deserialize)]
