@@ -34,7 +34,11 @@
       <div id="status" class="status">Loading engine…</div>
 
       <div class="layout">
-        <div id="board" class="board" aria-label="chess board"></div>
+        <div class="board-col tp-col">
+          <div id="capTop" class="cap-row" aria-label="pieces Black has captured"></div>
+          <div id="board" class="board" aria-label="chess board"></div>
+          <div id="capBot" class="cap-row" aria-label="pieces White has captured"></div>
+        </div>
         <aside class="panels">
           <div id="pieceTip" class="piece-tip" hidden></div>
           <section class="panel">

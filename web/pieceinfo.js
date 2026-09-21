@@ -46,6 +46,53 @@ window.PIECE_INFO = {
   },
 };
 
+// ---- Captured material: who has taken what, and by how much ----
+// Standard chess values; king excluded (never captured).
+window.CAPTURE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+
+// From a 64-char board string, work out what each side has captured (start
+// complement minus what's left) and the material balance (promotion-accurate,
+// from White's perspective: +ve = White ahead). Returns
+// { whiteCaptured:[black chars], blackCaptured:[White chars], materialDiff }.
+window.capturedFromBoard = function (boardStr) {
+  const cnt = {};
+  for (const ch of boardStr) if (ch !== ".") cnt[ch] = (cnt[ch] || 0) + 1;
+  const start = { p: 8, n: 2, b: 2, r: 2, q: 1, P: 8, N: 2, B: 2, R: 2, Q: 1 };
+  const missing = (chars) => {
+    const out = [];
+    for (const c of chars) {
+      const gone = Math.max(0, (start[c] || 0) - (cnt[c] || 0));
+      for (let k = 0; k < gone; k++) out.push(c);
+    }
+    out.sort((a, b) => (window.CAPTURE_VALUE[b.toLowerCase()] || 0) - (window.CAPTURE_VALUE[a.toLowerCase()] || 0));
+    return out;
+  };
+  let materialDiff = 0;
+  for (const ch of boardStr) {
+    if (ch === "." || ch === "K" || ch === "k") continue;
+    const v = window.CAPTURE_VALUE[ch.toLowerCase()] || 0;
+    materialDiff += ch === ch.toUpperCase() ? v : -v;
+  }
+  return {
+    whiteCaptured: missing(["q", "r", "b", "n", "p"]), // black pieces White took
+    blackCaptured: missing(["Q", "R", "B", "N", "P"]), // White pieces Black took
+    materialDiff,
+  };
+};
+
+// One side's tray: the captured glyphs (reusing the board piece set) plus a
+// "+N" badge when that side is ahead on material.
+window.capturedTrayHTML = function (capturedChars, advantage) {
+  const glyphs = capturedChars
+    .map((ch) => {
+      const color = ch === ch.toUpperCase() ? "white" : "black";
+      return `<span class="cap-pc ${color}">${window.pieceSVG ? window.pieceSVG(ch) : ""}</span>`;
+    })
+    .join("");
+  const badge = advantage > 0 ? `<span class="cap-adv">+${advantage}</span>` : "";
+  return glyphs || badge ? glyphs + badge : "";
+};
+
 // Illustrated move pattern: a 5×5 mini-board with the piece in the centre and
 // every square it can reach lit up (● move · ✕ capture). Far more intuitive
 // than a paragraph — you *see* the L of the knight, the rays of the bishop.

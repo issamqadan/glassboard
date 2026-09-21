@@ -948,6 +948,18 @@ main.game .status:empty { display: none; }
 .gb-newhere:hover { border-color: #7ee0d6; color: #aef0e6; background: rgba(126,224,214,0.16); }
 @media (max-width: 640px) { .gb-newhere { font-size: 0.76rem; padding: 5px 9px; } }
 
+/* ---- Captured material tray: who took what, and the material lead ---- */
+.cap-row { display: flex; align-items: center; min-height: 24px; margin: 4px 2px; }
+.cap-tray { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+.cap-pc { width: 19px; height: 19px; display: inline-flex; margin-right: -3px; }
+.cap-pc:last-of-type { margin-right: 0; }
+.cap-pc.white { --pf: var(--pf-w); --ps: var(--ps-w); }
+.cap-pc.black { --pf: var(--pf-b); --ps: var(--ps-b); }
+.cap-pc .pc-svg { width: 100%; height: 100%; display: block; fill: var(--pf); stroke: var(--ps); stroke-width: 1.1; stroke-linejoin: round; stroke-linecap: round; }
+.cap-adv { margin-left: 7px; font-size: 0.82rem; font-weight: 800; color: #7ee0d6; font-variant-numeric: tabular-nums; }
+/* Hotseat lays the board out at a fixed width; match it so trays align. */
+.tp-col { display: flex; flex-direction: column; width: min(480px, 92vw); flex: 0 0 auto; }
+
 /* ---- Piece tips: learn each piece as you touch it; full tour on demand ---- */
 .piece-tip { border-radius: 13px; padding: 11px 14px; border: 1px solid var(--glass-line, rgba(255,255,255,0.08));
   background: var(--glass-card, rgba(255,255,255,0.035)); }

@@ -531,12 +531,28 @@ const oppElo = () => (myColor === "white" ? state.black_elo : state.white_elo);
 function paint() {
   renderBoard();
   renderPlayers();
+  renderCaptured();
   renderCoach();
   renderAssist();
   renderStrategy();
   renderGlass();
   renderStatus();
   renderBudget();
+}
+
+// Captured material, following board orientation: the viewer's side sits at the
+// bottom. Each tray shows what that side has taken plus a "+N" lead badge.
+function renderCaptured() {
+  const top = document.getElementById("capTop"), bot = document.getElementById("capBot");
+  if (!top || !bot || !window.capturedFromBoard) return;
+  if (!game) { top.innerHTML = ""; bot.innerHTML = ""; return; }
+  const c = window.capturedFromBoard(game.boardString());
+  const iAmWhite = orient() !== "black";
+  const mine = iAmWhite ? c.whiteCaptured : c.blackCaptured;
+  const theirs = iAmWhite ? c.blackCaptured : c.whiteCaptured;
+  const myAdv = iAmWhite ? c.materialDiff : -c.materialDiff;
+  bot.innerHTML = window.capturedTrayHTML(mine, myAdv);
+  top.innerHTML = window.capturedTrayHTML(theirs, -myAdv);
 }
 
 // End-of-game agency read: how much help you leaned on, and the trend.
