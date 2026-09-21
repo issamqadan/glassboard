@@ -124,6 +124,7 @@ async function resumeAiGame(id) {
   pickedStrategyId = null; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
   firstGame = false;
   hideOver();
+  if (window.GBTheme) GBTheme.setContext(id); // restore this game's board
   setLevelPill(game.assistLevel());
   onPositionChanged();
   // Resumed mid-cycle on the engine's move → let it reply.
@@ -255,6 +256,7 @@ function newGame() {
   helpWasAvailable = false;
   animMoveKey = null;
   hideOver();
+  if (window.GBTheme) GBTheme.setContext(aiGameId); // this game's own board
   setLevelPill(game.assistLevel());
   onPositionChanged();
 }

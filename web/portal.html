@@ -291,6 +291,7 @@
   <div class="toasts" id="toasts"></div>
 
   <script src="./pieces.js"></script>
+  <script src="./theme.js"></script>
   <script src="./social.js"></script>
   <script>
     const TIERS = [
@@ -500,7 +501,16 @@
     // ---- mini board preview (renders the live position from FEN) ----
     const MINI_GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
     const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w';
-    function miniBoard(fen, color) {
+    // The board palette a specific game uses (per-game, set by the switcher),
+    // so the lobby preview matches what you'll see when you open it.
+    function boardThemeFor(key) {
+      let id = null;
+      try { id = localStorage.getItem('gb_board:' + key) || localStorage.getItem('gb_board'); } catch {}
+      const t = (window.GBTheme && window.GBTheme.list || []).find(x => x.id === (id || 'glass'));
+      return t || { light: '#b3bed2', dark: '#61708c' };
+    }
+    function miniBoard(fen, color, theme) {
+      const th = theme || { light: '#b3bed2', dark: '#61708c' };
       const rows = (fen || START_FEN).split(' ')[0].split('/');   // rows[0] = rank 8
       const grid = rows.map(row => {
         const cells = [];
@@ -515,7 +525,7 @@
         const dark = (f + r) % 2 === 1;
         const c = grid[r] && grid[r][f];
         const pc = c ? (typeof pieceSVG === 'function' ? pieceSVG(c) : MINI_GLYPH[c.toLowerCase()] + '︎') : '';
-        cells += `<div class="mc ${dark ? 'd' : 'l'}">${c ? `<span class="mp ${c === c.toUpperCase() ? 'w' : 'b'}">${pc}</span>` : ''}</div>`;
+        cells += `<div class="mc ${dark ? 'd' : 'l'}" style="background:${dark ? th.dark : th.light}">${c ? `<span class="mp ${c === c.toUpperCase() ? 'w' : 'b'}">${pc}</span>` : ''}</div>`;
       }
       return `<div class="mini">${cells}</div>`;
     }
@@ -572,7 +582,7 @@
             : `You ${g.myRating} · <span class="handicap-chip">handicap <span class="tier">set when they join</span></span>`);
         return `<div class="game${yourTurn ? ' your-turn' : ''}" style="--stripe:${over ? 'var(--faint)' : active ? 'var(--good)' : 'var(--warn)'}">
           <div class="g-row">
-            <div class="g-preview" ${over ? '' : `onclick="enterGame('${g.id}')"`} title="Open game" role="button">${miniBoard(g.fen, myColor)}</div>
+            <div class="g-preview" ${over ? '' : `onclick="enterGame('${g.id}')"`} title="Open game" role="button">${miniBoard(g.fen, myColor, boardThemeFor('mp:' + g.id))}</div>
             <div class="g-main">
               <div class="g-name">${escapeHtml(g.oppName)}${!casual && g.oppRating ? ` <span class="g-elo">${g.oppRating}</span>` : ''} ${modeChip}</div>
               <div class="g-sub">${sub}</div>
@@ -798,7 +808,7 @@
         if (started) meta.push('played ' + started);
         return `<div class="game${yourTurn ? ' your-turn' : ''}" style="--stripe:${over ? 'var(--faint)' : 'var(--good)'}">
           <div class="g-row">
-            <div class="g-preview" onclick="location.href='./index.html?g=${g.id}'" title="Resume game" role="button">${miniBoard(g.fen, 'white')}</div>
+            <div class="g-preview" onclick="location.href='./index.html?g=${g.id}'" title="Resume game" role="button">${miniBoard(g.fen, 'white', boardThemeFor(g.id))}</div>
             <div class="g-main">
               <div class="g-name">🤖 Glassboard AI <span class="g-elo">${g.engineElo || ''}</span> <span class="mode-chip">vs AI</span></div>
               <div class="g-sub">You ${g.humanElo || ''} · solo game on this device</div>

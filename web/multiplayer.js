@@ -289,7 +289,9 @@ function connect() {
   ws.onopen = () => {
     const p = currentPlayer();
     myName = p.name;
-    ws.send(JSON.stringify({ t: "join", room: roomEl.value.trim() || "test", elo: p.rating, pid: p.id, name: p.name }));
+    const room = roomEl.value.trim() || "test";
+    ws.send(JSON.stringify({ t: "join", room, elo: p.rating, pid: p.id, name: p.name }));
+    if (window.GBTheme) GBTheme.setContext("mp:" + room); // this game's own board
     statusEl.textContent = "Connected — joining room…";
   };
   ws.onmessage = (ev) => onMessage(JSON.parse(ev.data));
@@ -1177,6 +1179,7 @@ function finishMove(from, to, promo) {
 function startSim() {
   sim = true;
   gameMode = new URLSearchParams(location.search).get("mode") === "casual" ? "casual" : "match";
+  if (window.GBTheme) GBTheme.setContext("sim");
   game = new Game(); // startpos
   glassList = [];
   lastGlassCount = 0;

@@ -40,6 +40,7 @@ const isWhitePiece = (c) => c !== "." && c === c.toUpperCase();
 async function main() {
   await init();
   game = new Game();
+  if (window.GBTheme) GBTheme.setContext("hotseat"); // this mode's own board
 
   el("pickWhite").addEventListener("click", () => pickRole("white"));
   el("pickBlack").addEventListener("click", () => pickRole("black"));
