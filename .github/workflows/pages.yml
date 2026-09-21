@@ -51,6 +51,21 @@ jobs:
       - name: Build web bundle
         run: ./scripts/build-web.sh
 
+      # GitHub Pages + CDN cache static assets aggressively, so a fresh deploy can
+      # keep serving stale JS/WASM (a change that "didn't ship"). Stamp every local
+      # asset URL with the commit SHA so each deploy is a distinct, uncached URL.
+      - name: Cache-bust static assets
+        run: |
+          V="${GITHUB_SHA::8}"
+          for f in web/*.html; do
+            sed -i -E \
+              -e 's#(src="\./[^"]+\.js)"#\1?v='"$V"'"#g' \
+              -e 's#(href="\./[^"]+\.css)"#\1?v='"$V"'"#g' "$f"
+          done
+          sed -i -E 's#(from "\./pkg/glassboard_wasm\.js)"#\1?v='"$V"'"#' web/main.js web/multiplayer.js web/twoplayer.js
+          sed -i "s#new URL('glassboard_wasm_bg.wasm'#new URL('glassboard_wasm_bg.wasm?v=$V'#" web/pkg/glassboard_wasm.js
+          echo "Cache-busted static assets with v=$V"
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
