@@ -70,6 +70,9 @@ pub struct Assistance {
     pub level: AssistLevel,
     /// Is the side to move in check?
     pub in_check: bool,
+    /// Does the opponent threaten checkmate next move? (The build-up warning:
+    /// on your turn, if you do nothing, they mate — so your move must stop it.)
+    pub mate_threat: bool,
     /// Own pieces that are attacked and undefended (awareness+).
     pub hanging: Vec<Square>,
     /// Value-aware threats to our pieces — the opponent wins material by
@@ -96,6 +99,7 @@ pub struct Assistance {
 /// to `depth` where candidate moves are needed.
 pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
     let checked = in_check(b);
+    let mate_threat = level >= AssistLevel::Awareness && opponent_threatens_mate(b);
 
     let (hanging, threats, free_captures) = if level >= AssistLevel::Awareness {
         (
@@ -111,6 +115,11 @@ pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
     if level >= AssistLevel::Coaching {
         if checked {
             messages.push("You are in check — you must get out of it.".to_string());
+        } else if mate_threat {
+            messages.push(
+                "Checkmate threat — the opponent can mate next move. Your move must stop it."
+                    .to_string(),
+            );
         }
         // Threats first, biggest loss first — safety outranks everything else.
         for t in &threats {
@@ -178,6 +187,7 @@ pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
     Assistance {
         level,
         in_check: checked,
+        mate_threat,
         hanging,
         threats,
         free_captures,
@@ -291,6 +301,34 @@ fn hanging_pieces(b: &Board, side: Color) -> Vec<Square> {
         }
     }
     out
+}
+
+/// Does the opponent threaten mate next move? Give them the move (a null move)
+/// and see if any reply is checkmate. This is the "build-up" warning: on your
+/// turn it fires *before* you're mated, so your move can address it. Skipped when
+/// you're already in check (that's its own, louder signal).
+fn opponent_threatens_mate(b: &Board) -> bool {
+    if in_check(b) {
+        return false;
+    }
+    let opp = b.side.opp();
+    // Move-gen needs both kings on the board (king-safety checks).
+    let both_kings = |c: Color| b.squares.iter().flatten().any(|p| p.kind == PieceKind::King && p.color == c);
+    if !both_kings(Color::White) || !both_kings(Color::Black) {
+        return false;
+    }
+    let mut nb = *b;
+    nb.side = opp;
+    nb.ep = None;
+    for m in generate_legal(&nb) {
+        let mut c = nb;
+        c.make_move(m);
+        // Now it's our move in `c`: are we checkmated?
+        if in_check(&c) && generate_legal(&c).is_empty() {
+            return true;
+        }
+    }
+    false
 }
 
 /// Value-aware threats to `side`: our pieces the opponent can capture at a net
@@ -455,6 +493,26 @@ mod tests {
         assert_eq!(sq_to_algebraic(threats[0].square), "d4");
         assert_eq!(threats[0].kind, PieceKind::Queen);
         assert_eq!(threats[0].loss, 900 - 320, "lose queen, regain a knight");
+    }
+
+    /// Build-up warning: a back-rank mate looms. It's White to move; Black's rook
+    /// can mate on the back rank next move, so the threat must fire now.
+    #[test]
+    fn opponent_back_rank_mate_is_a_threat() {
+        // White king g1 boxed in by pawns f2,g2,h2; Black rook a8 swings to a1# next.
+        let b = parse_fen("r5k1/8/8/8/8/8/5PPP/6K1 w - - 0 1");
+        assert!(!in_check(&b));
+        assert!(opponent_threatens_mate(&b), "Ra1# is threatened");
+        let a = analyze(&b, AssistLevel::Coaching, 1);
+        assert!(a.mate_threat);
+        assert!(a.messages.iter().any(|m| m.contains("Checkmate threat")));
+    }
+
+    /// A quiet opening position is not under a mate threat.
+    #[test]
+    fn startpos_has_no_mate_threat() {
+        let b = Board::startpos();
+        assert!(!opponent_threatens_mate(&b));
     }
 
     /// A defended piece attacked only by something at least as valuable is safe.

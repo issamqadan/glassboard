@@ -120,7 +120,7 @@ async function resumeAiGame(id) {
   if (engineEloEl) engineEloEl.value = rec.engineElo;
   game.setRatings(rec.humanElo, rec.engineElo);
   aiGameId = id; aiSaved = true;
-  selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false;
+  selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
   pickedStrategyId = null; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
   firstGame = false;
   hideOver();
@@ -135,6 +135,7 @@ let legalTargets = [];
 let hanging = [];
 let threats = [];        // value-aware [{sq,kind,loss}], biggest loss first
 let threatSquares = [];  // just the squares, for board highlighting
+let mateKingSq = -1;     // the mated king's square, to ring it when the game ends
 let freeCaptures = [];
 let lastStratSig = ""; // signature of strategies last seen while the fold was open
 let curStratSig = "";
@@ -243,6 +244,7 @@ function newGame() {
   game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
   aiGameId = newAiId(); // a fresh slot; only saved once a move is played
   aiSaved = false;
+  mateKingSq = -1;
   selected = null;
   legalTargets = [];
   lastMove = null;
@@ -302,9 +304,9 @@ function onPositionChanged() {
   if (fold) fold.open = false;
   const followingPlan = assistData && assistData.strategy && assistData.strategy.strategies
     && assistData.strategy.strategies.some((s) => s.id === pickedStrategyId);
-  // Safety never waits: if you're in check or about to lose real material, the
-  // help shows at once — the thinking window is only for quiet positions.
-  const urgent = assistData && (assistData.inCheck || (threats[0] && threats[0].loss >= 200));
+  // Safety never waits: in check, a mate threat, or about to lose real material →
+  // help shows at once. The thinking window is only for quiet positions.
+  const urgent = assistData && (assistData.inCheck || assistData.mateThreat || (threats[0] && threats[0].loss >= 200));
   if (assistData && (assistData.candidates || []).length && !firstGame) {
     if (followingPlan || urgent) revealHint();
     else startThinkWindow();
@@ -424,6 +426,9 @@ function renderCoach() {
   if (a && a.inCheck) {
     tone = "danger"; ic = "⚠"; head = "You're in check";
     sub = "Get your king out of check this move.";
+  } else if (a && a.mateThreat) {
+    crit = true; tone = "danger"; ic = "🛑"; head = "Checkmate threat!";
+    sub = "The engine can mate next move — your move must stop it (guard the king or remove the attacker).";
   } else if (tlist.length) {
     // Value-aware: the biggest-loss threat first — this is what must interrupt
     // the plan. A defended queen attacked by a knight lands here (hanging misses it).
@@ -488,6 +493,25 @@ function resign() {
   paint();
 }
 
+function findKing(color) {
+  const k = color === "white" ? "K" : "k";
+  const s = game.boardString();
+  for (let i = 0; i < 64; i++) if (s[i] === k) return i;
+  return -1;
+}
+// Draw HOW the game ended, on the board: ring the mated king and arrow the
+// piece that delivered mate. Uses the plan overlay (cleared once the game is over).
+function illustrateMate(kingSq, fromSq) {
+  mateKingSq = kingSq;
+  const sq = boardEl.querySelector(`[data-sq="${kingSq}"]`);
+  if (sq) sq.classList.add("mate");
+  const ov = document.getElementById("planOverlay");
+  if (ov && fromSq != null && fromSq >= 0) {
+    ov.innerHTML = planArrow(fromSq, kingSq, "#ff5666", 0) +
+      `<circle class="mate-ring" cx="${planCxy(kingSq).x}" cy="${planCxy(kingSq).y}" r="46" fill="none" stroke="#ff5666" stroke-width="6"/>`;
+  }
+}
+
 function showGameOverIfNeeded() {
   const ov = document.getElementById("overOverlay");
   if (!ov) return;
@@ -495,7 +519,7 @@ function showGameOverIfNeeded() {
   const over = resigned || st !== "ongoing";
   const rb = document.getElementById("resignBtn");
   if (rb) rb.hidden = over;
-  if (!over) { ov.style.display = "none"; return; }
+  if (!over) { ov.style.display = "none"; mateKingSq = -1; return; }
   let winner = "", reason = "";
   if (resigned) { winner = "black"; reason = "resignation"; }        // you (White) resigned
   else if (st === "checkmate") { winner = game.sideToMove() === "white" ? "black" : "white"; reason = "checkmate"; }
@@ -503,9 +527,29 @@ function showGameOverIfNeeded() {
   else if (st === "fifty-move") { reason = "fifty-move rule"; }
   const draw = winner === "", won = winner === "white";
   const res = document.getElementById("overResult"), rea = document.getElementById("overReason");
-  res.textContent = draw ? "Draw" : won ? "You win! 🎉" : "You lose";
+
+  let how = "";
+  if (st === "checkmate") {
+    const loser = game.sideToMove();                 // the mated side is to move
+    const kingSq = findKing(loser);
+    illustrateMate(kingSq, lastMove ? lastMove.to : -1);
+    const byName = lastMove ? pieceNameAt(lastMove.to) : "piece";
+    const bySq = lastMove ? sqName(lastMove.to) : "";
+    how = won
+      ? `Your ${escapeHtml(byName)}${bySq ? " on " + bySq : ""} delivers mate — the black king can't escape.`
+      : `The engine's ${escapeHtml(byName)}${bySq ? " on " + bySq : ""} has your king trapped — no legal escape.`;
+  } else if (reason === "stalemate") {
+    how = "No legal moves, but the king isn't in check — it's a draw.";
+  } else if (reason === "resignation") {
+    how = "You resigned this one.";
+  } else {
+    how = "Fifty moves without a capture or pawn move — an automatic draw.";
+  }
+
+  res.innerHTML = (st === "checkmate" ? `<span class="over-mate">CHECKMATE</span>` : "") +
+    (draw ? "Draw" : won ? "You win! 🎉" : "You lose");
   res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss");
-  rea.innerHTML = "by " + reason + agencySummaryHtml();
+  rea.innerHTML = `<div class="over-how">${how}</div>` + agencySummaryHtml();
   ov.style.display = "grid";
 }
 
@@ -635,7 +679,10 @@ function renderBoard() {
       const i = idx(file, rank);
       const sq = document.createElement("div");
       sq.className = "sq " + ((file + rank) % 2 === 1 ? "light" : "dark");
+      sq.dataset.sq = i;
+      if (i === mateKingSq) sq.classList.add("mate");
       if (chkKing && s[i] === chkKing) sq.classList.add("check");
+      if (assistData && assistData.mateThreat && !assistData.inCheck && s[i] === "K") sq.classList.add("king-danger");
       if (selected === i) sq.classList.add("selected");
       if (legalTargets.includes(i)) { sq.classList.add("target"); if (s[i] !== ".") sq.classList.add("capture"); }
       if (threatSquares.includes(i)) sq.classList.add("threat");

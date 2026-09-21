@@ -893,6 +893,33 @@ main.game .status:empty { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .sq.check { animation: none; box-shadow: inset 0 0 0 3px #f26d7a; } }
 
+/* Mate threat looming (you're not in check yet, but you will be mated if you
+   ignore it): the king gets an amber warning halo — the build-up alert. */
+.sq.king-danger { box-shadow: inset 0 0 0 3px #ffb020, inset 0 0 20px -3px rgba(255,176,32,0.7);
+  animation: king-warn 1.1s ease-in-out infinite; }
+@keyframes king-warn { 0%,100% { box-shadow: inset 0 0 0 3px rgba(255,176,32,0.6), inset 0 0 16px -3px rgba(255,176,32,0.45); } 50% { box-shadow: inset 0 0 0 4px #ffc94d, inset 0 0 26px -1px rgba(255,176,32,0.85); } }
+@media (prefers-reduced-motion: reduce) { .sq.king-danger { animation: none; } }
+
+/* Checkmate: the mated king gets a heavy, unmistakable red ring + a slow throb. */
+.sq.mate { box-shadow: inset 0 0 0 4px #ff3b4a, inset 0 0 30px -2px rgba(255,59,74,0.9);
+  animation: mate-throb 1.3s ease-in-out infinite; z-index: 2; }
+.sq.mate .piece { animation: mate-topple 0.9s ease-out forwards; }
+@keyframes mate-throb { 0%,100% { box-shadow: inset 0 0 0 4px #ff3b4a, inset 0 0 24px -3px rgba(255,59,74,0.7); } 50% { box-shadow: inset 0 0 0 5px #ff5666, inset 0 0 34px 0 rgba(255,59,74,1); } }
+@keyframes mate-topple { to { transform: rotate(-18deg) translateY(2px); opacity: 0.85; } }
+/* the mate arrow's ring draws in on the plan overlay */
+.plan-overlay .mate-ring { animation: mate-ring-in 0.5s ease-out; transform-box: fill-box; transform-origin: center; }
+@keyframes mate-ring-in { from { opacity: 0; transform: scale(1.5); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .sq.mate, .sq.mate .piece, .plan-overlay .mate-ring { animation: none; } }
+
+/* The animated "CHECKMATE" stamp above the result. */
+.over-mate { display: block; font-size: 0.9rem; font-weight: 900; letter-spacing: 0.22em; color: #ff5666;
+  margin-bottom: 8px; animation: mate-stamp 0.5s cubic-bezier(.2,1.5,.4,1) both; }
+@keyframes mate-stamp { 0% { opacity: 0; transform: scale(2.2) rotate(-8deg); letter-spacing: 0.6em; } 100% { opacity: 1; transform: scale(1) rotate(0); letter-spacing: 0.22em; } }
+.over-how { color: #c3d0e6; font-size: 0.95rem; line-height: 1.45; }
+.over-result { animation: over-pop 0.35s cubic-bezier(.2,1.4,.4,1) both; }
+@keyframes over-pop { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .over-mate, .over-result { animation: none; } }
+
 /* Actionable coach: a button that turns the diagnosis into a board action. */
 .coach .co-act { flex-shrink: 0; background: rgba(242,109,122,0.16); color: #f7b0b7; border: 1px solid rgba(242,109,122,0.5);
   border-radius: 10px; padding: 9px 13px; font-weight: 640; font-size: 0.84rem; cursor: pointer; white-space: nowrap; }

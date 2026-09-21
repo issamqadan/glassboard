@@ -67,6 +67,7 @@ let gameMode = "match"; // "match" (declared handicap) | "casual" (free, both si
 let prevMyTurn = false, seenState = false, wasOver = false;
 const baseTitle = "Glassboard — Online";
 let lastMove = null;
+let mateKingSq = -1; // the mated king's square, ringed when the game ends
 let lastGlassFen = null;
 let hostName = null;
 let myName = null;
@@ -337,15 +338,17 @@ function onState(msg) {
   prevMyTurn = myTurn;
   seenState = true;
 
-  // Game-over screen (once per ending; cleared on rematch).
   const rez = gameResult(msg);
   const nowOver = !!rez.reason;
-  if (nowOver && !wasOver) showGameOver(rez);
-  if (!nowOver) { const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; }
-  wasOver = nowOver;
+  if (!nowOver) { mateKingSq = -1; const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; }
 
   computeAssist();
   paint();
+
+  // Game-over screen AFTER paint, so the mate arrow (on the plan overlay) and the
+  // king ring aren't wiped by the assistance repaint. Once per ending.
+  if (nowOver && !wasOver) showGameOver(rez);
+  wasOver = nowOver;
 }
 
 const oppLabel = () => (myColor === "white" ? state.black_name : state.white_name) || "Your opponent";
@@ -392,13 +395,44 @@ function gameResult(msg) {
   }
   return { reason, winner };
 }
+function findKing(color) {
+  const k = color === "white" ? "K" : "k";
+  const s = game ? game.boardString() : "";
+  for (let i = 0; i < 64; i++) if (s[i] === k) return i;
+  return -1;
+}
+function illustrateMate(kingSq, fromSq) {
+  mateKingSq = kingSq;
+  const sq = boardEl.querySelector(`[data-sq="${kingSq}"]`);
+  if (sq) sq.classList.add("mate");
+  const ov = document.getElementById("planOverlay");
+  if (ov && fromSq != null && fromSq >= 0 && kingSq >= 0) {
+    ov.innerHTML = planArrow(fromSq, kingSq, "#ff5666", 0) +
+      `<circle class="mate-ring" cx="${planCxy(kingSq).x}" cy="${planCxy(kingSq).y}" r="46" fill="none" stroke="#ff5666" stroke-width="6"/>`;
+  }
+}
 function showGameOver(rez) {
   const ov = document.getElementById("overOverlay");
   if (!ov) return;
   const draw = rez.winner === "", won = rez.winner === myColor;
   const res = el("overResult"), rea = el("overReason");
-  if (res) { res.textContent = draw ? "Draw" : won ? "You win! 🎉" : "You lose"; res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss"); }
-  if (rea) rea.textContent = "by " + rez.reason;
+  let how = "by " + rez.reason;
+  if (rez.reason === "checkmate") {
+    const loser = state && state.turn ? state.turn : (rez.winner === "white" ? "black" : "white");
+    const kingSq = findKing(loser);
+    illustrateMate(kingSq, lastMove ? lastMove.to : -1);
+    const byName = lastMove ? pieceNameAt(lastMove.to) : "piece";
+    const bySq = lastMove ? sqName(lastMove.to) : "";
+    how = won
+      ? `Your ${byName}${bySq ? " on " + bySq : ""} delivers mate — their king can't escape.`
+      : `Their ${byName}${bySq ? " on " + bySq : ""} has your king trapped — no legal escape.`;
+  }
+  if (res) {
+    res.innerHTML = (rez.reason === "checkmate" ? `<span class="over-mate">CHECKMATE</span>` : "") +
+      (draw ? "Draw" : won ? "You win! 🎉" : "You lose");
+    res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss");
+  }
+  if (rea) rea.innerHTML = `<div class="over-how">${escapeHtml(how)}</div>`;
   ov.style.display = "grid";
 }
 function doRematch() {
@@ -451,8 +485,8 @@ function computeAssist() {
   const myTurn = state && state.status === "ongoing" && state.turn === myColor;
   const followingPlan = assistData && assistData.strategy && assistData.strategy.strategies
     && assistData.strategy.strategies.some((s) => s.id === pickedStrategyId);
-  // Safety never waits: in check or losing real material → help shows at once.
-  const urgent = assistData && (assistData.inCheck || (threats[0] && threats[0].loss >= 200));
+  // Safety never waits: in check, a mate threat, or losing real material → help shows at once.
+  const urgent = assistData && (assistData.inCheck || assistData.mateThreat || (threats[0] && threats[0].loss >= 200));
   if (myTurn && assistData && (assistData.candidates || []).length) {
     if (followingPlan || urgent) revealHint();
     else startThinkWindow();
@@ -608,6 +642,9 @@ function renderCoach() {
   if (a && a.inCheck) {
     tone = "danger"; ic = "⚠"; head = "You're in check";
     sub = "Get your king out of check this move.";
+  } else if (a && a.mateThreat) {
+    crit = true; tone = "danger"; ic = "🛑"; head = "Checkmate threat!";
+    sub = "Your opponent can mate next move — your move must stop it (guard the king or remove the attacker).";
   } else if (tlist.length) {
     // Value-aware: biggest-loss threat first — catches a defended queen too.
     const t = tlist[0];
@@ -713,7 +750,10 @@ function renderBoard() {
     const i = idx(file, rank);
     const sq = document.createElement("div");
     sq.className = "sq " + ((file + rank) % 2 === 1 ? "light" : "dark");
+    sq.dataset.sq = i;
+    if (i === mateKingSq) sq.classList.add("mate");
     if (chkKing && s[i] === chkKing) sq.classList.add("check");
+    if (assistData && assistData.mateThreat && !assistData.inCheck && s[i] === (game.sideToMove() === "white" ? "K" : "k")) sq.classList.add("king-danger");
     if (selected === i) sq.classList.add("selected");
     if (legalTargets.includes(i)) { sq.classList.add("target"); if (s[i] !== ".") sq.classList.add("capture"); }
     if (threatSquares.includes(i)) sq.classList.add("threat");

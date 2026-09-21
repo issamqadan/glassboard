@@ -318,9 +318,10 @@ impl Game {
         };
 
         format!(
-            "{{\"level\":{},\"inCheck\":{},\"hanging\":[{}],\"threats\":[{}],\"freeCaptures\":[{}],\"messages\":[{}],\"candidates\":[{}],\"recommended\":{},\"strategy\":{}}}",
+            "{{\"level\":{},\"inCheck\":{},\"mateThreat\":{},\"hanging\":[{}],\"threats\":[{}],\"freeCaptures\":[{}],\"messages\":[{}],\"candidates\":[{}],\"recommended\":{},\"strategy\":{}}}",
             json_str(level_name(level)),
             a.in_check,
+            a.mate_threat,
             hanging,
             threats,
             free_captures,
