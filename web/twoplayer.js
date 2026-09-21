@@ -150,17 +150,10 @@ function render() {
   if (selected !== lastTipSq) { renderPieceTip(selected); lastTipSq = selected; }
 }
 
-// Captured material — the side at the bottom (per the chosen role) is "you".
+// Captured material as one tug-bar above the board, oriented to the chosen side.
 function renderCaptured() {
-  const top = document.getElementById("capTop"), bot = document.getElementById("capBot");
-  if (!top || !bot || !window.capturedFromBoard) return;
-  const c = window.capturedFromBoard(game.boardString());
-  const whiteBottom = role !== "black";
-  const bottomCap = whiteBottom ? c.whiteCaptured : c.blackCaptured;
-  const topCap = whiteBottom ? c.blackCaptured : c.whiteCaptured;
-  const bottomAdv = whiteBottom ? c.materialDiff : -c.materialDiff;
-  bot.innerHTML = window.capturedTrayHTML(bottomCap, bottomAdv);
-  top.innerHTML = window.capturedTrayHTML(topCap, -bottomAdv);
+  const el = document.getElementById("materialBar");
+  if (el && window.renderMaterialBar) window.renderMaterialBar(el, game.boardString(), role !== "black");
 }
 
 // Learn the pieces as you play (shared behaviour with the other modes).

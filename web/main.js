@@ -393,14 +393,10 @@ function paint() {
   showGameOverIfNeeded();
 }
 
-// Captured material: you (White) at the bottom, the engine (Black) at the top.
-// Each tray shows the pieces that side has taken and a "+N" lead badge.
+// Captured material as one tug-bar above the board (you are White → left side).
 function renderCaptured() {
-  const top = document.getElementById("capTop"), bot = document.getElementById("capBot");
-  if (!top || !bot || !window.capturedFromBoard) return;
-  const c = window.capturedFromBoard(game.boardString());
-  bot.innerHTML = window.capturedTrayHTML(c.whiteCaptured, c.materialDiff);
-  top.innerHTML = window.capturedTrayHTML(c.blackCaptured, -c.materialDiff);
+  const el = document.getElementById("materialBar");
+  if (el && window.renderMaterialBar) window.renderMaterialBar(el, game.boardString(), true);
 }
 
 // The coach: one prominent, concrete piece of advice under the board. This is

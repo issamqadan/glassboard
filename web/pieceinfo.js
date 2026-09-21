@@ -93,6 +93,49 @@ window.capturedTrayHTML = function (capturedChars, advantage) {
   return glyphs || badge ? glyphs + badge : "";
 };
 
+// The material "tug" bar: ONE strip above the board. Each side's captured pieces
+// flank a living balance beam whose midpoint slides toward whoever leads on
+// material, with the lead amount floating at the tipping point. At-a-glance who's
+// winning — and it *moves* when you capture (piece values, felt not memorised).
+// `iAmWhite` orients "you" to the left. Built once, then updated in place so the
+// beam glides (and captured pieces pop only when the set actually changes).
+window.renderMaterialBar = function (el, boardStr, iAmWhite) {
+  if (!el || !window.capturedFromBoard) return;
+  const c = window.capturedFromBoard(boardStr);
+  const mine = iAmWhite ? c.whiteCaptured : c.blackCaptured;   // pieces YOU took
+  const theirs = iAmWhite ? c.blackCaptured : c.whiteCaptured; // pieces THEY took
+  const adv = iAmWhite ? c.materialDiff : -c.materialDiff;      // + = you lead
+  const cap = Math.max(-10, Math.min(10, adv));
+  const yourShare = 50 + cap * 4; // 10..90 — leader's zone grows
+  const glyphs = (arr) =>
+    arr.map((ch) => {
+      const color = ch === ch.toUpperCase() ? "white" : "black";
+      return `<span class="cap-pc ${color}">${window.pieceSVG ? window.pieceSVG(ch) : ""}</span>`;
+    }).join("");
+
+  if (!el.querySelector(".mb-track")) {
+    el.innerHTML =
+      `<div class="mb-caps you"></div>` +
+      `<div class="mb-track">` +
+        `<div class="mb-fill you"></div><div class="mb-fill opp"></div>` +
+        `<div class="mb-knob"></div><span class="mb-badge"></span>` +
+      `</div>` +
+      `<div class="mb-caps opp"></div>`;
+  }
+  const capsYou = el.querySelector(".mb-caps.you");
+  const capsOpp = el.querySelector(".mb-caps.opp");
+  const sigYou = mine.join(""), sigOpp = theirs.join("");
+  if (capsYou.dataset.sig !== sigYou) { capsYou.innerHTML = glyphs(mine); capsYou.dataset.sig = sigYou; }
+  if (capsOpp.dataset.sig !== sigOpp) { capsOpp.innerHTML = glyphs(theirs); capsOpp.dataset.sig = sigOpp; }
+  el.querySelector(".mb-fill.you").style.width = yourShare + "%";
+  el.querySelector(".mb-fill.opp").style.width = (100 - yourShare) + "%";
+  el.querySelector(".mb-knob").style.left = yourShare + "%";
+  const badge = el.querySelector(".mb-badge");
+  badge.className = "mb-badge " + (adv === 0 ? "even" : adv > 0 ? "you" : "opp");
+  badge.style.left = (adv === 0 ? 50 : yourShare) + "%";
+  badge.textContent = adv === 0 ? "even" : "+" + Math.abs(adv);
+};
+
 // Illustrated move pattern: a 5×5 mini-board with the piece in the centre and
 // every square it can reach lit up (● move · ✕ capture). Far more intuitive
 // than a paragraph — you *see* the L of the knight, the rays of the bishop.

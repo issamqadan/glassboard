@@ -540,19 +540,12 @@ function paint() {
   renderBudget();
 }
 
-// Captured material, following board orientation: the viewer's side sits at the
-// bottom. Each tray shows what that side has taken plus a "+N" lead badge.
+// Captured material as one tug-bar above the board, oriented to the viewer.
 function renderCaptured() {
-  const top = document.getElementById("capTop"), bot = document.getElementById("capBot");
-  if (!top || !bot || !window.capturedFromBoard) return;
-  if (!game) { top.innerHTML = ""; bot.innerHTML = ""; return; }
-  const c = window.capturedFromBoard(game.boardString());
-  const iAmWhite = orient() !== "black";
-  const mine = iAmWhite ? c.whiteCaptured : c.blackCaptured;
-  const theirs = iAmWhite ? c.blackCaptured : c.whiteCaptured;
-  const myAdv = iAmWhite ? c.materialDiff : -c.materialDiff;
-  bot.innerHTML = window.capturedTrayHTML(mine, myAdv);
-  top.innerHTML = window.capturedTrayHTML(theirs, -myAdv);
+  const el = document.getElementById("materialBar");
+  if (!el || !window.renderMaterialBar) return;
+  if (!game) { el.innerHTML = ""; return; }
+  window.renderMaterialBar(el, game.boardString(), orient() !== "black");
 }
 
 // End-of-game agency read: how much help you leaned on, and the trend.
