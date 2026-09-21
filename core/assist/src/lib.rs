@@ -39,6 +39,18 @@ pub enum AssistLevel {
     Autopilot,
 }
 
+/// A piece of ours the opponent can win material from — value-aware, so a
+/// *defended* queen attacked by a knight still counts (you'd lose 9 for 3).
+#[derive(Clone, Debug)]
+pub struct Threat {
+    pub square: Square,
+    pub kind: PieceKind,
+    /// Material we lose if we ignore it, in centipawns (a light one-exchange
+    /// static evaluation: `value(piece) - cheapest_attacker` when defended,
+    /// or the full `value(piece)` when it's hanging).
+    pub loss: i32,
+}
+
 /// A candidate move with its engine score (centipawns, side-to-move relative).
 #[derive(Clone, Debug)]
 pub struct Candidate {
@@ -60,6 +72,11 @@ pub struct Assistance {
     pub in_check: bool,
     /// Own pieces that are attacked and undefended (awareness+).
     pub hanging: Vec<Square>,
+    /// Value-aware threats to our pieces — the opponent wins material by
+    /// capturing, *even if the piece is defended* (e.g. a queen defended by a
+    /// pawn but attacked by a knight). Ordered by material lost, biggest first.
+    /// This is the signal that must outrank a strategy step: safety first.
+    pub threats: Vec<Threat>,
     /// Enemy pieces we can capture for free right now (awareness+) — the
     /// offensive mirror of `hanging`.
     pub free_captures: Vec<Square>,
@@ -80,10 +97,14 @@ pub struct Assistance {
 pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
     let checked = in_check(b);
 
-    let (hanging, free_captures) = if level >= AssistLevel::Awareness {
-        (hanging_pieces(b, b.side), free_captures(b, b.side))
+    let (hanging, threats, free_captures) = if level >= AssistLevel::Awareness {
+        (
+            hanging_pieces(b, b.side),
+            threatened_pieces(b, b.side),
+            free_captures(b, b.side),
+        )
     } else {
-        (Vec::new(), Vec::new())
+        (Vec::new(), Vec::new(), Vec::new())
     };
 
     let mut messages = Vec::new();
@@ -91,12 +112,17 @@ pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
         if checked {
             messages.push("You are in check — you must get out of it.".to_string());
         }
-        for &s in &hanging {
-            if let Some(p) = b.squares[s as usize] {
+        // Threats first, biggest loss first — safety outranks everything else.
+        for t in &threats {
+            let name = kind_name(t.kind);
+            let sq = sq_to_algebraic(t.square);
+            if t.loss >= material(PieceKind::Rook) {
                 messages.push(format!(
-                    "Your {} on {} can be taken — defend it or move it.",
-                    kind_name(p.kind),
-                    sq_to_algebraic(s)
+                    "Urgent — your {name} on {sq} is under attack. Save it before anything else."
+                ));
+            } else {
+                messages.push(format!(
+                    "Your {name} on {sq} is under attack — defend it or move it to safety."
                 ));
             }
         }
@@ -153,6 +179,7 @@ pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
         level,
         in_check: checked,
         hanging,
+        threats,
         free_captures,
         messages,
         candidates,
@@ -266,6 +293,65 @@ fn hanging_pieces(b: &Board, side: Color) -> Vec<Square> {
     out
 }
 
+/// Value-aware threats to `side`: our pieces the opponent can capture at a net
+/// material gain — *even if defended*. A queen (900) defended by a pawn but
+/// attacked by a knight (320) still counts: the exchange loses us 580. This is
+/// the gap the plain "hanging" test misses, and the reason a strategy step must
+/// yield to it. Uses a light one-exchange evaluation; ordered by loss, biggest
+/// first.
+fn threatened_pieces(b: &Board, side: Color) -> Vec<Threat> {
+    let opp = side.opp();
+    // Enumerating enemy replies needs the enemy king on the board (move-gen
+    // checks king safety). Real games always have both; guard for test/edge
+    // positions that don't.
+    if !b
+        .squares
+        .iter()
+        .flatten()
+        .any(|p| p.kind == PieceKind::King && p.color == opp)
+    {
+        return Vec::new();
+    }
+    // The cheapest enemy piece that can land on each square, as if it were the
+    // opponent's move — one move-gen pass instead of per-square attacker scans.
+    let mut nb = *b;
+    nb.side = opp;
+    nb.ep = None; // en-passant can't capture on an occupied square; avoid a phantom
+    let mut cheapest = [i32::MAX; 64];
+    for m in generate_legal(&nb) {
+        if let Some(mover) = nb.squares[m.from as usize] {
+            let v = material(mover.kind);
+            if v < cheapest[m.to as usize] {
+                cheapest[m.to as usize] = v;
+            }
+        }
+    }
+
+    let mut out = Vec::new();
+    for s in 0..64u8 {
+        let p = match b.squares[s as usize] {
+            Some(p) => p,
+            None => continue,
+        };
+        if p.color != side || p.kind == PieceKind::King {
+            continue;
+        }
+        let attacker = cheapest[s as usize];
+        if attacker == i32::MAX {
+            continue; // no enemy move reaches it → not attacked
+        }
+        let val = material(p.kind);
+        // Defended → we recapture, so we only bleed value − cheapest attacker.
+        // Undefended → we lose the whole piece.
+        let loss = if is_attacked(b, s, side) { val - attacker } else { val };
+        if loss > 0 {
+            out.push(Threat { square: s, kind: p.kind, loss });
+        }
+    }
+    out.sort_by(|a, c| c.loss.cmp(&a.loss));
+    out
+}
+
 /// Enemy pieces (excluding king and pawns) that our side attacks and the enemy
 /// does not defend — free material available to win right now. Mirrors the
 /// server-side Player-Model "missed free capture" signal so live help and the
@@ -349,6 +435,34 @@ fn kind_name(k: PieceKind) -> &'static str {
         PieceKind::Rook => "rook",
         PieceKind::Queen => "queen",
         PieceKind::King => "king",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The bug the user hit: a queen *defended* by a pawn but attacked by a
+    /// knight is not "hanging", yet ignoring it loses 900-for-320. The plain
+    /// hanging test stays silent; the value-aware threat test must fire.
+    #[test]
+    fn defended_queen_attacked_by_knight_is_a_threat() {
+        // White Qd4 (defended by Pc3) is attacked by Black Nf5. White to move.
+        let b = parse_fen("6k1/8/8/5n2/3Q4/2P5/8/6K1 w - - 0 1");
+        assert!(hanging_pieces(&b, b.side).is_empty(), "queen is defended, not hanging");
+        let threats = threatened_pieces(&b, b.side);
+        assert_eq!(threats.len(), 1, "the queen should be flagged");
+        assert_eq!(sq_to_algebraic(threats[0].square), "d4");
+        assert_eq!(threats[0].kind, PieceKind::Queen);
+        assert_eq!(threats[0].loss, 900 - 320, "lose queen, regain a knight");
+    }
+
+    /// A defended piece attacked only by something at least as valuable is safe.
+    #[test]
+    fn defended_knight_attacked_by_rook_is_not_a_threat() {
+        // White Nd4 defended by Pc3, attacked by Black Rd8 down the file.
+        let b = parse_fen("3r2k1/8/8/8/3N4/2P5/8/6K1 w - - 0 1");
+        assert!(threatened_pieces(&b, b.side).is_empty());
     }
 }
 

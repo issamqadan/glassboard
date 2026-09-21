@@ -214,6 +214,19 @@ impl Game {
             .map(|s| s.to_string())
             .collect::<Vec<_>>()
             .join(",");
+        let threats = a
+            .threats
+            .iter()
+            .map(|t| {
+                format!(
+                    "{{\"sq\":{},\"kind\":{},\"loss\":{}}}",
+                    t.square,
+                    json_str(&piece_kind_letter(t.kind).to_string()),
+                    t.loss
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
         let messages = a
             .messages
             .iter()
@@ -305,10 +318,11 @@ impl Game {
         };
 
         format!(
-            "{{\"level\":{},\"inCheck\":{},\"hanging\":[{}],\"freeCaptures\":[{}],\"messages\":[{}],\"candidates\":[{}],\"recommended\":{},\"strategy\":{}}}",
+            "{{\"level\":{},\"inCheck\":{},\"hanging\":[{}],\"threats\":[{}],\"freeCaptures\":[{}],\"messages\":[{}],\"candidates\":[{}],\"recommended\":{},\"strategy\":{}}}",
             json_str(level_name(level)),
             a.in_check,
             hanging,
+            threats,
             free_captures,
             messages,
             candidates,
@@ -367,6 +381,17 @@ fn piece_char(p: Piece) -> char {
         c.to_ascii_uppercase()
     } else {
         c
+    }
+}
+
+fn piece_kind_letter(k: PieceKind) -> char {
+    match k {
+        PieceKind::Pawn => 'p',
+        PieceKind::Knight => 'n',
+        PieceKind::Bishop => 'b',
+        PieceKind::Rook => 'r',
+        PieceKind::Queen => 'q',
+        PieceKind::King => 'k',
     }
 }
 

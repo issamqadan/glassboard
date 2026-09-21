@@ -47,6 +47,8 @@ let glassList = [];
 let selected = null;
 let legalTargets = [];
 let hanging = [];
+let threats = [];        // value-aware [{sq,kind,loss}], biggest loss first
+let threatSquares = [];
 let freeCaptures = [];
 let assistData = null;
 let lastStratSig = ""; // signature of strategies last seen while the fold was open
@@ -422,6 +424,8 @@ function updateNotifyBtn() {
 function computeAssist() {
   assistData = null;
   hanging = [];
+  threats = [];
+  threatSquares = [];
   freeCaptures = [];
   if (game && state && state.status === "ongoing" && state.turn === myColor) {
     // Deeper help must be re-revealed (and re-paid) each new position.
@@ -432,6 +436,8 @@ function computeAssist() {
     game.setAssistOverride(isCasual ? "guided" : (forceAssist || ""));
     assistData = JSON.parse(game.assist(DEPTH));
     hanging = assistData.hanging || [];
+    threats = assistData.threats || [];
+    threatSquares = threats.map((t) => t.sq);
     freeCaptures = assistData.freeCaptures || [];
     if (!isCasual && (assistData.candidates || []).length) helpWasAvailable = true;
     // (Per-position "assist shown" logging is replaced by per-MOVE provenance —
@@ -445,8 +451,10 @@ function computeAssist() {
   const myTurn = state && state.status === "ongoing" && state.turn === myColor;
   const followingPlan = assistData && assistData.strategy && assistData.strategy.strategies
     && assistData.strategy.strategies.some((s) => s.id === pickedStrategyId);
+  // Safety never waits: in check or losing real material → help shows at once.
+  const urgent = assistData && (assistData.inCheck || (threats[0] && threats[0].loss >= 200));
   if (myTurn && assistData && (assistData.candidates || []).length) {
-    if (followingPlan) revealHint();
+    if (followingPlan || urgent) revealHint();
     else startThinkWindow();
   } else clearThinkWindow(true);
 }
@@ -586,18 +594,24 @@ function renderCoach() {
   const elc = document.getElementById("coach");
   if (!elc) return;
   const a = assistData;
-  let tone = null, ic = "", head = "", sub = "", actSq = null, actLabel = "";
+  let tone = null, ic = "", head = "", sub = "", actSq = null, actLabel = "", crit = false;
+  const tlist = (a && a.threats) || [];
   if (a && a.inCheck) {
     tone = "danger"; ic = "⚠"; head = "You're in check";
     sub = "Get your king out of check this move.";
-  } else if (a && a.hanging && a.hanging.length) {
-    tone = "danger"; ic = "⚠";
-    const sq = a.hanging[0];
-    head = `Your ${pieceNameAt(sq)} on ${sqName(sq)} can be taken`;
-    sub = a.hanging.length > 1
-      ? `${a.hanging.length} of your pieces are undefended — move or protect them.`
-      : "Defend it or move it to safety.";
-    actSq = sq; actLabel = "Show where it can go →";
+  } else if (tlist.length) {
+    // Value-aware: biggest-loss threat first — catches a defended queen too.
+    const t = tlist[0];
+    crit = t.loss >= 500;
+    tone = "danger"; ic = crit ? "🛑" : "⚠";
+    const nm = pieceNameAt(t.sq);
+    head = crit ? `Save your ${nm} on ${sqName(t.sq)}!` : `Your ${nm} on ${sqName(t.sq)} is under attack`;
+    sub = crit
+      ? "You'll lose it for less — handle this before your plan."
+      : (tlist.length > 1
+        ? `${tlist.length} pieces are under attack — protect the most valuable first.`
+        : "Defend it, move it, or capture the attacker.");
+    actSq = t.sq; actLabel = "Show how to save it →";
   } else if (a && a.freeCaptures && a.freeCaptures.length) {
     tone = "gold"; ic = "★";
     const sq = a.freeCaptures[0];
@@ -606,7 +620,7 @@ function renderCoach() {
   }
   if (!tone) { elc.hidden = true; elc.innerHTML = ""; setBoardGlow(null); return; } // quiet when safe
   elc.hidden = false;
-  elc.className = "coach " + tone;
+  elc.className = "coach " + tone + (crit ? " critical" : "");
   elc.innerHTML =
     `<span class="co-ic">${ic}</span>` +
     `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>` +
@@ -693,6 +707,7 @@ function renderBoard() {
     if (chkKing && s[i] === chkKing) sq.classList.add("check");
     if (selected === i) sq.classList.add("selected");
     if (legalTargets.includes(i)) { sq.classList.add("target"); if (s[i] !== ".") sq.classList.add("capture"); }
+    if (threatSquares.includes(i)) sq.classList.add("threat");
     if (hanging.includes(i)) sq.classList.add("hanging");
     if (freeCaptures.includes(i)) sq.classList.add("free");
     if (lastMove && (lastMove.from === i || lastMove.to === i)) sq.classList.add("lastmove");
@@ -924,9 +939,14 @@ function renderStrategy() {
     if (picked) {
       const d = document.createElement("div"); d.className = "sdetail"; d.style.setProperty("--sc", STRAT_COLOR[picked.id] || "#5cc9ec");
       const steps = picked.steps.map((st) => `<div class="step ${st.done ? "done" : ""}"><span class="sd">${st.done ? "✓" : "•"}</span><span>${escapeHtml(st.text)}</span></div>`).join("");
-      d.innerHTML =
-        `<div class="snext">Next — <b>your move</b><span class="smove" title="Click to play">${escapeHtml(picked.moveSan || picked.moveUci)}</span>${escapeHtml(picked.moveNote)}</div>` +
-        `<div class="steps">${steps}</div>` +
+      const t = threats && threats[0];
+      const onHold = t && t.loss >= 200;
+      const hold = onHold
+        ? `<div class="shold">⏸ <b>Plan on hold</b> — your ${pieceNameAt(t.sq)} on ${sqName(t.sq)} is under attack. Save it first (see the coach), then continue.</div>`
+        : "";
+      d.innerHTML = hold +
+        `<div class="snext${onHold ? " dimmed" : ""}">Next — <b>your move</b><span class="smove" title="Click to play">${escapeHtml(picked.moveSan || picked.moveUci)}</span>${escapeHtml(picked.moveNote)}</div>` +
+        `<div class="steps${onHold ? " dimmed" : ""}">${steps}</div>` +
         `<div class="glassmini">🔍 This plan is shown to your opponent too.</div>`;
       host.appendChild(d);
       const mv = d.querySelector(".smove");

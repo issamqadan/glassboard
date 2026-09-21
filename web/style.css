@@ -162,6 +162,17 @@ button {
 .sq.hanging {
   box-shadow: inset 0 0 0 3px var(--hang), inset 0 0 14px -3px var(--hang-glow);
 }
+/* Value-aware threat — a piece the opponent wins material from, even if it's
+   defended (the plain "hanging" ring misses those). A gentle pulse says "look". */
+.sq.threat {
+  box-shadow: inset 0 0 0 3px #f26d7a, inset 0 0 16px -2px rgba(242,109,122,0.7);
+  animation: threatPulse 1.5s ease-in-out infinite;
+}
+@keyframes threatPulse {
+  0%, 100% { box-shadow: inset 0 0 0 3px #f26d7a, inset 0 0 16px -2px rgba(242,109,122,0.55); }
+  50% { box-shadow: inset 0 0 0 4px #ff8a95, inset 0 0 20px -1px rgba(242,109,122,0.9); }
+}
+@media (prefers-reduced-motion: reduce) { .sq.threat { animation: none; } }
 /* Empty legal target — a soft dot. */
 .sq.target::after {
   content: "";
@@ -518,6 +529,11 @@ button {
 .strategy .scard .sname { font-weight: 620; }
 .strategy .scard .sidea { font-size: 0.74rem; color: #8ea0b8; margin-top: 1px; line-height: 1.35; }
 .strategy .sdetail { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+/* Plan-on-hold: safety interrupts the sequence; the plan step dims until it's resolved. */
+.strategy .shold { display: flex; gap: 8px; align-items: flex-start; font-size: 0.8rem; line-height: 1.4; color: #ffd9dd;
+  background: rgba(242,109,122,0.14); border: 1px solid rgba(242,109,122,0.4); border-radius: 10px; padding: 9px 11px; margin-bottom: 10px; }
+.strategy .shold b { color: #fff; }
+.strategy .snext.dimmed, .strategy .steps.dimmed { opacity: 0.4; filter: grayscale(0.4); pointer-events: none; }
 .strategy .steps { margin: 4px 0 10px; }
 .strategy .step { display: flex; align-items: center; gap: 9px; padding: 4px 0; font-size: 0.82rem; color: #8ea0b8; }
 .strategy .step .sd { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line-2); flex-shrink: 0; display: grid; place-items: center;
@@ -657,6 +673,12 @@ main.game .board-wrap .board, main.game .board { width: 100%; }
 .coach.gold   { background: var(--co-gold-bg); }   .coach.gold::before   { background: var(--co-gold); }   .coach.gold .co-ic   { color: var(--co-gold); }
 .coach.calm   { background: var(--co-calm-bg); }   .coach.calm::before   { background: var(--co-calm); }   .coach.calm .co-ic   { color: var(--co-calm); }
 .coach.idle   { background: var(--co-idle-bg); }   .coach.idle::before   { background: var(--co-idle); }   .coach.idle .co-ic   { opacity: .8; }
+/* Critical — a piece worth a rook or more is hanging. Louder than plain danger. */
+.coach.critical { background: rgba(242,109,122,0.18); box-shadow: 0 0 0 1px rgba(242,109,122,0.45), 0 6px 22px -8px rgba(242,109,122,0.6); animation: coachCrit 1.1s ease-in-out infinite; }
+.coach.critical::before { width: 5px; background: #ff5666; }
+.coach.critical .co-head { color: #ffd9dd; }
+@keyframes coachCrit { 0%,100% { box-shadow: 0 0 0 1px rgba(242,109,122,0.45), 0 6px 22px -8px rgba(242,109,122,0.5); } 50% { box-shadow: 0 0 0 1px rgba(242,109,122,0.8), 0 8px 26px -6px rgba(242,109,122,0.85); } }
+@media (prefers-reduced-motion: reduce) { .coach.critical { animation: none; } }
 @keyframes coach-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .coach { animation: none; } }
 

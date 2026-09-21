@@ -53,6 +53,8 @@ let game;
 let selected = null;
 let legalTargets = [];
 let hanging = [];
+let threats = [];        // value-aware [{sq,kind,loss}], biggest loss first
+let threatSquares = [];  // just the squares, for board highlighting
 let freeCaptures = [];
 let lastStratSig = ""; // signature of strategies last seen while the fold was open
 let curStratSig = "";
@@ -193,6 +195,8 @@ function renderBudget() {
 // for White's turn exactly once, then repaints everything.
 function onPositionChanged() {
   hanging = [];
+  threats = [];
+  threatSquares = [];
   freeCaptures = [];
   assistData = null;
   revealedSugg = false; // deeper help must be re-revealed (and re-paid) each position
@@ -200,6 +204,8 @@ function onPositionChanged() {
   if (game.status() === "ongoing" && game.sideToMove() === "white") {
     assistData = JSON.parse(game.assist(depth())); // records to glass-box once
     hanging = assistData.hanging || [];
+    threats = assistData.threats || [];
+    threatSquares = threats.map((t) => t.sq);
     freeCaptures = assistData.freeCaptures || [];
     if ((assistData.candidates || []).length) helpWasAvailable = true;
   }
@@ -211,8 +217,11 @@ function onPositionChanged() {
   if (fold) fold.open = false;
   const followingPlan = assistData && assistData.strategy && assistData.strategy.strategies
     && assistData.strategy.strategies.some((s) => s.id === pickedStrategyId);
+  // Safety never waits: if you're in check or about to lose real material, the
+  // help shows at once — the thinking window is only for quiet positions.
+  const urgent = assistData && (assistData.inCheck || (threats[0] && threats[0].loss >= 200));
   if (assistData && (assistData.candidates || []).length && !firstGame) {
-    if (followingPlan) revealHint();
+    if (followingPlan || urgent) revealHint();
     else startThinkWindow();
   } else clearThinkWindow(true);
   paint();
@@ -318,18 +327,25 @@ function renderCoach() {
   const el = document.getElementById("coach");
   if (!el) return;
   const a = assistData;
-  let tone = null, ic = "", head = "", sub = "", actSq = null, actLabel = "";
+  let tone = null, ic = "", head = "", sub = "", actSq = null, actLabel = "", crit = false;
+  const tlist = (a && a.threats) || [];
   if (a && a.inCheck) {
     tone = "danger"; ic = "⚠"; head = "You're in check";
     sub = "Get your king out of check this move.";
-  } else if (a && a.hanging && a.hanging.length) {
-    tone = "danger"; ic = "⚠";
-    const sq = a.hanging[0];
-    head = `Your ${pieceNameAt(sq)} on ${sqName(sq)} can be taken`;
-    sub = a.hanging.length > 1
-      ? `${a.hanging.length} of your pieces are undefended — move or protect them.`
-      : "Defend it or move it to safety.";
-    actSq = sq; actLabel = "Show where it can go →";
+  } else if (tlist.length) {
+    // Value-aware: the biggest-loss threat first — this is what must interrupt
+    // the plan. A defended queen attacked by a knight lands here (hanging misses it).
+    const t = tlist[0];
+    crit = t.loss >= 500; // rook or more at stake
+    tone = "danger"; ic = crit ? "🛑" : "⚠";
+    const nm = pieceNameAt(t.sq);
+    head = crit ? `Save your ${nm} on ${sqName(t.sq)}!` : `Your ${nm} on ${sqName(t.sq)} is under attack`;
+    sub = crit
+      ? "You'll lose it for less — handle this before your plan."
+      : (tlist.length > 1
+        ? `${tlist.length} pieces are under attack — protect the most valuable first.`
+        : "Defend it, move it, or capture the attacker.");
+    actSq = t.sq; actLabel = "Show how to save it →";
   } else if (a && a.freeCaptures && a.freeCaptures.length) {
     tone = "gold"; ic = "★";
     const sq = a.freeCaptures[0];
@@ -338,7 +354,7 @@ function renderCoach() {
   }
   if (!tone) { el.hidden = true; el.innerHTML = ""; setBoardGlow(null); return; } // quiet when safe
   el.hidden = false;
-  el.className = "coach " + tone;
+  el.className = "coach " + tone + (crit ? " critical" : "");
   el.innerHTML =
     `<span class="co-ic">${ic}</span>` +
     `<div class="co-body"><div class="co-head">${escapeHtml(head)}</div><div class="co-sub">${escapeHtml(sub)}</div></div>` +
@@ -483,7 +499,15 @@ function renderStrategy() {
     if (picked) {
       const d = document.createElement("div"); d.className = "sdetail"; d.style.setProperty("--sc", STRAT_COLOR[picked.id] || "#5cc9ec");
       const steps = picked.steps.map((st) => `<div class="step ${st.done ? "done" : ""}"><span class="sd">${st.done ? "✓" : "•"}</span><span>${escapeHtml(st.text)}</span></div>`).join("");
-      d.innerHTML = `<div class="snext">Next — <b>your move</b><span class="smove" title="Click to play">${escapeHtml(picked.moveSan || picked.moveUci)}</span>${escapeHtml(picked.moveNote)}</div><div class="steps">${steps}</div>`;
+      // Safety outranks the plan: if a piece is in real danger, hold the plan and
+      // send the player to the coach's rescue before resuming the sequence.
+      const t = threats && threats[0];
+      const onHold = t && t.loss >= 200;
+      const hold = onHold
+        ? `<div class="shold">⏸ <b>Plan on hold</b> — your ${pieceNameAt(t.sq)} on ${sqName(t.sq)} is under attack. Save it first (see the coach), then continue.</div>`
+        : "";
+      d.innerHTML = hold +
+        `<div class="snext${onHold ? " dimmed" : ""}">Next — <b>your move</b><span class="smove" title="Click to play">${escapeHtml(picked.moveSan || picked.moveUci)}</span>${escapeHtml(picked.moveNote)}</div><div class="steps${onHold ? " dimmed" : ""}">${steps}</div>`;
       host.appendChild(d);
       const mv = d.querySelector(".smove");
       if (mv) { mv.style.cursor = "pointer"; mv.addEventListener("click", () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to); }); }
@@ -521,6 +545,7 @@ function renderBoard() {
       if (chkKing && s[i] === chkKing) sq.classList.add("check");
       if (selected === i) sq.classList.add("selected");
       if (legalTargets.includes(i)) { sq.classList.add("target"); if (s[i] !== ".") sq.classList.add("capture"); }
+      if (threatSquares.includes(i)) sq.classList.add("threat");
       if (hanging.includes(i)) sq.classList.add("hanging");
       if (freeCaptures.includes(i)) sq.classList.add("free");
       if (firstGame && fgHintSquares.includes(i)) sq.classList.add("hint");
