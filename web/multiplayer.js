@@ -434,8 +434,30 @@ function showGameOver(rez) {
       (draw ? "Draw" : won ? "You win! 🎉" : "You lose");
     res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss");
   }
-  if (rea) rea.innerHTML = `<div class="over-how">${escapeHtml(how)}</div>`;
+  if (rea) rea.innerHTML = `<div class="over-how">${escapeHtml(how)}</div>` + independenceHtml();
   ov.style.display = "grid";
+}
+// The ladder-down payoff, tallied from your own provenance in the glass-box.
+function independenceHtml() {
+  const mine = glassList.map(parseProv).filter((p) => p && p.side === myColor);
+  const own = mine.filter((p) => p.prov === "own").length;
+  const foll = mine.filter((p) => p.prov === "followed").length;
+  const total = own + foll;
+  if (total < 2) return "";
+  const pct = Math.round((own / total) * 100);
+  let prev = null;
+  try { prev = JSON.parse(localStorage.getItem("gb_indep_last")); } catch {}
+  try { localStorage.setItem("gb_indep_last", JSON.stringify(pct)); } catch {}
+  let trend = "";
+  if (prev != null && isFinite(prev)) {
+    const d = pct - prev;
+    trend = d > 0 ? ` <span class="oi-up">▲ up from ${prev}%</span>` : d < 0 ? ` <span class="oi-dn">▼ from ${prev}%</span>` : " · same as last game";
+  }
+  return `<div class="over-indep">` +
+    `<div class="oi-head">🧠 Independence <b>${pct}%</b>${trend}</div>` +
+    `<div class="indep-bar"><div class="indep-fill" style="width:${pct}%"></div></div>` +
+    `<div class="oi-sub">You found <b>${own}</b> of ${total} moves on your own — 🤖 followed ${foll}. Needing help less is the whole idea.</div>` +
+    `</div>`;
 }
 function doRematch() {
   if (sim) { const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; startSim(); return; }

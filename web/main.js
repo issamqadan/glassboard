@@ -121,6 +121,7 @@ async function resumeAiGame(id) {
   game.setRatings(rec.humanElo, rec.engineElo);
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
+  indepOwn = 0; indepFollowed = 0;
   pickedStrategyId = null; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
   firstGame = false;
   hideOver();
@@ -137,6 +138,9 @@ let hanging = [];
 let threats = [];        // value-aware [{sq,kind,loss}], biggest loss first
 let threatSquares = [];  // just the squares, for board highlighting
 let mateKingSq = -1;     // the mated king's square, to ring it when the game ends
+// Independence: among moves where help was on offer, how many you found yourself
+// (🧠 own) vs followed (🤖). The "ladder down" payoff — you should need it less.
+let indepOwn = 0, indepFollowed = 0;
 let freeCaptures = [];
 let lastStratSig = ""; // signature of strategies last seen while the fold was open
 let curStratSig = "";
@@ -246,6 +250,7 @@ function newGame() {
   aiGameId = newAiId(); // a fresh slot; only saved once a move is played
   aiSaved = false;
   mateKingSq = -1;
+  indepOwn = 0; indepFollowed = 0;
   selected = null;
   legalTargets = [];
   lastMove = null;
@@ -551,7 +556,7 @@ function showGameOverIfNeeded() {
   res.innerHTML = (st === "checkmate" ? `<span class="over-mate">CHECKMATE</span>` : "") +
     (draw ? "Draw" : won ? "You win! 🎉" : "You lose");
   res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss");
-  rea.innerHTML = `<div class="over-how">${how}</div>` + agencySummaryHtml();
+  rea.innerHTML = `<div class="over-how">${how}</div>` + independenceHtml() + agencySummaryHtml();
   ov.style.display = "grid";
 }
 
@@ -575,6 +580,28 @@ function agencySummaryHtml() {
     body = `You leaned on <b>${budgetSpent}</b> help points (<b>${pct}%</b> of budget)${trend}. The less you need, the more you've learned.`;
   }
   return `<div class="over-help">🪙 ${body}</div>`;
+}
+
+// The ladder-down payoff: of the moves where help was on the table, how many you
+// found on your own (🧠) vs followed (🤖) — with the trend, because needing it
+// less over time is the whole point.
+function independenceHtml() {
+  const total = indepOwn + indepFollowed;
+  if (total < 2) return "";
+  const pct = Math.round((indepOwn / total) * 100);
+  let prev = null;
+  try { prev = JSON.parse(localStorage.getItem("gb_indep_last")); } catch {}
+  localStorage.setItem("gb_indep_last", JSON.stringify(pct));
+  let trend = "";
+  if (prev != null && isFinite(prev)) {
+    const d = pct - prev;
+    trend = d > 0 ? ` <span class="oi-up">▲ up from ${prev}%</span>` : d < 0 ? ` <span class="oi-dn">▼ from ${prev}%</span>` : " · same as last game";
+  }
+  return `<div class="over-indep">` +
+    `<div class="oi-head">🧠 Independence <b>${pct}%</b>${trend}</div>` +
+    `<div class="indep-bar"><div class="indep-fill" style="width:${pct}%"></div></div>` +
+    `<div class="oi-sub">You found <b>${indepOwn}</b> of ${total} assisted moves on your own — 🤖 followed ${indepFollowed}. Needing help less is the whole idea.</div>` +
+    `</div>`;
 }
 
 // --- strategy layer (same UX as multiplayer; White orientation, plays vs AI) ---
@@ -917,8 +944,22 @@ function playMove(from, to) {
   if (game.isPromotion(from, to)) { showPromotion(from, to); return; }
   doPlay(from, to, undefined);
 }
+// Did this move match the advice that was live? (null = no help was on offer.)
+function provenanceOf(from, to) {
+  const a = assistData;
+  if (!a || a.level === "off" || !(a.candidates || []).length) return null;
+  const uci = sqName(from) + sqName(to);
+  if ((a.candidates || []).some((c) => c.from === from && c.to === to)) return "followed";
+  if (a.recommended && a.recommended.slice(0, 4) === uci) return "followed";
+  const sr = a.strategy;
+  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  if (picked && picked.moveUci && picked.moveUci.slice(0, 4) === uci) return "followed";
+  return "own";
+}
 function doPlay(from, to, promo) {
   const preFen = game.fen(); // position before the human's move (for the Player Model)
+  const prov = provenanceOf(from, to); // classify BEFORE the move (assist is for this position)
+  if (prov === "own") indepOwn += 1; else if (prov === "followed") indepFollowed += 1;
   const ok = game.makeMove(from, to, promo);
   selected = null;
   legalTargets = [];
