@@ -436,6 +436,31 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
         }
     }
 
+    // --- Make a pawn break (proactive: open lines / relieve a cramp) ---
+    if ph != "endgame" {
+        let rec = plan_move(ranked, top_score, |m| pawn_break(b, m, side));
+        if pawn_break(b, &rec, side) {
+            out.push(mk(
+                "pawn_break",
+                "Make a pawn break",
+                "Advance a pawn to challenge theirs — a break opens lines for your pieces and frees a cramped position.",
+                32 + if ph == "middlegame" { 10 } else { 0 },
+                rec,
+                format!(
+                    "Pushes to {} to challenge their pawns — prepares to open the position.",
+                    sq_to_algebraic(rec.to)
+                ),
+                vec![PlanArrow { from: rec.from, to: rec.to, kind: ArrowKind::Attack }],
+                vec![rec.to],
+                vec![
+                    step("Back the break with a piece or pawn", false),
+                    step("Play the break", false),
+                    step("Use the open line you created", false),
+                ],
+            ));
+        }
+    }
+
     // --- Attack the King (middlegame, exposed enemy king) ---
     if ph == "middlegame" {
         let opp_castled = is_castled(b, opp);
@@ -713,6 +738,24 @@ fn forward_pawn(b: &Board, m: &Move, color: Color) -> bool {
             rank_of(m.to) < rank_of(m.from)
         }
 }
+/// A pawn *break* (lever): a push that ends up attacking an enemy pawn — the
+/// classic proactive way to open lines and break a cramped structure. (A capture
+/// is a different plan; here we mean the push that creates the contact.)
+fn pawn_break(b: &Board, m: &Move, color: Color) -> bool {
+    if !forward_pawn(b, m, color) || b.squares[m.to as usize].is_some() {
+        return false; // must be a quiet push, not a capture
+    }
+    let f = file_of(m.to);
+    let ar = if color == Color::White { rank_of(m.to) + 1 } else { rank_of(m.to) - 1 };
+    if !(0..8).contains(&ar) {
+        return false;
+    }
+    [-1i32, 1].into_iter().any(|df| {
+        let nf = f + df;
+        (0..8).contains(&nf)
+            && matches!(b.squares[(ar * 8 + nf) as usize], Some(p) if p.color == color.opp() && p.kind == PieceKind::Pawn)
+    })
+}
 
 /// A plain read of what the opponent is up to — their most salient plan/threat.
 /// This is P3 (reading the opponent): surface an incoming plan before it lands.
@@ -798,6 +841,16 @@ mod tests {
         assert!(s.strategies.iter().any(|x| x.id == "develop" || x.id == "center"));
         // every strategy carries a concrete first move
         assert!(s.strategies.iter().all(|x| !x.move_san.is_empty()));
+    }
+
+    #[test]
+    fn pawn_push_that_hits_a_pawn_is_a_break() {
+        // White Pc2, Black Pd5. c2-c4 lands attacking d5 → a break; c2-c3 doesn't.
+        let b = parse_fen("4k3/8/8/3p4/8/8/2P5/4K3 w - - 0 1");
+        let c4 = Move { from: 10, to: 26, promo: None, flag: Flag::DoublePush };
+        assert!(pawn_break(&b, &c4, Color::White));
+        let c3 = Move { from: 10, to: 18, promo: None, flag: Flag::Normal };
+        assert!(!pawn_break(&b, &c3, Color::White));
     }
 
     #[test]
