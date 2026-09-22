@@ -39,6 +39,16 @@ native apps, the neural net / LLM. (Handicap stays a heuristic seed for now.)
 2. **Roadmap work** — planned items; often aligns with (1).
 
 ### Field-input log (newest first)
+- **2026-09-23 — Roadmap sweep: shipped the open needle-movers.** Strategy P2 (proactive
+  pawn-break plan), independence score (game-end + trend), Match-as-agreement (glass-box
+  contract), device/orientation reserve fix, and the playtest kit (in-app fun/fair + doc).
+- **2026-09-22 — Coach text squished one word per line on narrow rails.** *(Shipped: action
+  wraps below; text keeps a real reading width.)*
+- **2026-09-22 — Learn should be learner-paced with live tips, not auto-advance.** *(Shipped:
+  keep practising each piece, info surfaces as you move, you advance on your own.)*
+- **2026-09-22 — "How did I get mated with no warning?"** *(Shipped: mate-threat build-up
+  warning + illustrated checkmate.)*
+- **2026-09-21 — Captured pieces need a fun visual.** *(Shipped: material tug-bar.)*
 - **2026-09-21 — Lobby preview should show the game's board colour.** *(Shipped: mini-board
   renders each game's per-game palette.)*
 - **2026-09-21 — Board selection was global, not per-game.** Each game should keep its own
@@ -66,7 +76,13 @@ native apps, the neural net / LLM. (Handicap stays a heuristic seed for now.)
 - **2026-09-20 — Device-agnostic is first-class** → promoted to a vision non-negotiable (#5).
 
 ## Roadmap alignment (what moves the POC needle)
-Closes the hypothesis: **independence score** (provenance → the "ladder down" payoff),
-**Match-as-agreement** (negotiated terms shown as the glass-box contract), strategy
-depth (P2 proactive plans), and device-agnostic polish. *Adjacent (retention, not
-core):* Rivals/social, cross-game badge. *Infra:* same-screen sim (`?sim=1`).
+Closes the hypothesis: **independence score** ✅ (provenance → the "ladder down" payoff,
+shown at game end with trend), **Match-as-agreement** ✅ (negotiated terms as the glass-box
+contract, visible before move 1), **strategy depth (P2)** ◑ (proactive "pawn break" plan
+added; more to come), and **device-agnostic polish** ✅ (board fits with the material bar
+across orientations). *Adjacent (retention, not core):* Rivals/social, cross-game badge.
+*Infra:* same-screen sim (`?sim=1`).
+
+**The gate is now runnable.** The [playtest kit](PLAYTEST.md) ships in-app fun/fair capture
+(server-collected) + a protocol. Next action = **run the unequal-pair playtest** and let the
+result lead the field-input log.
