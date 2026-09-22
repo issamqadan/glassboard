@@ -61,6 +61,21 @@
     .choice h3 { margin: 0 0 3px; font-size: 1.06rem; }
     .choice p { margin: 0; color: var(--muted); font-size: 0.86rem; }
 
+    /* tutorial: board + side tips */
+    .tut-cols { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+    .tut-cols .board-wrap { flex: 0 1 360px; }
+    .tut-side { flex: 1 1 240px; min-width: 220px; display: flex; flex-direction: column; gap: 12px; }
+    .tut-side .tf-row { background: var(--glass); border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; }
+    .tut-side .tf-lab { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent-2); font-weight: 800; }
+    .tut-side .tf-row p { margin: 4px 0 0; font-size: 0.88rem; color: var(--muted); line-height: 1.45; }
+    .tut-side .tf-row.live { border-color: rgba(126,224,214,0.5); background: linear-gradient(135deg, rgba(126,224,214,0.12), rgba(92,201,236,0.06)); }
+    .tut-side .tf-row.live p { color: var(--text); }
+    .tut-controls { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+    .tut-controls .tut-spacer { flex: 1; }
+    .tut-count { font-size: 0.85rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+    .tut-controls .btn { margin: 0; }
+    @media (max-width: 560px) { .tut-side { flex-basis: 100%; } }
+
     /* board */
     .board-wrap { max-width: 380px; margin: 0 auto; }
     .board { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); aspect-ratio: 1/1; border-radius: 12px; overflow: hidden;
@@ -133,9 +148,18 @@
       <span class="eyebrow">Learn by doing</span>
       <h1 id="tut-title">Meet the knight</h1>
       <p class="prompt" id="tut-prompt"></p>
-      <div class="how-to">👆 <b>Tap the glowing piece</b> — then tap a <span style="color:var(--accent)">highlighted square</span> to move it there.</div>
-      <div class="board-wrap"><div class="board" id="tut-board"></div></div>
+      <div class="how-to">👆 <b>Tap the glowing piece</b>, then a <span style="color:var(--accent)">highlighted square</span>. Move it as many times as you like — try every square it can reach.</div>
+      <div class="tut-cols">
+        <div class="board-wrap"><div class="board" id="tut-board"></div></div>
+        <aside class="tut-side" id="tut-facts"></aside>
+      </div>
       <div class="feedback" id="tut-fb"></div>
+      <div class="tut-controls">
+        <span class="tut-count" id="tut-count"></span>
+        <span class="tut-spacer"></span>
+        <button class="link" id="tut-skip" onclick="nextTut()">Skip</button>
+        <button class="btn" id="tut-next" style="display:none" onclick="nextTut()">Next piece →</button>
+      </div>
     </section>
 
     <!-- ASSESSMENT -->
@@ -159,6 +183,7 @@
   </main>
 
   <script src="./pieces.js"></script>
+  <script src="./pieceinfo.js"></script>
   <script>
     const GLY = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
     const FILES = "abcdefgh";
@@ -232,30 +257,69 @@
     function pick(p) { path = p; if (p === "new") { setDots(1); startTutorial(); } else { setDots(1); startAssess(); } }
 
     // ---------- tutorial (beginners) ----------
+    // Learner-paced: you keep moving each piece as much as you like, and useful
+    // info appears as you go. You decide when to move on with "Next piece →".
     const TUT = [
-      { title: "The pawn", prompt: "Pawns move <b>forward</b> — one square, or two on their first move — and capture <b>diagonally</b>. Tap it, then a blue square.", place: { 12: "P" } },
-      { title: "The knight", prompt: "The knight moves in an <b>L</b> and can <b>jump over</b> other pieces. Tap it, then a blue square.", place: { 27: "N" } },
-      { title: "The bishop", prompt: "The bishop glides <b>diagonally</b>, as far as it likes. Give it a go.", place: { 27: "B" } },
-      { title: "The rook", prompt: "The rook moves in <b>straight lines</b> — across, or up and down. Move it.", place: { 27: "R" } },
-      { title: "The queen", prompt: "The most powerful piece — the queen moves in <b>any direction</b>, any distance. Try it.", place: { 27: "Q" } },
-      { title: "The king", prompt: "The king moves <b>one square</b> in any direction. Keep him safe — the whole game is about protecting your king.", place: { 28: "K" } },
+      { kind: "p", place: { 12: "P" } },
+      { kind: "n", place: { 27: "N" } },
+      { kind: "b", place: { 27: "B" } },
+      { kind: "r", place: { 27: "R" } },
+      { kind: "q", place: { 27: "Q" } },
+      { kind: "k", place: { 28: "K" } },
     ];
-    let tutStep = 0;
+    // Encouraging one-liners that rotate as you keep exploring a piece.
+    const TUT_CHEERS = ["Nice move! 👏", "Try another square →", "Keep going — explore where it can reach.", "You've got the pattern. Move it again, or hit Next.", "Great — you can move on whenever you like."];
+    let tutStep = 0, tutMoves = 0;
+    const pinfo = (k) => (window.PIECE_INFO && window.PIECE_INFO[k]) || { name: k, moves: "", role: "", strong: "", pairs: "" };
     function startTutorial() { tutStep = 0; go("tutorial"); loadTut(); }
+    function facts(info, liveIdx) {
+      const rows = [
+        ["Its role", info.role],
+        ["When it's strong", info.strong],
+        ["Works well with", info.pairs],
+      ].filter(([, v]) => v);
+      return rows.map(([lab, v], i) =>
+        `<div class="tf-row${i === liveIdx ? " live" : ""}"><span class="tf-lab">${lab}</span><p>${v}</p></div>`).join("");
+    }
     function loadTut() {
       const t = TUT[tutStep];
-      document.getElementById("tut-title").innerHTML = t.title;
-      document.getElementById("tut-prompt").innerHTML = t.prompt;
+      const info = pinfo(t.kind);
+      tutMoves = 0;
+      document.getElementById("tut-title").innerHTML = `${info.icon || ""} Meet the ${info.name.toLowerCase()}`;
+      document.getElementById("tut-prompt").innerHTML = info.moves;
       document.getElementById("tut-fb").textContent = "";
-      const map = {}; Object.assign(map, t.place);
-      const only = +Object.keys(t.place)[0];
-      board("tut-board", map, {
-        only, onMove: (from, to, render) => {
-          apply(map, from, to); render(); flash("tut-board", true);
-          const fb = document.getElementById("tut-fb"); fb.className = "feedback good"; fb.textContent = "Nice move! 👏";
-          setTimeout(() => { tutStep++; if (tutStep < TUT.length) loadTut(); else finishTutorial(); }, 900);
-        }
-      });
+      document.getElementById("tut-facts").innerHTML = facts(info, 0);
+      document.getElementById("tut-count").textContent = "";
+      const nextBtn = document.getElementById("tut-next"); nextBtn.style.display = "none";
+      nextBtn.textContent = tutStep < TUT.length - 1 ? "Next piece →" : "Finish →";
+      const start = +Object.keys(t.place)[0];
+      const setup = () => {
+        const map = {}; Object.assign(map, t.place); // reset the piece to its start each time
+        board("tut-board", map, {
+          only: start,
+          onMove: (from, to, render) => {
+            apply(map, from, to); render(); flash("tut-board", true);
+            tutMoves++;
+            const fb = document.getElementById("tut-fb");
+            fb.className = "feedback good";
+            fb.textContent = TUT_CHEERS[Math.min(tutMoves - 1, TUT_CHEERS.length - 1)];
+            // cycle which fact is highlighted, so info surfaces as you play
+            const info2 = pinfo(t.kind);
+            const rowsN = [info2.role, info2.strong, info2.pairs].filter(Boolean).length || 1;
+            document.getElementById("tut-facts").innerHTML = facts(info2, (tutMoves - 1) % rowsN);
+            document.getElementById("tut-count").textContent = `${tutMoves} move${tutMoves > 1 ? "s" : ""} — nice`;
+            nextBtn.style.display = "";
+            // let them keep practising: reset the piece so it's ready to move again
+            setTimeout(setup, 650);
+          },
+        });
+      };
+      setup();
+    }
+    function nextTut() {
+      tutStep++;
+      if (tutStep < TUT.length) loadTut();
+      else finishTutorial();
     }
     function finishTutorial() {
       // beginners: goal explainer, then a beginner level
