@@ -716,7 +716,7 @@ details.panel > *:not(summary) { padding: 12px 15px; }
      takes the largest square that fits the height left after (nav + game bar),
      giving up width only for the leftover rail. Board grows big; the rail
      negotiates for what remains. */
-  main.game .board-col { width: min(900px, calc(100vh - 132px), calc(100vw - 380px)); flex: 0 0 auto; }
+  main.game .board-col { width: min(900px, calc(100vh - 184px), calc(100vw - 380px)); flex: 0 0 auto; }
   /* The rail takes leftover width (not a reserved slab), and scrolls itself. */
   main.game .panels { flex: 0 1 360px; min-width: 288px; align-self: stretch;
     position: sticky; top: 66px; max-height: calc(100vh - 78px); overflow-y: auto;
@@ -726,7 +726,7 @@ details.panel > *:not(summary) { padding: 12px 15px; }
 }
 /* Landscape phones/tablets: keep the square board within the viewport height. */
 @media (max-width: 899px) and (orientation: landscape) {
-  main.game .board-col { width: min(100%, calc(100vh - 150px)); margin: 0 auto; }
+  main.game .board-col { width: min(100%, calc(100vh - 202px)); margin: 0 auto; }
 }
 
 /* Phones: the board is sized so the coach (the primary help) stays on-screen
@@ -741,7 +741,7 @@ details.panel > *:not(summary) { padding: 12px 15px; }
   main.game .btn-primary { flex: 1; white-space: nowrap; padding: 11px 14px; }
   main.game .opts > summary { padding: 11px 12px; }
   /* Board leaves room for the coach beneath it (reserve ≈ top chrome + coach). */
-  main.game .board-col { width: min(96vw, calc(100vh - 250px)); margin: 0 auto; }
+  main.game .board-col { width: min(96vw, calc(100vh - 294px)); margin: 0 auto; }
   .coach { padding: 12px 13px; border-radius: 13px; }
   .coach .co-head { font-size: 0.96rem; }
   .coach .co-play { padding: 10px 13px; }
