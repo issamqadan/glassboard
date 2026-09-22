@@ -435,6 +435,7 @@ function showGameOver(rez) {
     res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss");
   }
   if (rea) rea.innerHTML = `<div class="over-how">${escapeHtml(how)}</div>` + independenceHtml();
+  if (window.gbFeedback) gbFeedback.render(document.getElementById("overFeedback"), { mode: gameMode, gameId: (roomEl && roomEl.value.trim()) || "" });
   ov.style.display = "grid";
 }
 // The ladder-down payoff, tallied from your own provenance in the glass-box.

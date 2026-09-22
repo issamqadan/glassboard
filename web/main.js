@@ -557,6 +557,7 @@ function showGameOverIfNeeded() {
     (draw ? "Draw" : won ? "You win! 🎉" : "You lose");
   res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss");
   rea.innerHTML = `<div class="over-how">${how}</div>` + independenceHtml() + agencySummaryHtml();
+  if (window.gbFeedback) gbFeedback.render(document.getElementById("overFeedback"), { mode: "ai", gameId: aiGameId || "" });
   ov.style.display = "grid";
 }
 

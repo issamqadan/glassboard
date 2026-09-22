@@ -192,6 +192,16 @@ async fn build_store() -> Store {
             .execute(&pool)
             .await
             .expect("create ai_games table");
+            // Playtest feedback — the exit-gate signal: did each player find the
+            // game fun and fair? Collected centrally so both devices report in.
+            sqlx::query(
+                "CREATE TABLE IF NOT EXISTS feedback (\
+                   ts BIGINT NOT NULL, game_id TEXT NOT NULL DEFAULT '', player TEXT NOT NULL DEFAULT '', \
+                   mode TEXT NOT NULL DEFAULT '', fun INT NOT NULL, fair INT NOT NULL, note TEXT NOT NULL DEFAULT '')",
+            )
+            .execute(&pool)
+            .await
+            .expect("create feedback table");
             println!("Accounts + games: Postgres (durable)");
             Store::Pg(pool)
         }
@@ -532,6 +542,7 @@ async fn main() {
         .route("/games/delete", post(delete_game))
         .route("/ai-games", get(list_ai_games).post(upsert_ai_game))
         .route("/ai-games/delete", post(delete_ai_game))
+        .route("/feedback", get(list_feedback).post(post_feedback))
         .route("/account", post(account))
         .route("/profile", get(profile))
         .route("/record", post(record))
@@ -764,6 +775,68 @@ async fn delete_ai_game(State(store): State<Store>, Json(b): Json<DeleteReq>) ->
         let _ = sqlx::query("DELETE FROM ai_games WHERE id=$1").bind(&b.id).execute(pool).await;
     }
     Json(serde_json::json!({ "deleted": true }))
+}
+
+// ---- playtest feedback (the exit-gate signal) ----
+
+#[derive(Deserialize)]
+struct FeedbackReq {
+    #[serde(default)]
+    game_id: String,
+    #[serde(default)]
+    player: String,
+    #[serde(default)]
+    mode: String,
+    fun: bool,
+    fair: bool,
+    #[serde(default)]
+    note: String,
+}
+
+/// Record one player's post-game read: fun? fair? (+ an optional note.)
+async fn post_feedback(State(store): State<Store>, Json(b): Json<FeedbackReq>) -> Json<serde_json::Value> {
+    if let Store::Pg(pool) = &store {
+        let note: String = b.note.chars().take(500).collect();
+        let _ = sqlx::query(
+            "INSERT INTO feedback (ts,game_id,player,mode,fun,fair,note) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+        )
+        .bind(now_secs() as i64)
+        .bind(&b.game_id)
+        .bind(&b.player)
+        .bind(&b.mode)
+        .bind(b.fun as i32)
+        .bind(b.fair as i32)
+        .bind(&note)
+        .execute(pool)
+        .await;
+    }
+    Json(serde_json::json!({ "ok": true }))
+}
+
+/// Read recent feedback (newest first) — for reviewing playtest results.
+async fn list_feedback(State(store): State<Store>) -> Json<serde_json::Value> {
+    let mut rows = Vec::new();
+    if let Store::Pg(pool) = &store {
+        if let Ok(rs) = sqlx::query(
+            "SELECT ts,game_id,player,mode,fun,fair,note FROM feedback ORDER BY ts DESC LIMIT 200",
+        )
+        .fetch_all(pool)
+        .await
+        {
+            for r in rs {
+                rows.push(serde_json::json!({
+                    "ts": r.get::<i64, _>("ts"),
+                    "game_id": r.get::<String, _>("game_id"),
+                    "player": r.get::<String, _>("player"),
+                    "mode": r.get::<String, _>("mode"),
+                    "fun": r.get::<i32, _>("fun") != 0,
+                    "fair": r.get::<i32, _>("fair") != 0,
+                    "note": r.get::<String, _>("note"),
+                }));
+            }
+        }
+    }
+    Json(serde_json::json!({ "feedback": rows }))
 }
 
 #[derive(Deserialize)]

@@ -795,6 +795,25 @@ main.game .budget .bg-num { flex-shrink: 0; font-variant-numeric: tabular-nums; 
   font-size: 0.88rem; color: #cdd8e8; line-height: 1.5; max-width: 340px; }
 .over-help b { color: #7ee0d6; }
 
+/* Post-game feedback — the POC exit-gate signal (fun? fair?). */
+.over-feedback { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--glass-line, rgba(255,255,255,0.08)); max-width: 340px; text-align: left; }
+.over-feedback .fb-q { font-size: 0.92rem; color: #eaf0fb; font-weight: 640; margin-bottom: 10px; }
+.over-feedback .fb-rows { display: flex; flex-direction: column; gap: 8px; }
+.over-feedback .fb-row { display: flex; align-items: center; gap: 10px; }
+.over-feedback .fb-lab { flex: 0 0 44px; font-size: 0.86rem; color: #a9b7cf; }
+.over-feedback .fb-b { width: 40px; height: 34px; border-radius: 9px; border: 1px solid var(--glass-line, rgba(255,255,255,0.12));
+  background: rgba(255,255,255,0.04); font-size: 1.05rem; cursor: pointer; transition: transform .1s, border-color .12s, background .12s; }
+.over-feedback .fb-b:hover { transform: translateY(-1px); }
+.over-feedback .fb-b.on { border-color: #7ee0d6; background: rgba(126,224,214,0.18); }
+.over-feedback .fb-note { width: 100%; margin-top: 10px; padding: 9px 11px; border-radius: 9px; box-sizing: border-box;
+  border: 1px solid var(--glass-line, rgba(255,255,255,0.12)); background: rgba(255,255,255,0.04); color: #eaf0fb; font-size: 0.86rem; }
+.over-feedback .fb-note::placeholder { color: #6f8298; }
+.over-feedback .fb-send { width: 100%; margin-top: 10px; padding: 10px; border-radius: 10px; font-weight: 700; font-size: 0.88rem; cursor: pointer;
+  border: 1px solid rgba(126,224,214,0.5); background: rgba(126,224,214,0.16); color: #aef0e6; }
+.over-feedback .fb-send:disabled { opacity: 0.45; cursor: default; }
+.over-feedback .fb-send:not(:disabled):hover { background: rgba(126,224,214,0.28); }
+.over-feedback .fb-thanks { font-size: 0.9rem; color: #7ee0d6; padding: 6px 0; }
+
 /* Independence: the ladder-down payoff — own vs followed, with a progress bar. */
 .over-indep { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--glass-line, rgba(255,255,255,0.08)); max-width: 340px; text-align: left; }
 .over-indep .oi-head { font-size: 0.98rem; color: #eaf0fb; }
