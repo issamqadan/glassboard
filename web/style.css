@@ -956,6 +956,15 @@ main.game .status:empty { display: none; }
 /* Move-provenance pips + ledger rows (the glass-box as a per-move story). */
 .gpip.followed { background: #f0c674; box-shadow: 0 0 0 1px rgba(0,0,0,0.3); }  /* 🤖 followed the machine */
 .gpip.own { background: #5fd98a; box-shadow: 0 0 0 1px rgba(0,0,0,0.3); }        /* 🧠 played their own */
+/* Match-as-agreement: the negotiated terms, stated at the top of the glass-box. */
+.glass-contract { display: flex; gap: 11px; align-items: flex-start; padding: 12px 13px; margin-bottom: 12px;
+  border-radius: 12px; border: 1px solid rgba(126,224,214,0.4); background: linear-gradient(135deg, rgba(126,224,214,0.12), rgba(92,201,236,0.06)); }
+.glass-contract.casual { border-color: rgba(126,224,214,0.5); }
+.glass-contract.even { border-color: var(--glass-line, rgba(255,255,255,0.14)); background: rgba(255,255,255,0.04); }
+.glass-contract .gc-ic { font-size: 1.25rem; line-height: 1.2; flex-shrink: 0; }
+.glass-contract b { color: #aef0e6; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.glass-contract p { margin: 3px 0 0; font-size: 0.86rem; color: #cdd8e8; line-height: 1.45; }
+.glass-contract p b { text-transform: none; letter-spacing: 0; font-size: inherit; color: #eaf7f5; }
 .glass .ev .pm { color: #8ea0b8; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.82em; }
 .glass .ev.prov-own .who { color: #5fd98a; }
 .glass .ev.prov-followed .who { color: #f0c674; }

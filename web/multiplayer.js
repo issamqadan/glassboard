@@ -1066,11 +1066,32 @@ function parseProv(e) {
   if (!m) return null;
   return { side: e.side, prov: m[1], uci: m[2] };
 }
+// Match-as-agreement: the assistance terms both players agreed to, stated as a
+// contract at the top of the glass-box. Derived from the shared game state, so
+// both sides see identical wording — the negotiated handicap made explicit.
+function rungForGap(g) {
+  g = Math.max(0, g);
+  return g < 100 ? "Off" : g < 300 ? "Hint" : g < 500 ? "Coach" : g < 800 ? "Guide" : g < 1200 ? "Assist" : "Autopilot";
+}
+function matchContractHtml() {
+  if (!state) return "";
+  const we = state.white_elo || 0, be = state.black_elo || 0;
+  const wn = state.white_name || "White", bn = state.black_name || "Black";
+  if (state.mode === "casual") {
+    return `<div class="glass-contract casual"><span class="gc-ic">🤝</span><div><b>The agreement</b><p>Friendly game — <b>both players</b> get full assistance. Every bit is logged below, visible to each other.</p></div></div>`;
+  }
+  const gap = Math.abs(we - be);
+  if (gap < 100) {
+    return `<div class="glass-contract even"><span class="gc-ic">⚖️</span><div><b>The agreement</b><p>An even match (${gap}-pt gap) — <b>no assistance</b> on either side. Pure play.</p></div></div>`;
+  }
+  const weaker = we < be ? wn : bn, stronger = we < be ? bn : wn;
+  return `<div class="glass-contract"><span class="gc-ic">🤝</span><div><b>The agreement</b><p><b>${escapeHtml(weaker)}</b> plays with <b>${rungForGap(gap)}</b> assistance; <b>${escapeHtml(stronger)}</b> unassisted — a handicap sized to the ${gap}-point gap. Every hint appears below, visible to both.</p></div></div>`;
+}
 let lastGlassCount = 0;
 function renderGlass() {
   const provs = glassList.map(parseProv).filter(Boolean);
   const legacy = glassList.filter((e) => !parseProv(e));
-  // Full ledger (sheet): a per-move story, plus any legacy notes.
+  // Full ledger (sheet): the agreement, then a per-move story, plus legacy notes.
   if (glassEl) {
     const rows = provs.map((p) => {
       const icon = p.prov === "followed" ? "🤖" : "🧠";
@@ -1079,11 +1100,12 @@ function renderGlass() {
       return `<div class="ev prov-${p.prov}"><span class="who">${icon} ${side}</span> ${what} <span class="pm">${p.uci}</span></div>`;
     });
     const extra = legacy.map((e) => `<div class="ev"><span class="who">${e.side}</span> · ${escapeHtml(e.summary)}</div>`);
-    glassEl.innerHTML = (rows.concat(extra).join("")) || `<div class="none">No moves yet — every move is logged here as 🤖 followed or 🧠 your own.</div>`;
+    const ledger = rows.concat(extra).join("") || `<div class="none">No moves yet — every move is logged here as 🤖 followed or 🧠 your own.</div>`;
+    glassEl.innerHTML = matchContractHtml() + ledger;
   }
   const chip = document.getElementById("glassChip");
   if (!chip) return;
-  chip.hidden = provs.length === 0;
+  chip.hidden = !game; // reachable as soon as there's a game — the agreement is inside
   if (!provs.length) { lastGlassCount = 0; return; }
   // Compact ribbon: one pip per move, coloured by provenance (🤖 vs 🧠).
   const pipsEl = chip.querySelector(".gpips");
