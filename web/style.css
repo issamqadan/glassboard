@@ -658,16 +658,18 @@ main.game .board-wrap { width: 100%; }
 main.game .board-wrap .board, main.game .board { width: 100%; }
 
 /* ---- the coach bar: primary, concrete assistance ---- */
-.coach { display: flex; align-items: center; gap: 13px; padding: 13px 15px; border-radius: 14px;
+.coach { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px 13px; padding: 13px 15px; border-radius: 14px;
   border: 1px solid var(--glass-line); background: var(--glass-card); position: relative; overflow: hidden;
   min-height: 30px; animation: coach-in .28s cubic-bezier(.2,.8,.2,1); }
 .coach::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--co-idle); }
 .coach .co-ic { font-size: 1.5rem; line-height: 1; flex-shrink: 0; width: 30px; text-align: center; }
-.coach .co-body { flex: 1; min-width: 0; }
+/* keep a real reading width — if the action can't fit beside it, the action wraps
+   to its own line rather than crushing the text to one word per line */
+.coach .co-body { flex: 1 1 150px; min-width: 120px; }
 .coach .co-head { font-weight: 680; font-size: 1rem; letter-spacing: -0.01em; color: #eaf0fb; line-height: 1.25; }
 .coach .co-sub { font-size: 0.85rem; color: #a9b7cf; margin-top: 2px; line-height: 1.35; }
-.coach .co-play { flex-shrink: 0; background: rgba(92,201,236,0.16); color: #bfe8f7; border: 1px solid rgba(92,201,236,0.5);
-  border-radius: 10px; padding: 9px 14px; font-weight: 640; font-size: 0.86rem; cursor: pointer; white-space: nowrap; transition: background .15s, transform .12s; }
+.coach .co-play { flex: 0 1 auto; align-self: center; background: rgba(92,201,236,0.16); color: #bfe8f7; border: 1px solid rgba(92,201,236,0.5);
+  border-radius: 10px; padding: 9px 14px; font-weight: 640; font-size: 0.86rem; cursor: pointer; white-space: normal; transition: background .15s, transform .12s; }
 .coach .co-play:hover { background: rgba(92,201,236,0.28); transform: translateY(-1px); }
 .coach.danger { background: var(--co-danger-bg); } .coach.danger::before { background: var(--co-danger); } .coach.danger .co-ic { color: var(--co-danger); }
 .coach.gold   { background: var(--co-gold-bg); }   .coach.gold::before   { background: var(--co-gold); }   .coach.gold .co-ic   { color: var(--co-gold); }
@@ -921,8 +923,8 @@ main.game .status:empty { display: none; }
 @media (prefers-reduced-motion: reduce) { .over-mate, .over-result { animation: none; } }
 
 /* Actionable coach: a button that turns the diagnosis into a board action. */
-.coach .co-act { flex-shrink: 0; background: rgba(242,109,122,0.16); color: #f7b0b7; border: 1px solid rgba(242,109,122,0.5);
-  border-radius: 10px; padding: 9px 13px; font-weight: 640; font-size: 0.84rem; cursor: pointer; white-space: nowrap; }
+.coach .co-act { flex: 0 1 auto; align-self: center; background: rgba(242,109,122,0.16); color: #f7b0b7; border: 1px solid rgba(242,109,122,0.5);
+  border-radius: 10px; padding: 9px 13px; font-weight: 640; font-size: 0.84rem; cursor: pointer; white-space: normal; }
 .coach.gold .co-act { background: rgba(240,198,116,0.16); color: #f0d9a8; border-color: rgba(240,198,116,0.5); }
 .coach .co-act:hover { filter: brightness(1.15); }
 /* The suggested move that resolves the threat, tagged + highlighted green. */
