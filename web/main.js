@@ -224,7 +224,8 @@ async function main() {
   detectFirstGame();
   const nh = document.getElementById("newHereLink");
   if (nh) nh.hidden = firstGame; // hidden while the guided game is running
-  document.getElementById("new").addEventListener("click", () => { firstGame = false; newGame(); });
+  const closeMenu = () => { const f = document.getElementById("setupFold"); if (f) f.removeAttribute("open"); };
+  document.getElementById("new").addEventListener("click", () => { closeMenu(); firstGame = false; newGame(); });
   const mf = document.getElementById("movesFold");
   if (mf) mf.addEventListener("toggle", () => { if (mf.open && hintState === "pending") revealHint(); });
   const psheet = document.getElementById("pieceSheet"), pclose = document.getElementById("pieceSheetClose");
@@ -236,7 +237,7 @@ async function main() {
   if (ssclose) ssclose.addEventListener("click", closeSteps);
   if (ssheet) ssheet.addEventListener("click", (e) => { if (e.target === ssheet) closeSteps(); });
   const rb = document.getElementById("resignBtn");
-  if (rb) rb.addEventListener("click", resign);
+  if (rb) rb.addEventListener("click", () => { closeMenu(); resign(); });
   const orm = document.getElementById("overRematch");
   if (orm) orm.addEventListener("click", () => { hideOver(); newGame(); });
   const ocl = document.getElementById("overClose");
@@ -563,10 +564,11 @@ function renderPlayers() {
   el.hidden = false;
   const over = resigned || game.status() !== "ongoing";
   const turn = over ? null : game.sideToMove();
+  // Compact: whose-move stays on one row with the ratings (branding is in the nav).
   el.innerHTML =
     `<span class="pl"><span class="dot white"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span></span>` +
-    `<span class="vs">vs</span>` +
-    `<span class="pl"><span class="dot black"></span> <b>🤖 Glassboard</b> <span class="tnum">${engineEloEl.value}</span></span>` +
+    `<span class="vs">·</span>` +
+    `<span class="pl"><span class="dot black"></span> <b>🤖</b> <span class="tnum">${engineEloEl.value}</span></span>` +
     (turn ? (turn === "white"
       ? `<span class="turn you">💡 Your move</span>`
       : `<span class="turn wait">Engine…</span>`) : "");

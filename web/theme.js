@@ -51,22 +51,32 @@
   paint(defaultTheme());
 
   function inject() {
-    if (!document.querySelector(".board")) return;      // only where a real board exists
     if (document.getElementById("gb-theme")) return;
+    // Prefer a designated slot (e.g. inside the game's settings menu) so the
+    // picker isn't a permanent floating row. Otherwise fall back to a COLLAPSED
+    // floating pill that expands only on tap — never an always-visible swatch row.
+    const slot = document.getElementById("gbThemeSlot");
+    if (!slot && !document.querySelector(".board")) return;
+    const swatches = THEMES.map(
+      (t) => `<button class="gb-swatch" data-id="${t.id}" title="${t.label}" aria-label="${t.label} board" style="--sw-l:${t.light};--sw-d:${t.dark}"><span></span><span></span></button>`
+    ).join("");
     const wrap = document.createElement("div");
     wrap.id = "gb-theme";
-    wrap.className = "gb-theme";
-    wrap.innerHTML =
-      '<span class="gb-theme-lab">Board</span>' +
-      THEMES.map(
-        (t) =>
-          `<button class="gb-swatch" data-id="${t.id}" title="${t.label}" aria-label="${t.label} board" style="--sw-l:${t.light};--sw-d:${t.dark}"><span></span><span></span></button>`
-      ).join("");
+    if (slot) {
+      wrap.className = "gb-theme in-slot";
+      wrap.innerHTML = swatches;
+      slot.appendChild(wrap);
+    } else {
+      wrap.className = "gb-theme floating collapsed";
+      wrap.innerHTML = `<button class="gb-theme-toggle" aria-label="Board theme" title="Board theme">🎨</button><div class="gb-theme-swatches">${swatches}</div>`;
+      document.body.appendChild(wrap);
+      wrap.querySelector(".gb-theme-toggle").addEventListener("click", (e) => { e.stopPropagation(); wrap.classList.toggle("collapsed"); });
+      document.addEventListener("click", (e) => { if (!wrap.contains(e.target)) wrap.classList.add("collapsed"); });
+    }
     wrap.addEventListener("click", (e) => {
       const b = e.target.closest(".gb-swatch");
-      if (b) choose(b.dataset.id);
+      if (b) { choose(b.dataset.id); if (wrap.classList.contains("floating")) wrap.classList.add("collapsed"); }
     });
-    document.body.appendChild(wrap);
     paint(resolve(ctx)); // set the active swatch to the current board
   }
 

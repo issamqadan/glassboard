@@ -13,11 +13,16 @@
       <div class="gamebar">
         <div id="players" class="players" hidden></div>
         <div class="gb-actions">
-          <a id="newHereLink" class="gb-newhere" href="./index.html?first=1" title="New to chess? A guided game teaches you as you play">👋 New to chess?</a>
           <span id="level" class="pill" title="Assistance level">—</span>
           <details class="opts gb-opts" id="setupFold">
-            <summary title="Difficulty">⚙</summary>
+            <summary title="Game menu">⚙</summary>
             <div class="opts-body">
+              <div class="menu-group">
+                <button id="new" class="menu-item" type="button">＋ New game</button>
+                <button id="resignBtn" class="menu-item danger" type="button" hidden>Resign</button>
+                <a id="newHereLink" class="menu-item" href="./index.html?first=1" title="A guided game teaches you as you play">👋 New to chess?</a>
+              </div>
+              <div class="menu-sep"></div>
               <label>You (White) <input id="humanElo" type="number" value="1200" min="100" max="3200" /></label>
               <label>Engine (Black) <input id="engineElo" type="number" value="1700" min="100" max="3200" /></label>
               <label>Depth
@@ -27,10 +32,10 @@
                   <option value="4">4</option>
                 </select>
               </label>
+              <div class="menu-sep"></div>
+              <div class="menu-theme"><span class="menu-theme-lab">Board theme</span><div id="gbThemeSlot"></div></div>
             </div>
           </details>
-          <button id="new" class="gb-btn" title="New game">＋ New</button>
-          <button id="resignBtn" class="gb-btn danger" hidden>Resign</button>
         </div>
       </div>
       <div id="status" class="status" hidden>Loading engine…</div>
