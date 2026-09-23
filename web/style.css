@@ -716,7 +716,7 @@ details.panel > *:not(summary) { padding: 12px 15px; }
      takes the largest square that fits the height left after (nav + game bar),
      giving up width only for the leftover rail. Board grows big; the rail
      negotiates for what remains. */
-  main.game .board-col { width: min(900px, calc(100vh - 184px), calc(100vw - 380px)); flex: 0 0 auto; }
+  main.game .board-col { width: min(900px, calc(100vh - 244px), calc(100vw - 380px)); flex: 0 0 auto; }  /* room for material bar + plan dock */
   /* The rail takes leftover width (not a reserved slab), and scrolls itself. */
   main.game .panels { flex: 0 1 360px; min-width: 288px; align-self: stretch;
     position: sticky; top: 66px; max-height: calc(100vh - 78px); overflow-y: auto;
@@ -989,8 +989,9 @@ main.game .status:empty { display: none; }
 .glass .ev.prov-followed .who { color: #f0c674; }
 
 /* ---- Plan Dock: strategy made glanceable + always-visible under the board ---- */
-.plan-dock { display: none; flex-direction: column; gap: 8px; margin-top: 6px; padding: 10px 12px; border-radius: 13px;
+.plan-dock { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding: 10px 12px; border-radius: 13px;
   border: 1px solid var(--glass-line, rgba(255,255,255,0.1)); background: var(--glass-card, rgba(255,255,255,0.04)); border-left: 3px solid var(--sc, #5cc9ec); }
+.plan-dock[hidden] { display: none; }
 .plan-dock .pd-lead { font-size: 0.82rem; color: #8ea0b8; }
 .plan-dock .pd-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
 .plan-dock .pd-chips::-webkit-scrollbar { display: none; }
@@ -1028,11 +1029,9 @@ main.game .status:empty { display: none; }
 .steps-sheet-body .ss-play { margin-top: 4px; background: rgba(126,224,214,0.16); color: #aef0e6; border: 1px solid rgba(126,224,224,0.5); border-radius: 10px; padding: 11px; font-weight: 700; cursor: pointer; }
 .steps-sheet-body .ss-play:hover { background: rgba(126,224,214,0.26); }
 
-/* Dock on smaller screens (always in view, no scroll); the rail panel owns desktop. */
-@media (max-width: 899px) {
-  .plan-dock { display: flex; }
-  main.game .strat-panel { display: none; }
-}
+/* The dock is the single strategy surface on every screen — always in view,
+   right under the board. The rail's fuller panel is retired in its favour. */
+main.game .strat-panel { display: none; }
 
 /* Thinking window — the "idea bulb". No countdown, no pressure: the bulb quietly
    warms from dim to bright as your thinking time passes (driven by --fill 0→1),

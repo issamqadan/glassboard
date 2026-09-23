@@ -526,7 +526,28 @@ function computeAssist() {
 const HINT_DELAY = 30;
 let hintTick = null, hintSecs = 0, hintState = "off", hintPaused = false;
 const hintAutoOff = () => { try { return localStorage.getItem("gb_hint_auto") === "off"; } catch { return false; } };
-function hintStep() { hintSecs -= 1; if (hintSecs <= 0) revealHint(); else renderThinkWindow(); }
+function hintStep() { hintSecs -= 1; if (hintSecs <= 0) revealHint(true); else renderThinkWindow(); }
+// A soft "idea!" cue for the moment the bulb finishes warming. Best-effort.
+let _ideaCtx = null;
+function ideaCue() {
+  try { if (navigator.vibrate) navigator.vibrate(18); } catch {}
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    _ideaCtx = _ideaCtx || new AC();
+    if (_ideaCtx.state === "suspended") _ideaCtx.resume();
+    const t = _ideaCtx.currentTime;
+    [660, 990].forEach((f, i) => {
+      const o = _ideaCtx.createOscillator(), g = _ideaCtx.createGain();
+      o.type = "sine"; o.frequency.value = f;
+      const s = t + i * 0.1;
+      g.gain.setValueAtTime(0.0001, s);
+      g.gain.exponentialRampToValueAtTime(0.05, s + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, s + 0.2);
+      o.connect(g).connect(_ideaCtx.destination);
+      o.start(s); o.stop(s + 0.22);
+    });
+  } catch {}
+}
 function clearThinkWindow(hide) {
   if (hintTick) { clearInterval(hintTick); hintTick = null; }
   hintPaused = false;
@@ -551,12 +572,13 @@ function resumeThinkWindow() {
     renderThinkWindow();
   }
 }
-function revealHint() {
+function revealHint(auto) {
   clearThinkWindow();
   hintState = "revealed";
   const fold = document.getElementById("movesFold");
   if (fold) fold.open = true;
   renderThinkWindow();
+  if (auto === true) ideaCue();
 }
 function dismissHint() {
   clearThinkWindow();
@@ -579,7 +601,7 @@ function renderThinkWindow() {
     el.innerHTML =
       `<button class="tw-bulb" id="twNow" title="Show the hint now" aria-label="Show the hint now">💡</button>` +
       `<div class="tw-body"><div class="tw-lead"></div><button class="tw-skip" id="twGot"></button></div>`;
-    el.querySelector("#twNow").onclick = revealHint;
+    el.querySelector("#twNow").onclick = () => revealHint(false);
     el.querySelector("#twGot").onclick = dismissHint;
   }
   const bulb = el.querySelector(".tw-bulb");
