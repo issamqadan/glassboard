@@ -364,27 +364,34 @@ function dismissHint() {
   hintState = "dismissed";
   renderThinkWindow();
 }
+// The "idea bulb": calm, no countdown. The bulb quietly WARMS UP (dim → bright)
+// as your thinking time passes — no ticking number, no draining bar, no pressure.
+// Tap it to reveal now; wave it off with "not now". Element persists so the glow
+// glides instead of stepping.
 function renderThinkWindow() {
   const el = document.getElementById("thinkWindow");
   if (!el) return;
   if (hintState !== "pending") { el.hidden = true; el.innerHTML = ""; return; }
   el.hidden = false;
-  if (hintAutoOff()) {
+  const auto = hintAutoOff();
+  const fill = auto ? 1 : Math.max(0, Math.min(1, 1 - hintSecs / HINT_DELAY));
+  const label = auto ? "Want a hint?"
+    : hintPaused ? "Paused — read the tip, no rush"
+    : fill < 0.5 ? "Take your time — think it through"
+    : fill < 0.95 ? "An idea's forming…" : "Ready when you are";
+  if (!el.querySelector(".tw-bulb")) {
     el.innerHTML =
-      `<div class="tw-top"><span class="tw-lead">💡 Want a hint?</span></div>` +
-      `<div class="tw-actions"><button class="tw-btn now" id="twNow">Show</button><button class="tw-btn ghost" id="twGot">No thanks</button></div>`;
-  } else {
-    const pct = Math.max(0, Math.min(100, Math.round((hintSecs / HINT_DELAY) * 100)));
-    const label = hintPaused ? "Paused — read the tip, no rush"
-      : hintSecs > HINT_DELAY * 0.5 ? "Take your time — think it through"
-      : hintSecs > 5 ? "A hint's on its way…" : "Hint almost here…";
-    el.innerHTML =
-      `<div class="tw-top"><span class="tw-lead">💡 ${label}</span><span class="tw-secs">${hintPaused ? "⏸" : hintSecs + "s"}</span></div>` +
-      `<div class="tw-bar"><div class="tw-fill${hintPaused ? " paused" : ""}" style="width:${pct}%"></div></div>` +
-      `<div class="tw-actions"><button class="tw-btn now" id="twNow">Show now</button><button class="tw-btn ghost" id="twGot">I've got this</button></div>`;
+      `<button class="tw-bulb" id="twNow" title="Show the hint now" aria-label="Show the hint now">💡</button>` +
+      `<div class="tw-body"><div class="tw-lead"></div><button class="tw-skip" id="twGot"></button></div>`;
+    el.querySelector("#twNow").onclick = revealHint;
+    el.querySelector("#twGot").onclick = dismissHint;
   }
-  const now = document.getElementById("twNow"); if (now) now.onclick = revealHint;
-  const got = document.getElementById("twGot"); if (got) got.onclick = dismissHint;
+  const bulb = el.querySelector(".tw-bulb");
+  bulb.style.setProperty("--fill", fill.toFixed(2));
+  bulb.classList.toggle("paused", hintPaused);
+  bulb.classList.toggle("ready", !auto && fill >= 0.95);
+  el.querySelector(".tw-lead").textContent = label;
+  el.querySelector(".tw-skip").textContent = auto ? "no thanks" : "not now";
 }
 
 // Repaints board + panels from current state (no assistance recompute).
