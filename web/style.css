@@ -855,7 +855,7 @@ main.game .first-game .fg-dot.on { background: #7ee0d6; }
 /* ---- Game Mode: one slim glanceable bar (players · turn · level + actions) ---- */
 main.game .gamebar { display: flex; align-items: center; gap: 12px; padding: 4px 0 8px; flex-wrap: wrap; }
 main.game .gamebar .players { flex: 1 1 auto; margin: 0; border: 0; background: none; padding: 0; min-width: 0; }
-main.game .gamebar .gb-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+main.game .gamebar .gb-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto; }
 .gb-btn { background: var(--glass-card, rgba(255,255,255,0.035)); border: 1px solid var(--glass-line, rgba(255,255,255,0.08)); color: #cdd8e8;
   border-radius: 10px; padding: 8px 13px; font-size: 0.85rem; font-weight: 620; cursor: pointer; white-space: nowrap; }
 .gb-btn:hover { border-color: #5cc9ec; color: #eaf0fb; }
@@ -867,7 +867,10 @@ main.game .gamebar .gb-actions { display: flex; align-items: center; gap: 8px; f
 .gb-opts > summary::-webkit-details-marker { display: none; }
 .gb-opts > summary::before { content: none; } /* the literal ⚙ is enough — no double gear */
 .gb-opts[open] > summary { border-color: #5cc9ec; color: #eaf0fb; }
-.gb-opts .opts-body { position: absolute; right: 0; top: 42px; z-index: 30; display: flex; flex-direction: column; gap: 11px; padding: 14px; min-width: 230px;
+/* Dropdown anchored to the gear's right edge (the actions are right-aligned, so
+   it always opens leftward into the screen), clamped to the viewport width. */
+.gb-opts .opts-body { position: absolute; right: 0; top: 42px; z-index: 30; display: flex; flex-direction: column; gap: 11px; padding: 14px;
+  width: max-content; min-width: 230px; max-width: calc(100vw - 20px);
   background: #0c111b; border: 1px solid var(--glass-line, rgba(255,255,255,0.1)); border-radius: 12px; box-shadow: 0 22px 55px -22px rgba(0,0,0,0.85); }
 .gb-opts .opts-body label { font-size: 0.85rem; color: #b9c6da; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 /* Game menu: secondary actions tucked out of the top bar, in the ⚙ dropdown. */
