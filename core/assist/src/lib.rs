@@ -150,7 +150,7 @@ pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
     }
 
     let ranked = if level >= AssistLevel::Suggestion {
-        rank_moves(b, depth)
+        safety_rerank(b, rank_moves(b, depth))
     } else {
         Vec::new()
     };
@@ -331,13 +331,38 @@ fn opponent_threatens_mate(b: &Board) -> bool {
     false
 }
 
+/// Material we can lose right after playing `mv` — the opponent's best winning
+/// capture in the resulting position. This is the chessmaster's blunder-check:
+/// "if I play this, what do I hang?" A light one-exchange estimate.
+pub(crate) fn hang_after(b: &Board, mv: Move) -> i32 {
+    let mut nb = *b;
+    nb.make_move(mv);
+    threatened_pieces(&nb, b.side).first().map(|t| t.loss).unwrap_or(0)
+}
+
+/// Re-rank the engine's candidates through a safety lens: subtract what each move
+/// hangs, so moves that drop material sink and moves that keep the position sound
+/// rise. This keeps a weaker player from being told to give away a piece, and
+/// makes "save the threatened queen" naturally surface as the top move. Only the
+/// top slice is re-weighted (that's all we ever show); `sort_by` is stable, so
+/// among equally-safe moves the engine's own order is preserved.
+pub(crate) fn safety_rerank(b: &Board, mut ranked: Vec<(Move, i32)>) -> Vec<(Move, i32)> {
+    let k = ranked.len().min(12);
+    for i in 0..k {
+        let (mv, sc) = ranked[i];
+        ranked[i] = (mv, sc - hang_after(b, mv));
+    }
+    ranked[..k].sort_by(|a, c| c.1.cmp(&a.1));
+    ranked
+}
+
 /// Value-aware threats to `side`: our pieces the opponent can capture at a net
 /// material gain — *even if defended*. A queen (900) defended by a pawn but
 /// attacked by a knight (320) still counts: the exchange loses us 580. This is
 /// the gap the plain "hanging" test misses, and the reason a strategy step must
 /// yield to it. Uses a light one-exchange evaluation; ordered by loss, biggest
 /// first.
-fn threatened_pieces(b: &Board, side: Color) -> Vec<Threat> {
+pub(crate) fn threatened_pieces(b: &Board, side: Color) -> Vec<Threat> {
     let opp = side.opp();
     // Enumerating enemy replies needs the enemy king on the board (move-gen
     // checks king safety). Real games always have both; guard for test/edge
@@ -513,6 +538,21 @@ mod tests {
     fn startpos_has_no_mate_threat() {
         let b = Board::startpos();
         assert!(!opponent_threatens_mate(&b));
+    }
+
+    /// The chessmaster blunder-check in action: a queen under attack must be
+    /// saved by the recommendation, and the strategy must lead with saving it —
+    /// not push some unrelated plan while the queen hangs.
+    #[test]
+    fn threatened_queen_is_saved_by_the_recommendation() {
+        // White Qd4 attacked by Black Nf5 and undefended. White to move.
+        let b = parse_fen("6k1/8/8/5n2/3Q4/8/6PP/6K1 w - - 0 1");
+        assert_eq!(threatened_pieces(&b, b.side).first().map(|t| t.loss), Some(900));
+        let a = analyze(&b, AssistLevel::Suggestion, 3);
+        let best = a.candidates.first().expect("a candidate");
+        assert!(hang_after(&b, best.mv) < 900, "recommended {} still hangs the queen", best.san);
+        let sr = a.strategy.expect("strategy");
+        assert!(sr.strategies.iter().any(|s| s.id == "save_piece"), "expected a save_piece plan on top");
     }
 
     /// A defended piece attacked only by something at least as valuable is safe.

@@ -285,6 +285,14 @@ fn plan_move(ranked: &[(Move, i32)], top_score: i32, pred: impl Fn(&Move) -> boo
 fn kind_at(b: &Board, sq: Square) -> Option<PieceKind> {
     b.squares[sq as usize].map(|p| p.kind)
 }
+/// Does `m` get us out of danger — i.e. after it, the worst material we can lose
+/// drops below `threshold`? (Moved the piece to safety, defended it, or took the
+/// attacker.) Used so the "save your piece" plan recommends a move that works.
+fn move_saves(b: &Board, m: &Move, side: Color, threshold: i32) -> bool {
+    let mut nb = *b;
+    nb.make_move(*m);
+    crate::threatened_pieces(&nb, side).first().map(|t| t.loss).unwrap_or(0) < threshold
+}
 fn piece_word(k: PieceKind) -> &'static str {
     match k {
         PieceKind::Pawn => "pawn",
@@ -328,6 +336,33 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
         }
     };
     let step = |text: &str, done: bool| PlanStep { text: text.to_string(), done };
+
+    // --- Safety first: save a piece under real threat (a chessmaster deals with
+    // threats before pursuing plans). Highest fit so it leads when material is
+    // genuinely at risk. The recommended move is already safety-reranked. ---
+    if let Some(t) = crate::threatened_pieces(b, side).into_iter().next() {
+        if t.loss >= 200 {
+            let (sq, loss, word) = (t.square, t.loss, piece_word(t.kind));
+            let rec = plan_move(ranked, top_score, |m| move_saves(b, m, side, loss));
+            if move_saves(b, &rec, side, loss) {
+                out.push(mk(
+                    "save_piece",
+                    &format!("Save your {word}"),
+                    "A piece is under attack — get it safe (move it, defend it, or take the attacker) before anything else.",
+                    96,
+                    rec,
+                    format!("Gets your {word} out of danger — safety comes first."),
+                    vec![PlanArrow { from: rec.from, to: rec.to, kind: ArrowKind::Support }],
+                    vec![sq],
+                    vec![
+                        step("Deal with the threat", false),
+                        step("Get every piece safe and defended", false),
+                        step("Then get on with your plan", false),
+                    ],
+                ));
+            }
+        }
+    }
 
     // --- Win the loose piece (tactics first) ---
     let loose = loose_enemy(b, side);
