@@ -181,6 +181,10 @@ async function main() {
   const closePieceSheet = () => { psheet.style.display = "none"; resumeThinkWindow(); };
   if (pclose && psheet) pclose.addEventListener("click", closePieceSheet);
   if (psheet) psheet.addEventListener("click", (e) => { if (e.target === psheet) closePieceSheet(); });
+  const ssheet = el("stepsSheet"), ssclose = el("stepsSheetClose");
+  const closeSteps = () => { if (ssheet) ssheet.style.display = "none"; };
+  if (ssclose) ssclose.addEventListener("click", closeSteps);
+  if (ssheet) ssheet.addEventListener("click", (e) => { if (e.target === ssheet) closeSteps(); });
   const gsheet = el("glassSheet"), gchip = el("glassChip"), gclose = el("glassClose");
   if (gchip && gsheet) gchip.addEventListener("click", () => { gsheet.style.display = "grid"; });
   if (gclose && gsheet) gclose.addEventListener("click", () => { gsheet.style.display = "none"; });
@@ -598,9 +602,55 @@ function paint() {
   renderCoach();
   renderAssist();
   renderStrategy();
+  renderPlanDock();
   renderGlass();
   renderStatus();
   renderBudget();
+}
+
+// Plan Dock: the strategy glanceable + always-visible under the board (plan ·
+// step progress · next move chip), so on a phone you never scroll for your plan.
+function renderPlanDock() {
+  const dock = document.getElementById("planDock");
+  if (!dock) return;
+  const sr = assistData && assistData.strategy;
+  if (!sr || !sr.strategies || !sr.strategies.length) { dock.hidden = true; dock.innerHTML = ""; return; }
+  dock.hidden = false;
+  const picked = sr.strategies.find((s) => s.id === pickedStrategyId);
+  if (!picked) {
+    const chips = sr.strategies.slice(0, 3).map((s) =>
+      `<button class="pd-pick" data-id="${s.id}" style="--sc:${STRAT_COLOR[s.id] || "#5cc9ec"}"><span class="pd-cic">${STRAT_ICON[s.id] || "◆"}</span>${escapeHtml(s.name)}</button>`).join("");
+    dock.style.removeProperty("--sc");
+    dock.innerHTML = `<div class="pd-lead">🧭 Pick a plan</div><div class="pd-chips">${chips}</div>`;
+    dock.querySelectorAll(".pd-pick").forEach((b) => b.onclick = () => pickStrategy(b.dataset.id));
+    return;
+  }
+  const doneN = picked.steps.filter((s) => s.done).length;
+  const pips = picked.steps.map((s, i) => `<span class="pd-pip${s.done ? " done" : i === doneN ? " now" : ""}"></span>`).join("");
+  dock.style.setProperty("--sc", STRAT_COLOR[picked.id] || "#5cc9ec");
+  dock.innerHTML =
+    `<div class="pd-top"><span class="pd-ic">${STRAT_ICON[picked.id] || "◆"}</span><span class="pd-name">${escapeHtml(picked.name)}</span>` +
+      `<span class="pd-pips" title="${doneN}/${picked.steps.length} steps">${pips}</span>` +
+      `<button class="pd-steps" id="pdSteps">Steps</button><button class="pd-x" id="pdX" title="Drop this plan" aria-label="Drop this plan">✕</button></div>` +
+    `<div class="pd-next"><span class="pd-lab">NEXT</span><button class="pd-move" id="pdMove" title="Play this move">${escapeHtml(picked.moveSan || picked.moveUci)}</button>` +
+      `<span class="pd-note">${escapeHtml(picked.moveNote)}</span></div>`;
+  dock.querySelector("#pdMove").onclick = () => { const q = uciToSquares(picked.moveUci); if (q) sendMove(q.from, q.to); };
+  dock.querySelector("#pdSteps").onclick = () => openStepsSheet(picked);
+  dock.querySelector("#pdX").onclick = () => { pickedStrategyId = null; renderStrategy(); renderAssist(); renderPlanDock(); };
+}
+function openStepsSheet(picked) {
+  const t = document.getElementById("stepsSheetTitle");
+  if (t) t.textContent = (STRAT_ICON[picked.id] || "◆") + " " + picked.name;
+  const b = document.getElementById("stepsSheetBody");
+  if (b) b.innerHTML =
+    `<div class="ss-idea">${escapeHtml(picked.idea)}</div>` +
+    `<div class="ss-steps">${picked.steps.map((st) => `<div class="ss-step ${st.done ? "done" : ""}"><span class="ss-dot">${st.done ? "✓" : "•"}</span><span>${escapeHtml(st.text)}</span></div>`).join("")}</div>` +
+    `<div class="glassmini" style="margin:2px 0 0">🔍 Your plan is shown to your opponent too.</div>` +
+    `<button class="ss-play" id="ssPlay">Play next — ${escapeHtml(picked.moveSan || picked.moveUci)}</button>`;
+  const p = document.getElementById("ssPlay");
+  if (p) p.onclick = () => { const sh = document.getElementById("stepsSheet"); if (sh) sh.style.display = "none"; const q = uciToSquares(picked.moveUci); if (q) sendMove(q.from, q.to); };
+  const sh = document.getElementById("stepsSheet");
+  if (sh) sh.style.display = "grid";
 }
 
 // Captured material as one tug-bar above the board, oriented to the viewer.

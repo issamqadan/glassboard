@@ -741,7 +741,7 @@ details.panel > *:not(summary) { padding: 12px 15px; }
   main.game .btn-primary { flex: 1; white-space: nowrap; padding: 11px 14px; }
   main.game .opts > summary { padding: 11px 12px; }
   /* Board leaves room for the coach beneath it (reserve ≈ top chrome + coach). */
-  main.game .board-col { width: min(96vw, calc(100vh - 294px)); margin: 0 auto; }
+  main.game .board-col { width: min(96vw, calc(100vh - 340px)); margin: 0 auto; }  /* room for material bar + plan dock */
   .coach { padding: 12px 13px; border-radius: 13px; }
   .coach .co-head { font-size: 0.96rem; }
   .coach .co-play { padding: 10px 13px; }
@@ -987,6 +987,52 @@ main.game .status:empty { display: none; }
 .glass .ev .pm { color: #8ea0b8; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.82em; }
 .glass .ev.prov-own .who { color: #5fd98a; }
 .glass .ev.prov-followed .who { color: #f0c674; }
+
+/* ---- Plan Dock: strategy made glanceable + always-visible under the board ---- */
+.plan-dock { display: none; flex-direction: column; gap: 8px; margin-top: 6px; padding: 10px 12px; border-radius: 13px;
+  border: 1px solid var(--glass-line, rgba(255,255,255,0.1)); background: var(--glass-card, rgba(255,255,255,0.04)); border-left: 3px solid var(--sc, #5cc9ec); }
+.plan-dock .pd-lead { font-size: 0.82rem; color: #8ea0b8; }
+.plan-dock .pd-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.plan-dock .pd-chips::-webkit-scrollbar { display: none; }
+.plan-dock .pd-pick { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 8px 11px; border-radius: 10px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--sc) 45%, transparent); background: color-mix(in srgb, var(--sc) 14%, transparent);
+  color: #eaf0fb; font-size: 0.84rem; font-weight: 600; white-space: nowrap; }
+.plan-dock .pd-cic { color: var(--sc); }
+.plan-dock .pd-top { display: flex; align-items: center; gap: 8px; }
+.plan-dock .pd-ic { color: var(--sc); font-size: 1rem; line-height: 1; }
+.plan-dock .pd-name { font-weight: 650; color: #eaf0fb; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-dock .pd-pips { display: flex; gap: 4px; margin-left: 2px; flex-shrink: 0; }
+.plan-dock .pd-pip { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.16); }
+.plan-dock .pd-pip.done { background: var(--sc); }
+.plan-dock .pd-pip.now { background: var(--sc); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sc) 35%, transparent); }
+.plan-dock .pd-steps { margin-left: auto; background: none; border: 1px solid var(--glass-line, rgba(255,255,255,0.12)); color: #b7c4dc;
+  border-radius: 8px; padding: 4px 9px; font-size: 0.76rem; cursor: pointer; white-space: nowrap; }
+.plan-dock .pd-steps:hover { color: #eaf0fb; border-color: var(--sc); }
+.plan-dock .pd-x { background: none; border: 0; color: #6f8298; font-size: 0.9rem; cursor: pointer; padding: 2px 4px; }
+.plan-dock .pd-x:hover { color: #b7c4dc; }
+.plan-dock .pd-next { display: flex; align-items: center; gap: 9px; }
+.plan-dock .pd-lab { font-size: 0.64rem; font-weight: 800; letter-spacing: 0.08em; color: #7ee0d6; flex-shrink: 0; }
+.plan-dock .pd-move { flex-shrink: 0; font-weight: 800; font-size: 1rem; color: var(--sc); background: color-mix(in srgb, var(--sc) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sc) 50%, transparent); border-radius: 9px; padding: 6px 12px; cursor: pointer; }
+.plan-dock .pd-move:hover { background: color-mix(in srgb, var(--sc) 24%, transparent); }
+.plan-dock .pd-note { font-size: 0.8rem; color: #a9b7cf; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Steps sheet — the full multi-step plan on demand. */
+.steps-sheet-body { padding: 14px 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.steps-sheet-body .ss-idea { font-size: 0.9rem; color: #cdd8e8; line-height: 1.5; }
+.steps-sheet-body .ss-steps { display: flex; flex-direction: column; gap: 9px; }
+.steps-sheet-body .ss-step { display: flex; align-items: flex-start; gap: 10px; font-size: 0.9rem; color: #b7c4dc; line-height: 1.4; }
+.steps-sheet-body .ss-step.done { color: #7f92ab; }
+.steps-sheet-body .ss-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line-2, #2b3856); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #5d6c8c; flex-shrink: 0; }
+.steps-sheet-body .ss-step.done .ss-dot { background: #2fa96b; border-color: #2fa96b; color: #04220f; }
+.steps-sheet-body .ss-play { margin-top: 4px; background: rgba(126,224,214,0.16); color: #aef0e6; border: 1px solid rgba(126,224,224,0.5); border-radius: 10px; padding: 11px; font-weight: 700; cursor: pointer; }
+.steps-sheet-body .ss-play:hover { background: rgba(126,224,214,0.26); }
+
+/* Dock on smaller screens (always in view, no scroll); the rail panel owns desktop. */
+@media (max-width: 899px) {
+  .plan-dock { display: flex; }
+  main.game .strat-panel { display: none; }
+}
 
 /* Thinking window — the "idea bulb". No countdown, no pressure: the bulb quietly
    warms from dim to bright as your thinking time passes (driven by --fill 0→1),
