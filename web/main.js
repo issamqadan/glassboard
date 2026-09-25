@@ -245,10 +245,20 @@ async function main() {
   // handicap). Applies live to the running game.
   const aiLevelEl = document.getElementById("aiLevel");
   if (aiLevelEl) aiLevelEl.addEventListener("change", () => {
-    engineEloEl.value = aiLevelEl.value;
-    if (game) game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
-    setLevelPill(game ? game.assistLevel() : "off");
-    onPositionChanged();
+    const newElo = parseInt(aiLevelEl.value, 10);
+    const midGame = lastMove != null || moveReview.length > 0; // a move has been played
+    if (midGame && !confirm(`Play a new game against the ${levelName(newElo)} AI? (You choose your opponent at the start of a game.)`)) {
+      syncAiLevel(); // revert the dropdown to the current opponent
+      return;
+    }
+    engineEloEl.value = newElo;
+    closeMenu();
+    if (midGame) { firstGame = false; newGame(); }        // new opponent → fresh game
+    else {                                                  // untouched board → apply in place
+      if (game) game.setRatings(parseInt(humanEloEl.value, 10), newElo);
+      setLevelPill(game ? game.assistLevel() : "off");
+      onPositionChanged();
+    }
   });
   if (humanEloEl) humanEloEl.addEventListener("change", () => {
     if (game) game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
