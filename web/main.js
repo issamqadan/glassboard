@@ -308,20 +308,13 @@ function onPositionChanged() {
     freeCaptures = assistData.freeCaptures || [];
     if ((assistData.candidates || []).length) helpWasAvailable = true;
   }
-  // Move help arrives on a timed "thinking window" — by default nothing shows;
-  // a hint fades in after HINT_DELAY, or on "Show now", or never if you wave it
-  // off. EXCEPTION: if you're following a picked multi-step strategy, its step
-  // help shows immediately (you've opted into the plan).
+  // Vs the AI there's no opponent to hide help from, so suggestions show
+  // immediately — the timed "thinking window" (which exists so a HUMAN opponent
+  // doesn't watch you being fed moves) is a multiplayer-only thing.
   const fold = document.getElementById("movesFold");
   if (fold) fold.open = false;
-  const followingPlan = assistData && assistData.strategy && assistData.strategy.strategies
-    && assistData.strategy.strategies.some((s) => s.id === pickedStrategyId);
-  // Safety never waits: in check, a mate threat, or about to lose real material →
-  // help shows at once. The thinking window is only for quiet positions.
-  const urgent = assistData && (assistData.inCheck || assistData.mateThreat || (threats[0] && threats[0].loss >= 200));
   if (assistData && (assistData.candidates || []).length && !firstGame) {
-    if (followingPlan || urgent) revealHint();
-    else startThinkWindow();
+    revealHint();
   } else clearThinkWindow(true);
   paint();
 }

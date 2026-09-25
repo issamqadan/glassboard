@@ -272,13 +272,17 @@ fn pick(ranked: &[(Move, i32)], pred: impl Fn(&Move) -> bool) -> Option<Move> {
     ranked.iter().map(|(m, _)| *m).find(|m| pred(m))
 }
 
-/// The best ranked move that serves the plan — but only if it's within ~1.3
-/// pawns of the engine's best move, so a plan never recommends a blunder.
-/// Falls back to the engine's best move otherwise.
+/// The best ranked move that serves the plan — but only if it's essentially as
+/// good as the engine's best move (within ~0.4 pawns). A plan must never cost
+/// material: a chessmaster follows a plan by playing the *best move consistent
+/// with it*, not a worse "themed" move. If nothing thematic is near-best, we fall
+/// back to the engine's best move (still sound; the plan's steps/arrows teach the
+/// idea). This keeps "follow the plan" as strong as "play the best move".
+const PLAN_SLACK: i32 = 40;
 fn plan_move(ranked: &[(Move, i32)], top_score: i32, pred: impl Fn(&Move) -> bool) -> Move {
     ranked
         .iter()
-        .find(|(m, s)| pred(m) && *s + 130 >= top_score)
+        .find(|(m, s)| pred(m) && *s + PLAN_SLACK >= top_score)
         .map(|(m, _)| *m)
         .unwrap_or(ranked[0].0)
 }

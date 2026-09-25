@@ -578,9 +578,18 @@ mod tests {
         }
         // Average over several fixed openings so one noisy line doesn't mislead.
         // White follows the recommendation (or raw search); Black is raw search.
-        fn from_opening(first: &str, white_safe: bool, plies: u32) -> i32 {
+        // White strategy: 0 = engine recommendation, 1 = raw search, 2 = follow the top plan.
+        fn top_plan_move(b: &Board) -> Move {
+            let ranked = rank_moves(b, 3);
+            let sr = crate::strategy::strategize(b, &ranked);
+            let uci = sr.strategies.first().map(|s| s.move_uci.clone());
+            match uci {
+                Some(u) => generate_legal(b).into_iter().find(|m| to_uci(*m) == u).unwrap_or(ranked[0].0),
+                None => ranked[0].0,
+            }
+        }
+        fn from_opening(first: &str, mode: u8, plies: u32) -> i32 {
             let mut b = Board::startpos();
-            // force White's first move to vary the game
             if let Some(m) = generate_legal(&b).into_iter().find(|m| to_uci(*m) == first) {
                 b.make_move(m);
             }
@@ -588,8 +597,12 @@ mod tests {
                 if generate_legal(&b).is_empty() {
                     return if in_check(&b) { if b.side == Color::White { -99 } else { 99 } } else { 0 };
                 }
-                let m = if b.side == Color::White && white_safe {
-                    analyze(&b, AssistLevel::Guided, 3).best.expect("best").mv
+                let m = if b.side == Color::White {
+                    match mode {
+                        0 => analyze(&b, AssistLevel::Guided, 3).best.expect("best").mv,
+                        2 => top_plan_move(&b),
+                        _ => search(&b, 3).best.expect("move"),
+                    }
                 } else {
                     search(&b, 3).best.expect("move")
                 };
@@ -597,14 +610,16 @@ mod tests {
             }
             mat(&b) / 100
         }
-        let openings = ["e2e4", "d2d4", "g1f3", "c2c4", "e2e3", "b1c3"];
-        let (mut rec_sum, mut raw_sum) = (0, 0);
+        let openings = ["e2e4", "d2d4", "g1f3", "c2c4"];
+        let (mut rec, mut raw, mut plan) = (0, 0, 0);
         for op in openings {
-            rec_sum += from_opening(op, true, 70);
-            raw_sum += from_opening(op, false, 70);
+            rec += from_opening(op, 0, 70);
+            raw += from_opening(op, 1, 70);
+            plan += from_opening(op, 2, 70);
         }
-        println!("\nAVG material over {} openings — recommendation: {:+}  raw search: {:+}",
-            openings.len(), rec_sum / openings.len() as i32, raw_sum / openings.len() as i32);
+        let n = openings.len() as i32;
+        println!("\nAVG material / {} openings — recommendation: {:+}  raw: {:+}  FOLLOW-PLAN: {:+}",
+            n, rec / n, raw / n, plan / n);
     }
 
     /// A defended piece attacked only by something at least as valuable is safe.
