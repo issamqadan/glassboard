@@ -306,6 +306,11 @@ button {
   padding: 2px 9px;
   border-radius: 999px;
 }
+/* Live eval pill — the engine's read of your position (measurement during play). */
+.eval-pill { text-transform: none; font-variant-numeric: tabular-nums; font-weight: 700; }
+.eval-pill.good { background: rgba(69,200,110,0.16); color: #6fe0a0; }
+.eval-pill.bad { background: rgba(242,109,122,0.16); color: #f4a2ab; }
+.eval-pill.even { background: rgba(147,162,192,0.14); color: #b9c6da; }
 
 .hint {
   font-size: 0.72em;

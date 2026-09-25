@@ -177,6 +177,34 @@ impl Game {
         }
     }
 
+    /// Like `engineMove`, but picks at random among the moves within `r`'s budget
+    /// of the best — so the opponent doesn't play an identical game every time.
+    /// `rand` is a float in [0,1) from JS (the engine has no RNG). Variety is
+    /// wider in the opening and tight later, so play stays strong but not robotic.
+    #[wasm_bindgen(js_name = engineMoveVaried)]
+    pub fn engine_move_varied(&mut self, depth: u32, rand: f64) -> String {
+        if generate_legal(&self.board).is_empty() {
+            return String::new();
+        }
+        let ranked = rank_moves(&self.board, depth);
+        if ranked.is_empty() {
+            return String::new();
+        }
+        let top = ranked[0].1;
+        let spread = if self.board.fullmove <= 6 { 70 } else { 35 };
+        let pool: Vec<Move> = ranked
+            .iter()
+            .filter(|(_, s)| top - *s <= spread)
+            .map(|(m, _)| *m)
+            .collect();
+        let idx = ((rand.clamp(0.0, 0.999) * pool.len() as f64) as usize).min(pool.len() - 1);
+        let m = pool[idx];
+        let u = move_uci(m);
+        self.board.make_move(m);
+        self.ply += 1;
+        u
+    }
+
     /// "ongoing" | "checkmate" | "stalemate" | "fifty-move".
     pub fn status(&self) -> String {
         if generate_legal(&self.board).is_empty() {

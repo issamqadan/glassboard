@@ -121,7 +121,7 @@ async function resumeAiGame(id) {
   game.setRatings(rec.humanElo, rec.engineElo);
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
-  indepOwn = 0; indepFollowed = 0; moveReview = [];
+  indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
   pickedStrategyId = null; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
   firstGame = false;
   hideOver();
@@ -144,6 +144,7 @@ let indepOwn = 0, indepFollowed = 0;
 // Strength telemetry: per-move centipawn loss vs the engine's best, so we can
 // measure how good your (assisted) play actually was in a real game.
 let moveReview = []; // [{cp, wasBest}]
+let lastEval = null; // engine's read of your position (white-relative cp), for the live pill
 let freeCaptures = [];
 let lastStratSig = ""; // signature of strategies last seen while the fold was open
 let curStratSig = "";
@@ -258,7 +259,7 @@ function newGame() {
   aiGameId = newAiId(); // a fresh slot; only saved once a move is played
   aiSaved = false;
   mateKingSq = -1;
-  indepOwn = 0; indepFollowed = 0; moveReview = [];
+  indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
   selected = null;
   legalTargets = [];
   lastMove = null;
@@ -309,7 +310,7 @@ function onPositionChanged() {
     threats = assistData.threats || [];
     threatSquares = threats.map((t) => t.sq);
     freeCaptures = assistData.freeCaptures || [];
-    if ((assistData.candidates || []).length) helpWasAvailable = true;
+    if ((assistData.candidates || []).length) { helpWasAvailable = true; lastEval = assistData.candidates[0].score; }
   }
   // Vs the AI there's no opponent to hide help from, so suggestions show
   // immediately — the timed "thinking window" (which exists so a HUMAN opponent
@@ -418,11 +419,31 @@ function renderThinkWindow() {
   el.querySelector(".tw-skip").textContent = auto ? "no thanks" : "not now";
 }
 
+// Live position eval — the engine's read of your position, so strength is
+// visible DURING the game (white-relative; from the best-move score).
+function renderEval() {
+  const el = document.getElementById("evalPill");
+  if (!el) return;
+  const over = resigned || game.status() !== "ongoing";
+  if (lastEval == null || over) { el.hidden = true; return; }
+  el.hidden = false;
+  let txt, cls;
+  if (Math.abs(lastEval) >= 29000) { txt = lastEval > 0 ? "Mate ▲" : "Mate ▼"; }
+  else {
+    const p = lastEval / 100;
+    txt = (p >= 0 ? "+" : "") + p.toFixed(1);
+  }
+  cls = lastEval >= 80 ? "good" : lastEval <= -80 ? "bad" : "even";
+  el.className = "pill eval-pill " + cls;
+  el.textContent = "⚖ " + txt;
+}
+
 // Repaints board + panels from current state (no assistance recompute).
 function paint() {
   renderFirstGame();
   renderBoard();
   renderPlayers();
+  renderEval();
   renderCoach();
   renderAssist();
   renderStrategy();
@@ -513,9 +534,10 @@ function renderCoach() {
   } else if (a && a.mateThreat) {
     crit = true; tone = "danger"; ic = "🛑"; head = "Checkmate threat!";
     sub = "The engine can mate next move — your move must stop it (guard the king or remove the attacker).";
-  } else if (tlist.length) {
-    // Value-aware: the biggest-loss threat first — this is what must interrupt
-    // the plan. A defended queen attacked by a knight lands here (hanging misses it).
+  } else if (tlist.length && tlist[0].loss >= 200) {
+    // Only alarm for a real piece (minor or more). A single pawn isn't worth a
+    // red "SAVE IT" — the engine often (correctly) lets a pawn go, which made the
+    // old alarm misleading ("save your pawn" while the best move ignores it).
     const t = tlist[0];
     crit = t.loss >= 500; // rook or more at stake
     tone = "danger"; ic = crit ? "🛑" : "⚠";
@@ -1108,7 +1130,7 @@ function engineReply() {
   busy = true;
   statusEl.textContent = "Engine thinking…";
   setTimeout(() => {
-    const uci = game.engineMove(depth());
+    const uci = game.engineMoveVaried(depth(), Math.random()); // vary among near-best → no identical games
     if (uci.length >= 4) lastMove = uciToSquares(uci);
     busy = false;
     if (!firstGame) persistAiGame(game.status() !== "ongoing");
