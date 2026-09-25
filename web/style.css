@@ -460,6 +460,11 @@ button {
 .players .waiting-dot { width: 9px; height: 9px; border-radius: 50%; background: #e6a94c; display: inline-block; animation: pulse-w 1.4s infinite; }
 @keyframes pulse-w { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 .players .turn { margin-left: auto; font-size: 0.8rem; color: var(--accent); font-weight: 600; }
+/* Tappable AI-level chip on the opponent — the discoverable way to pick who you play. */
+.players .ai-chip { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font: inherit; color: inherit;
+  background: rgba(126,224,214,0.08); border: 1px solid rgba(126,224,214,0.28); border-radius: 999px; padding: 3px 10px; }
+.players .ai-chip:hover { border-color: #7ee0d6; background: rgba(126,224,214,0.16); }
+.players .ai-chip .ai-caret { color: var(--accent); font-size: 0.72rem; }
 
 /* friendly level chips (assess your level without a rating) */
 .lvl-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }

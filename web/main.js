@@ -601,6 +601,11 @@ function updateSetupSum() {
   const el = document.getElementById("setupSum");
   if (el) el.textContent = `You ${humanEloEl.value} · Engine ${engineEloEl.value}`;
 }
+// Friendly name for an AI rating (matches the ⚙ AI-level options).
+function levelName(elo) {
+  const e = parseInt(elo, 10);
+  return e <= 700 ? "Beginner" : e <= 1100 ? "Casual" : e <= 1500 ? "Intermediate" : e <= 1900 ? "Club" : e <= 2300 ? "Expert" : "Master";
+}
 function renderPlayers() {
   updateSetupSum();
   const el = document.getElementById("players");
@@ -608,14 +613,20 @@ function renderPlayers() {
   el.hidden = false;
   const over = resigned || game.status() !== "ongoing";
   const turn = over ? null : game.sideToMove();
-  // Compact: whose-move stays on one row with the ratings (branding is in the nav).
+  // Compact: whose-move stays on one row. The 🤖 chip shows the AI LEVEL and is
+  // tappable to change it — that's where you look for "who am I playing".
   el.innerHTML =
     `<span class="pl"><span class="dot white"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span></span>` +
     `<span class="vs">·</span>` +
-    `<span class="pl"><span class="dot black"></span> <b>🤖</b> <span class="tnum">${engineEloEl.value}</span></span>` +
+    `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot black"></span> <b>🤖 ${levelName(engineEloEl.value)}</b> <span class="ai-caret">▾</span></button>` +
     (turn ? (turn === "white"
       ? `<span class="turn you">💡 Your move</span>`
       : `<span class="turn wait">Engine…</span>`) : "");
+  const ac = document.getElementById("aiChip");
+  if (ac) ac.onclick = () => {
+    const f = document.getElementById("setupFold"); if (f) f.open = true;
+    const s = document.getElementById("aiLevel"); if (s) { try { s.focus(); } catch {} }
+  };
 }
 
 function resign() {
