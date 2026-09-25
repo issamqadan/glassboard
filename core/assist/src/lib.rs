@@ -149,8 +149,13 @@ pub fn analyze(b: &Board, level: AssistLevel, depth: u32) -> Assistance {
         }
     }
 
+    // Trust the search for move quality — it already avoids real hangs far better
+    // than any static estimate (an earlier "safety re-rank" made play much worse
+    // by overriding deep search with a crude 1-ply guess). Safety shows up in the
+    // WARNINGS (threats, mate-threat) and the "save your piece" plan, not by
+    // second-guessing which move is strongest.
     let ranked = if level >= AssistLevel::Suggestion {
-        safety_rerank(b, rank_moves(b, depth))
+        rank_moves(b, depth)
     } else {
         Vec::new()
     };
@@ -329,31 +334,6 @@ fn opponent_threatens_mate(b: &Board) -> bool {
         }
     }
     false
-}
-
-/// Material we can lose right after playing `mv` — the opponent's best winning
-/// capture in the resulting position. This is the chessmaster's blunder-check:
-/// "if I play this, what do I hang?" A light one-exchange estimate.
-pub(crate) fn hang_after(b: &Board, mv: Move) -> i32 {
-    let mut nb = *b;
-    nb.make_move(mv);
-    threatened_pieces(&nb, b.side).first().map(|t| t.loss).unwrap_or(0)
-}
-
-/// Re-rank the engine's candidates through a safety lens: subtract what each move
-/// hangs, so moves that drop material sink and moves that keep the position sound
-/// rise. This keeps a weaker player from being told to give away a piece, and
-/// makes "save the threatened queen" naturally surface as the top move. Only the
-/// top slice is re-weighted (that's all we ever show); `sort_by` is stable, so
-/// among equally-safe moves the engine's own order is preserved.
-pub(crate) fn safety_rerank(b: &Board, mut ranked: Vec<(Move, i32)>) -> Vec<(Move, i32)> {
-    let k = ranked.len().min(12);
-    for i in 0..k {
-        let (mv, sc) = ranked[i];
-        ranked[i] = (mv, sc - hang_after(b, mv));
-    }
-    ranked[..k].sort_by(|a, c| c.1.cmp(&a.1));
-    ranked
 }
 
 /// Value-aware threats to `side`: our pieces the opponent can capture at a net
@@ -549,10 +529,82 @@ mod tests {
         let b = parse_fen("6k1/8/8/5n2/3Q4/8/6PP/6K1 w - - 0 1");
         assert_eq!(threatened_pieces(&b, b.side).first().map(|t| t.loss), Some(900));
         let a = analyze(&b, AssistLevel::Suggestion, 3);
+        // The search-based recommendation already rescues the queen: after it, the
+        // worst material we can lose is well below a full queen.
         let best = a.candidates.first().expect("a candidate");
-        assert!(hang_after(&b, best.mv) < 900, "recommended {} still hangs the queen", best.san);
+        let mut nb = b;
+        nb.make_move(best.mv);
+        let after = threatened_pieces(&nb, b.side).first().map(|t| t.loss).unwrap_or(0);
+        assert!(after < 900, "recommended {} still hangs the queen", best.san);
         let sr = a.strategy.expect("strategy");
         assert!(sr.strategies.iter().any(|s| s.id == "save_piece"), "expected a save_piece plan on top");
+    }
+
+    // Diagnostic self-play: the assisted side follows recommendations vs a raw
+    // search opponent, averaged over several openings. Slow (many depth-3
+    // searches), so #[ignore]d — run on demand to sanity-check strength:
+    //   cargo test -p glassboard-assist selfplay -- --ignored --nocapture
+    // Baseline (2026-09-24): recommendation +0 vs raw search -1 — following the
+    // help plays evenly with the same-depth opponent (no self-inflicted losses).
+    #[test]
+    #[ignore]
+    fn selfplay_diag() {
+        fn mat(b: &Board) -> i32 {
+            let mut s = 0;
+            for sq in 0..64u8 {
+                if let Some(p) = b.squares[sq as usize] {
+                    if p.kind == PieceKind::King { continue; }
+                    let v = material(p.kind);
+                    s += if p.color == Color::White { v } else { -v };
+                }
+            }
+            s
+        }
+        fn play(white_safe: bool, plies: u32) -> (i32, String, u32) {
+            let mut b = Board::startpos();
+            for ply in 0..plies {
+                if generate_legal(&b).is_empty() {
+                    let res = if in_check(&b) { format!("{:?} wins", b.side.opp()) } else { "draw".into() };
+                    return (mat(&b), res, ply);
+                }
+                let m = if b.side == Color::White && white_safe {
+                    analyze(&b, AssistLevel::Guided, 3).best.expect("best").mv
+                } else {
+                    search(&b, 3).best.expect("move")
+                };
+                b.make_move(m);
+            }
+            (mat(&b), "ongoing".into(), plies)
+        }
+        // Average over several fixed openings so one noisy line doesn't mislead.
+        // White follows the recommendation (or raw search); Black is raw search.
+        fn from_opening(first: &str, white_safe: bool, plies: u32) -> i32 {
+            let mut b = Board::startpos();
+            // force White's first move to vary the game
+            if let Some(m) = generate_legal(&b).into_iter().find(|m| to_uci(*m) == first) {
+                b.make_move(m);
+            }
+            for _ in 0..plies {
+                if generate_legal(&b).is_empty() {
+                    return if in_check(&b) { if b.side == Color::White { -99 } else { 99 } } else { 0 };
+                }
+                let m = if b.side == Color::White && white_safe {
+                    analyze(&b, AssistLevel::Guided, 3).best.expect("best").mv
+                } else {
+                    search(&b, 3).best.expect("move")
+                };
+                b.make_move(m);
+            }
+            mat(&b) / 100
+        }
+        let openings = ["e2e4", "d2d4", "g1f3", "c2c4", "e2e3", "b1c3"];
+        let (mut rec_sum, mut raw_sum) = (0, 0);
+        for op in openings {
+            rec_sum += from_opening(op, true, 70);
+            raw_sum += from_opening(op, false, 70);
+        }
+        println!("\nAVG material over {} openings — recommendation: {:+}  raw search: {:+}",
+            openings.len(), rec_sum / openings.len() as i32, raw_sum / openings.len() as i32);
     }
 
     /// A defended piece attacked only by something at least as valuable is safe.
