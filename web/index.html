@@ -23,14 +23,18 @@
               <a id="newHereLink" class="menu-item" href="./index.html?first=1" title="A guided game teaches you as you play">👋 New to chess?</a>
               <div class="menu-sep"></div>
               <label>You (White) <input id="humanElo" type="number" value="1200" min="100" max="3200" /></label>
-              <label>Engine (Black) <input id="engineElo" type="number" value="1700" min="100" max="3200" /></label>
-              <label>Depth
-                <select id="depth">
-                  <option value="2">2</option>
-                  <option value="3" selected>3</option>
-                  <option value="4">4</option>
+              <label>AI level
+                <select id="aiLevel">
+                  <option value="700">🌱 Beginner</option>
+                  <option value="1100">♟ Casual</option>
+                  <option value="1500" selected>♞ Intermediate</option>
+                  <option value="1900">⚔ Club</option>
+                  <option value="2300">★ Expert</option>
+                  <option value="3000">👑 Master</option>
                 </select>
               </label>
+              <input id="engineElo" type="hidden" value="1500" />
+              <input id="depth" type="hidden" value="3" />
               <div class="menu-sep"></div>
               <div class="menu-theme"><span class="menu-theme-lab">Board theme</span><div id="gbThemeSlot"></div></div>
             </div>

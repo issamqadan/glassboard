@@ -118,6 +118,7 @@ async function resumeAiGame(id) {
   game = Game.fromFen(rec.fen);
   if (humanEloEl) humanEloEl.value = rec.humanElo;
   if (engineEloEl) engineEloEl.value = rec.engineElo;
+  syncAiLevel();
   game.setRatings(rec.humanElo, rec.engineElo);
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
@@ -174,7 +175,18 @@ let assistData = null; // parsed assist JSON for the current (White) turn
 let busy = false;
 let resigned = false;
 
-const depth = () => parseInt(depthEl.value, 10);
+// Assistance search depth — a notch deeper than the opponent's, so following the
+// help lifts you above it (the handicap made real). Derived from the AI level.
+const depth = () => Game.assistDepthFor(parseInt(engineEloEl.value, 10));
+// Set the AI-level dropdown to the option nearest the current engine rating.
+function syncAiLevel() {
+  const sel = document.getElementById("aiLevel");
+  if (!sel) return;
+  const elo = parseInt(engineEloEl.value, 10);
+  let best = sel.options[0];
+  for (const o of sel.options) if (Math.abs(+o.value - elo) < Math.abs(+best.value - elo)) best = o;
+  sel.value = best.value;
+}
 const idx = (file, rank) => rank * 8 + file;
 const isWhitePiece = (c) => c !== "." && c === c.toUpperCase();
 
@@ -229,6 +241,20 @@ async function main() {
   const nh = document.getElementById("newHereLink");
   if (nh) nh.hidden = firstGame; // hidden while the guided game is running
   const closeMenu = () => { const f = document.getElementById("setupFold"); if (f) f.removeAttribute("open"); };
+  // AI-level chooser → sets the opponent's rating (drives its strength + the
+  // handicap). Applies live to the running game.
+  const aiLevelEl = document.getElementById("aiLevel");
+  if (aiLevelEl) aiLevelEl.addEventListener("change", () => {
+    engineEloEl.value = aiLevelEl.value;
+    if (game) game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
+    setLevelPill(game ? game.assistLevel() : "off");
+    onPositionChanged();
+  });
+  if (humanEloEl) humanEloEl.addEventListener("change", () => {
+    if (game) game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
+    setLevelPill(game ? game.assistLevel() : "off");
+    onPositionChanged();
+  });
   document.getElementById("new").addEventListener("click", () => { closeMenu(); firstGame = false; newGame(); });
   const mf = document.getElementById("movesFold");
   if (mf) mf.addEventListener("toggle", () => { if (mf.open && hintState === "pending") revealHint(); });
@@ -1130,7 +1156,7 @@ function engineReply() {
   busy = true;
   statusEl.textContent = "Engine thinking…";
   setTimeout(() => {
-    const uci = game.engineMoveVaried(depth(), Math.random()); // vary among near-best → no identical games
+    const uci = game.engineMoveByElo(parseInt(engineEloEl.value, 10), Math.random()); // strength by chosen AI level
     if (uci.length >= 4) lastMove = uciToSquares(uci);
     busy = false;
     if (!firstGame) persistAiGame(game.status() !== "ongoing");

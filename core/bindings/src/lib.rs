@@ -177,21 +177,24 @@ impl Game {
         }
     }
 
-    /// Like `engineMove`, but picks at random among the moves within `r`'s budget
-    /// of the best — so the opponent doesn't play an identical game every time.
-    /// `rand` is a float in [0,1) from JS (the engine has no RNG). Variety is
-    /// wider in the opening and tight later, so play stays strong but not robotic.
-    #[wasm_bindgen(js_name = engineMoveVaried)]
-    pub fn engine_move_varied(&mut self, depth: u32, rand: f64) -> String {
+    /// The opponent plays at a chosen strength: `elo` maps to a search depth and a
+    /// move-variety spread. Higher elo → deeper search + tighter choice (stronger,
+    /// more strategic); lower elo → shallower + more variety (weaker, more human,
+    /// occasional slips). `rand` is a float in [0,1) from JS (the engine has no
+    /// RNG). NOTE: strength is a heuristic ladder, not a calibrated Elo (P4).
+    #[wasm_bindgen(js_name = engineMoveByElo)]
+    pub fn engine_move_by_elo(&mut self, elo: i32, rand: f64) -> String {
         if generate_legal(&self.board).is_empty() {
             return String::new();
         }
+        let (depth, spread) = strength_for_elo(elo);
         let ranked = rank_moves(&self.board, depth);
         if ranked.is_empty() {
             return String::new();
         }
         let top = ranked[0].1;
-        let spread = if self.board.fullmove <= 6 { 70 } else { 35 };
+        // Wider spread early so openings vary; the level's own spread otherwise.
+        let spread = if self.board.fullmove <= 6 { spread + 35 } else { spread };
         let pool: Vec<Move> = ranked
             .iter()
             .filter(|(_, s)| top - *s <= spread)
@@ -203,6 +206,14 @@ impl Game {
         self.board.make_move(m);
         self.ply += 1;
         u
+    }
+
+    /// The search depth to give the ASSISTANCE for an opponent of this `elo` — a
+    /// notch deeper than the opponent (capped), so following the help lifts the
+    /// assisted player above the opponent. That is the handicap made real.
+    #[wasm_bindgen(js_name = assistDepthFor)]
+    pub fn assist_depth_for(elo: i32) -> u32 {
+        (strength_for_elo(elo).0 + 1).min(4).max(3)
     }
 
     /// "ongoing" | "checkmate" | "stalemate" | "fifty-move".
@@ -413,6 +424,21 @@ impl Game {
 impl Default for Game {
     fn default() -> Self {
         Game::new()
+    }
+}
+
+/// Map a chosen rating to (search depth, move-variety spread in centipawns).
+/// A heuristic ladder — deeper + tighter as the level rises. Absolute Elo is
+/// aspirational; the point is a clear, monotonic difficulty curve (P4 will
+/// calibrate real strength).
+fn strength_for_elo(elo: i32) -> (u32, i32) {
+    match elo {
+        i if i <= 700 => (1, 250),   // Beginner — very shallow, lots of slips
+        i if i <= 1100 => (2, 140),  // Casual
+        i if i <= 1500 => (2, 60),   // Intermediate
+        i if i <= 1900 => (3, 30),   // Club
+        i if i <= 2300 => (3, 10),   // Expert
+        _ => (4, 0),                 // Master — deepest, always the best move
     }
 }
 
