@@ -121,7 +121,7 @@ async function resumeAiGame(id) {
   game.setRatings(rec.humanElo, rec.engineElo);
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
-  indepOwn = 0; indepFollowed = 0;
+  indepOwn = 0; indepFollowed = 0; moveReview = [];
   pickedStrategyId = null; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
   firstGame = false;
   hideOver();
@@ -141,6 +141,9 @@ let mateKingSq = -1;     // the mated king's square, to ring it when the game en
 // Independence: among moves where help was on offer, how many you found yourself
 // (🧠 own) vs followed (🤖). The "ladder down" payoff — you should need it less.
 let indepOwn = 0, indepFollowed = 0;
+// Strength telemetry: per-move centipawn loss vs the engine's best, so we can
+// measure how good your (assisted) play actually was in a real game.
+let moveReview = []; // [{cp, wasBest}]
 let freeCaptures = [];
 let lastStratSig = ""; // signature of strategies last seen while the fold was open
 let curStratSig = "";
@@ -255,7 +258,7 @@ function newGame() {
   aiGameId = newAiId(); // a fresh slot; only saved once a move is played
   aiSaved = false;
   mateKingSq = -1;
-  indepOwn = 0; indepFollowed = 0;
+  indepOwn = 0; indepFollowed = 0; moveReview = [];
   selected = null;
   legalTargets = [];
   lastMove = null;
@@ -631,7 +634,7 @@ function showGameOverIfNeeded() {
   res.innerHTML = (st === "checkmate" ? `<span class="over-mate">CHECKMATE</span>` : "") +
     (draw ? "Draw" : won ? "You win! 🎉" : "You lose");
   res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss");
-  rea.innerHTML = `<div class="over-how">${how}</div>` + independenceHtml() + agencySummaryHtml();
+  rea.innerHTML = `<div class="over-how">${how}</div>` + reviewHtml() + independenceHtml() + agencySummaryHtml();
   if (window.gbFeedback) gbFeedback.render(document.getElementById("overFeedback"), { mode: "ai", gameId: aiGameId || "" });
   ov.style.display = "grid";
 }
@@ -677,6 +680,30 @@ function independenceHtml() {
     `<div class="oi-head">🧠 Independence <b>${pct}%</b>${trend}</div>` +
     `<div class="indep-bar"><div class="indep-fill" style="width:${pct}%"></div></div>` +
     `<div class="oi-sub">You found <b>${indepOwn}</b> of ${total} assisted moves on your own — 🤖 followed ${indepFollowed}. Needing help less is the whole idea.</div>` +
+    `</div>`;
+}
+
+// Strength measurement (real game): per-move centipawn loss vs the engine's best,
+// split into "when you followed the help" (= how strong the assistance was) vs
+// "your own moves". Lower cp/move = closer to perfect. Also logged to the console.
+function reviewHtml() {
+  const r = moveReview.filter((m) => m.cp != null && m.cp >= 0);
+  if (r.length < 3) return "";
+  const mean = (a) => (a.length ? Math.round(a.reduce((s, m) => s + m.cp, 0) / a.length) : null);
+  const avg = mean(r);
+  const foll = r.filter((m) => m.prov === "followed");
+  const own = r.filter((m) => m.prov === "own");
+  const grade = (cp) => cp <= 20 ? "excellent" : cp <= 50 ? "solid" : cp <= 120 ? "some slips" : "loose";
+  const worst = r.reduce((a, m) => (m.cp > a.cp ? m : a), r[0]);
+  const worstIdx = r.indexOf(worst) + 1;
+  console.log(`[review] game over — ${r.length} of your moves | avg ${avg}cp | followed ${foll.length} (avg ${mean(foll)}cp) | own ${own.length} (avg ${mean(own)}cp) | worst ${worst.cp}cp @ move ${worstIdx}`);
+  const line = (lab, cp) => cp == null ? "" : `<div class="rv-row"><span>${lab}</span><b>${cp} cp/move</b> · ${grade(cp)}</div>`;
+  return `<div class="over-review">` +
+    `<div class="rv-head">📊 Play review — how close to best you played</div>` +
+    line("Overall", avg) +
+    (foll.length ? line("🤖 When you followed the help", mean(foll)) : "") +
+    (own.length ? line("🧠 Your own moves", mean(own)) : "") +
+    (worst.cp >= 150 ? `<div class="rv-row"><span>Biggest slip</span><b>−${(worst.cp / 100).toFixed(1)}</b> at move ${worstIdx}</div>` : "") +
     `</div>`;
 }
 
@@ -1036,6 +1063,19 @@ function doPlay(from, to, promo) {
   const preFen = game.fen(); // position before the human's move (for the Player Model)
   const prov = provenanceOf(from, to); // classify BEFORE the move (assist is for this position)
   if (prov === "own") indepOwn += 1; else if (prov === "followed") indepFollowed += 1;
+  // Strength telemetry (measured BEFORE the move): how far from best was it?
+  if (!firstGame && assistData && (assistData.candidates || []).length) {
+    try {
+      const bestScore = assistData.candidates[0].score;
+      const played = game.scoreMove(from, to, depth());
+      if (played > -1000000) {
+        const cp = Math.max(0, bestScore - played);
+        const wasBest = assistData.recommended && (sqName(from) + sqName(to)) === assistData.recommended.slice(0, 4);
+        moveReview.push({ cp, wasBest, prov });
+        console.log(`[review] ply ${moveReview.length} ${sqName(from)}${sqName(to)} cpLoss=${cp}${wasBest ? " (best)" : ""} ${prov}`);
+      }
+    } catch {}
+  }
   const ok = game.makeMove(from, to, promo);
   selected = null;
   legalTargets = [];

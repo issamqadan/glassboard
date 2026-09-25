@@ -148,6 +148,35 @@ impl Game {
         }
     }
 
+    /// Strength telemetry: the search score (centipawns, side-to-move relative)
+    /// of the current position at `depth` — the value of playing the best move.
+    #[wasm_bindgen(js_name = bestScore)]
+    pub fn best_score(&self, depth: u32) -> i32 {
+        if generate_legal(&self.board).is_empty() {
+            return if engine::in_check(&self.board) { -30000 } else { 0 };
+        }
+        search(&self.board, depth).score
+    }
+
+    /// The search score of a SPECIFIC move (side-to-move relative). Compared with
+    /// `bestScore`, `bestScore - scoreMove` is the move's centipawn loss — how far
+    /// from best it was. Used to measure assistance/play quality in real games.
+    /// Returns i32::MIN sentinel (-2_000_000) if the move isn't legal.
+    #[wasm_bindgen(js_name = scoreMove)]
+    pub fn score_move(&self, from: u8, to: u8, depth: u32) -> i32 {
+        match generate_legal(&self.board)
+            .into_iter()
+            .find(|m| m.from == from && m.to == to)
+        {
+            Some(m) => {
+                let mut nb = self.board;
+                nb.make_move(m);
+                -search(&nb, depth.saturating_sub(1)).score
+            }
+            None => -2_000_000,
+        }
+    }
+
     /// "ongoing" | "checkmate" | "stalemate" | "fifty-move".
     pub fn status(&self) -> String {
         if generate_legal(&self.board).is_empty() {

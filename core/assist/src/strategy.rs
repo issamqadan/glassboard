@@ -286,6 +286,17 @@ fn plan_move(ranked: &[(Move, i32)], top_score: i32, pred: impl Fn(&Move) -> boo
         .map(|(m, _)| *m)
         .unwrap_or(ranked[0].0)
 }
+/// Like `pick`, but only if the best matching move is essentially as good as the
+/// engine's best (within PLAN_SLACK). Returns None when the themed move would
+/// cost material — so a plan that *needs* a specific move (e.g. a capture) is
+/// simply not offered rather than recommending a losing one (a "free" piece that
+/// is really a trap). This is the fix for plans suggesting voluntary piece loss.
+fn pick_guarded(ranked: &[(Move, i32)], top_score: i32, pred: impl Fn(&Move) -> bool) -> Option<Move> {
+    ranked
+        .iter()
+        .find(|(m, s)| pred(m) && *s + PLAN_SLACK >= top_score)
+        .map(|(m, _)| *m)
+}
 fn kind_at(b: &Board, sq: Square) -> Option<PieceKind> {
     b.squares[sq as usize].map(|p| p.kind)
 }
@@ -318,7 +329,6 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
     if ranked.is_empty() {
         return StrategyRead { phase: ph, strategies: out, opponent: None };
     }
-    let top = ranked[0].0;
     let top_score = ranked[0].1;
     let castle_mv = pick(ranked, |m| m.flag == Flag::Castle);
     let opp_king = king_square(b, opp);
@@ -374,8 +384,11 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
         .iter()
         .max_by_key(|&&s| kind_at(b, s).map(material).unwrap_or(0))
     {
-        // A capture of that square, if we have one ranked.
-        if let Some(cap) = pick(ranked, |m| m.to == target) {
+        // A capture of that square — but ONLY if the search agrees it's safe.
+        // A piece that's "undefended" by the 1-ply test can still be a trap
+        // (capturing walks into a recapture/fork); guard so we never recommend a
+        // losing "free" capture.
+        if let Some(cap) = pick_guarded(ranked, top_score, |m| m.to == target) {
             let vk = kind_at(b, target).map(piece_word).unwrap_or("piece");
             out.push(mk(
                 "win_material",
@@ -630,10 +643,9 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
         let enemy_short = kf >= 5
             && ((side == Color::White && kr >= 6) || (side == Color::Black && kr <= 1));
         if enemy_short {
-            let rec = pick(ranked, |m| {
+            let rec = plan_move(ranked, top_score, |m| {
                 kind_at(b, m.from) == Some(PieceKind::Pawn) && file_of(m.from) >= 5 && forward_pawn(b, m, side)
-            })
-            .unwrap_or(top);
+            });
             out.push(mk(
                 "pawn_storm",
                 "Kingside pawn storm",

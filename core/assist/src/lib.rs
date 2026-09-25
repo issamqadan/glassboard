@@ -610,16 +610,41 @@ mod tests {
             }
             mat(&b) / 100
         }
+        let _ = from_opening; // (kept for ad-hoc material checks)
+        // The real measure of plan move quality: in EACH position, how far below
+        // the best move is the top plan's recommendation? (Same position → no
+        // divergent-game noise.) Flags the worst offender plan.
         let openings = ["e2e4", "d2d4", "g1f3", "c2c4"];
-        let (mut rec, mut raw, mut plan) = (0, 0, 0);
+        let (mut sum_def, mut cnt, mut worst, mut worst_id) = (0i64, 0i64, 0i32, String::new());
+        let mut over100 = 0;
         for op in openings {
-            rec += from_opening(op, 0, 70);
-            raw += from_opening(op, 1, 70);
-            plan += from_opening(op, 2, 70);
+            let mut b = Board::startpos();
+            if let Some(m) = generate_legal(&b).into_iter().find(|m| to_uci(*m) == op) { b.make_move(m); }
+            for _ in 0..60 {
+                if generate_legal(&b).is_empty() { break; }
+                if b.side == Color::White {
+                    let ranked = rank_moves(&b, 3);
+                    let top = ranked[0].1;
+                    let sr = crate::strategy::strategize(&b, &ranked);
+                    if let Some(s) = sr.strategies.first() {
+                        let ms = generate_legal(&b).into_iter()
+                            .find(|m| to_uci(*m) == s.move_uci)
+                            .and_then(|m| ranked.iter().find(|(rm, _)| *rm == m).map(|(_, sc)| *sc));
+                        if let Some(sc) = ms {
+                            let def = top - sc;
+                            sum_def += def as i64; cnt += 1;
+                            if def > 100 { over100 += 1; }
+                            if def > worst { worst = def; worst_id = s.id.to_string(); }
+                        }
+                    }
+                    b.make_move(ranked[0].0);
+                } else {
+                    b.make_move(search(&b, 3).best.expect("m"));
+                }
+            }
         }
-        let n = openings.len() as i32;
-        println!("\nAVG material / {} openings — recommendation: {:+}  raw: {:+}  FOLLOW-PLAN: {:+}",
-            n, rec / n, raw / n, plan / n);
+        println!("\nTOP-PLAN move deficit vs best: avg {}cp over {} moves | {} moves >100cp | worst {}cp ({})",
+            sum_def / cnt.max(1), cnt, over100, worst, worst_id);
     }
 
     /// A defended piece attacked only by something at least as valuable is safe.
