@@ -552,8 +552,8 @@ function pieceNameAt(sq) {
 function setBoardGlow(tone) {
   const bw = document.querySelector("main.game .board-wrap");
   if (!bw) return;
-  bw.classList.remove("glow-danger", "glow-gold", "glow-calm");
-  if (tone === "danger" || tone === "gold" || tone === "calm") bw.classList.add("glow-" + tone);
+  bw.classList.remove("glow-danger", "glow-gold", "glow-calm", "glow-win", "glow-loss", "glow-draw");
+  if (["danger", "gold", "calm", "win", "loss", "draw"].includes(tone)) bw.classList.add("glow-" + tone);
 }
 // The coach is a transient safety net: it speaks ONLY when there's real danger
 // or a free opportunity. When you're safe, it says nothing (hidden) — no "you're
@@ -705,6 +705,7 @@ function showGameOverIfNeeded() {
   res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss");
   rea.innerHTML = `<div class="over-how">${how}</div>` + reviewHtml() + independenceHtml() + agencySummaryHtml();
   if (window.gbFeedback) gbFeedback.render(document.getElementById("overFeedback"), { mode: "ai", gameId: aiGameId || "" });
+  setBoardGlow(draw ? "draw" : won ? "win" : "loss"); // highlight the result on the board (which stays visible)
   ov.style.display = "grid";
 }
 
