@@ -596,6 +596,56 @@ mod tests {
         }
     }
 
+    /// ROOT-CAUSE: how much does the in-app move-variety SPREAD weaken the AI
+    /// vs. playing its best move at the same depth? Clean-best(depth) [White] vs
+    /// spread(depth) [Black] — if White wins big, the spread is the weakness.
+    /// Also reports the average pool size (how many moves it randomises among).
+    #[test]
+    #[ignore]
+    fn spread_cost_diag() {
+        fn xs(r: &mut u64) -> u64 { *r ^= *r << 13; *r ^= *r >> 7; *r ^= *r << 17; *r }
+        // Replicates bindings::engine_move_by_elo's pool selection.
+        fn spread_move(b: &Board, depth: u32, base_spread: i32, rng: &mut u64, pool_acc: &mut (i64, i64)) -> Move {
+            let ranked = rank_moves(b, depth);
+            let top = ranked[0].1;
+            let spread = if b.fullmove <= 6 { base_spread + 35 } else { base_spread };
+            let pool: Vec<Move> = ranked.iter().filter(|(_, s)| top - *s <= spread).map(|(m, _)| *m).collect();
+            pool_acc.0 += pool.len() as i64; pool_acc.1 += 1;
+            let idx = (xs(rng) % pool.len() as u64) as usize;
+            pool[idx]
+        }
+        fn material_of(b: &Board) -> i32 {
+            let mut s = 0;
+            for sq in 0..64u8 { if let Some(p) = b.squares[sq as usize] { if p.kind != PieceKind::King {
+                s += if p.color == Color::White { material(p.kind) } else { -material(p.kind) }; } } }
+            s / 100
+        }
+        let ops = ["e2e4", "d2d4", "g1f3", "c2c4"];
+        for (depth, spread) in [(3u32, 30i32), (4, 12)] {
+            let (mut sum, mut w, mut l) = (0i32, 0, 0);
+            let mut pool_acc = (0i64, 0i64);
+            let mut rng: u64 = 0x9E3779B97F4A7C15;
+            for op in ops {
+                let mut b = Board::startpos();
+                if let Some(m) = generate_legal(&b).into_iter().find(|m| to_uci(*m) == op) { b.make_move(m); }
+                for _ in 0..70 {
+                    if generate_legal(&b).is_empty() { break; }
+                    let m = if b.side == Color::White {
+                        search(&b, depth).best.expect("best")            // clean best
+                    } else {
+                        spread_move(&b, depth, spread, &mut rng, &mut pool_acc) // in-app spread
+                    };
+                    b.make_move(m);
+                }
+                let mt = material_of(&b);
+                sum += mt; if mt >= 500 { w += 1; } else if mt <= -500 { l += 1; }
+            }
+            let avg_pool = pool_acc.0 as f64 / pool_acc.1.max(1) as f64;
+            println!("SPREAD-COST d{depth} (spread {spread}): clean-best beats spread by avg material {:+} | W{w}/L{l} of {} | avg pool size {:.1}",
+                sum / ops.len() as i32, ops.len(), avg_pool);
+        }
+    }
+
     /// A defended piece attacked only by something at least as valuable is safe.
     #[test]
     fn defended_knight_attacked_by_rook_is_not_a_threat() {
