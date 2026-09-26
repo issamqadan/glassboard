@@ -126,6 +126,7 @@ async function resumeAiGame(id) {
   game.setAssistOverride(aiAssistOverride); // restore the chosen assistance
   aiTokens = typeof rec.aiTokens === "number" ? rec.aiTokens : AI_TOKENS_MAX;
   aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {};
+  lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX;
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
@@ -169,7 +170,12 @@ const AI_TOKENS_MAX = 3;         // lifelines the AI gets per game
 let aiTokens = AI_TOKENS_MAX;    // how many remain
 let aiLifelineLog = [];          // [{move, kind, note}] — what the AI spent, for the panel + reveal
 let aiLastLifelineIdx = -9;      // move index of the last spend (spacing, so it doesn't spam)
+let lastMoveLifeline = false;    // was the most recent move an AI lifeline? (for the board badge)
 let momentSeen = {};             // one-shot guards for personality moments this game
+// Your side of the symmetric meter: lifelines you've cashed in by following help.
+const PLAYER_TOKENS_MAX = 3;
+let playerFollows = 0;           // how many times you've played the suggested move
+let playerTokens = PLAYER_TOKENS_MAX;
 
 let selected = null;
 let legalTargets = [];
@@ -383,6 +389,7 @@ function newGame() {
   aiGameId = newAiId(); // a fresh slot; only saved once a move is played
   aiSaved = false;
   aiTokens = AI_TOKENS_MAX; aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {}; // fresh
+  lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX;
   mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
   selected = null;
@@ -721,15 +728,6 @@ function levelName(elo) {
   const e = parseInt(elo, 10);
   return e <= 700 ? "Beginner" : e <= 1100 ? "Casual" : e <= 1500 ? "Intermediate" : e <= 1900 ? "Club" : e <= 2300 ? "Expert" : "Master";
 }
-// The AI's lifelines, shown on its chip — spent ones dim so you can watch the
-// scarcity tick down ("it's used two, one left — push now"). Hidden for Master
-// (already at the search ceiling, so a lifeline changes nothing) and first games.
-function aiLifelinesHtml() {
-  if (firstGame || parseInt(engineEloEl.value, 10) >= 3000) return "";
-  let pips = "";
-  for (let i = 0; i < AI_TOKENS_MAX; i++) pips += `<span class="ll${i < aiTokens ? "" : " spent"}">🛟</span>`;
-  return ` <span class="ai-lifelines" title="Lifelines — the AI can dig deep for a stronger move. You'll see each one it spends.">${pips}</span>`;
-}
 function renderPlayers() {
   updateSetupSum();
   const el = document.getElementById("players");
@@ -742,7 +740,7 @@ function renderPlayers() {
   el.innerHTML =
     `<span class="pl"><span class="dot white"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span></span>` +
     `<span class="vs">·</span>` +
-    `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot black"></span> <b>🤖 ${levelName(engineEloEl.value)}</b>${aiLifelinesHtml()} <span class="ai-caret">▾</span></button>` +
+    `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot black"></span> <b>🤖 ${levelName(engineEloEl.value)}</b> <span class="ai-caret">▾</span></button>` +
     (turn ? (turn === "white"
       ? `<span class="turn you">💡 Your move</span>`
       : `<span class="turn wait">Engine…</span>`) : "");
@@ -756,32 +754,54 @@ function renderPlayers() {
 // The Opponent's-assistance panel — the symmetric glass-box. Always visible in a
 // real Play-AI game so "what help did the AI get?" has a clear, honest home:
 // lifelines remaining (buoys that dim as spent) + a live log of every one it used.
+function pipRow(left, max) {
+  let s = "";
+  for (let i = 0; i < max; i++) s += `<span class="ll${i < left ? "" : " spent"}">🛟</span>`;
+  return s;
+}
 function renderAiAssist() {
   const el = document.getElementById("aiAssist");
   if (!el) return;
   if (firstGame || parseInt(engineEloEl.value, 10) >= 3000) { el.hidden = true; el.innerHTML = ""; return; }
   el.hidden = false;
-  let pips = "";
-  for (let i = 0; i < AI_TOKENS_MAX; i++) pips += `<span class="ll${i < aiTokens ? "" : " spent"}">🛟</span>`;
+  const noHelp = aiAssistOverride === "off";
+  // Your row: lifelines you cash in by following the suggested move. No-help mode
+  // = pure chess (no pips). Otherwise show how many "follows" you have in hand.
+  const youPips = noHelp
+    ? `<span class="al-nohelp">pure chess</span>`
+    : pipRow(playerTokens, PLAYER_TOKENS_MAX);
+  const youNote = noHelp ? "you chose no assistance"
+    : playerFollows === 0 ? "playing on your own so far"
+    : `you've followed the help ${playerFollows}×`;
+  const aiPips = pipRow(aiTokens, AI_TOKENS_MAX);
+  const aiUsed = AI_TOKENS_MAX - aiTokens;
+  const aiNote = aiUsed === 0 ? "hasn't needed help yet" : `dug deep ${aiUsed}×`;
   const log = aiLifelineLog.length
-    ? aiLifelineLog.map((e) => `<li><span class="al-mv">move ${e.move}</span> <b>${e.tag}</b> — ${e.note}</li>`).join("")
-    : `<li class="al-none">Hasn't needed help yet — you'll see each lifeline the moment it's spent.</li>`;
+    ? `<ul class="al-log">` + aiLifelineLog.map((e) => `<li><span class="al-mv">move ${e.move}</span> <b>${e.tag}</b> — ${e.note}</li>`).join("") + `</ul>`
+    : "";
   el.innerHTML =
-    `<div class="al-head"><span class="al-title">🤖 ${levelName(engineEloEl.value)} plays glass too</span>` +
-    `<span class="al-pips" title="Lifelines left — the AI can dig deep for a stronger move">${pips}</span></div>` +
-    `<div class="al-sub">Same assistance as you — used in the open. ${aiTokens} of ${AI_TOKENS_MAX} lifelines left.</div>` +
-    `<ul class="al-log">${log}</ul>`;
+    `<div class="al-title">🔎 Assistance — in the open</div>` +
+    `<div class="al-side"><span class="al-who">🧑 You</span><span class="al-pips">${youPips}</span><span class="al-side-note">${youNote}</span></div>` +
+    `<div class="al-side"><span class="al-who">🤖 ${levelName(engineEloEl.value)}</span><span class="al-pips" title="Lifelines left">${aiPips}</span><span class="al-side-note">${aiNote}</span></div>` +
+    log;
 }
 
-// A transient "moment" — personality without touching the board. Fades on its own.
+// A "moment" — personality without touching the board. It lingers (~7s), shows a
+// countdown bar so its exit feels intentional, and you can tap it to dismiss early.
+const MOMENT_MS = 7000;
 let momentTimer = null;
+function hideMoment() { const e = document.getElementById("momentToast"); if (e) e.classList.remove("show"); }
 function showMoment(html, kind) {
   let el = document.getElementById("momentToast");
-  if (!el) { el = document.createElement("div"); el.id = "momentToast"; el.className = "moment-toast"; document.body.appendChild(el); }
+  if (!el) {
+    el = document.createElement("div"); el.id = "momentToast"; el.className = "moment-toast";
+    el.addEventListener("click", () => { if (momentTimer) clearTimeout(momentTimer); hideMoment(); });
+    document.body.appendChild(el);
+  }
   el.className = "moment-toast show" + (kind ? " " + kind : "");
-  el.innerHTML = html;
+  el.innerHTML = html + `<span class="mo-bar" style="animation-duration:${MOMENT_MS}ms"></span>`;
   if (momentTimer) clearTimeout(momentTimer);
-  momentTimer = setTimeout(() => { const e = document.getElementById("momentToast"); if (e) e.classList.remove("show"); }, 3800);
+  momentTimer = setTimeout(hideMoment, MOMENT_MS);
 }
 // The kinds of assistance the AI can spend — the same glass-box capabilities a
 // human gets, named so its use reads as a game event, not an engine internal.
@@ -1078,7 +1098,10 @@ function renderBoard() {
       if (hanging.includes(i)) sq.classList.add("hanging");
       if (freeCaptures.includes(i)) sq.classList.add("free");
       if (firstGame && fgHintSquares.includes(i)) sq.classList.add("hint");
-      if (lastMove && (lastMove.from === i || lastMove.to === i)) sq.classList.add("lastmove");
+      if (lastMove && (lastMove.from === i || lastMove.to === i)) {
+        sq.classList.add("lastmove");
+        if (lastMoveLifeline) sq.classList.add("lifeline-move"); // the AI's assisted move, marked on the board
+      }
 
       // Coordinate labels on the edge squares.
       if (rank === 0) sq.appendChild(coord("file", FILES[file]));
@@ -1091,6 +1114,12 @@ function renderBoard() {
         if (typeof pieceSVG === "function") span.innerHTML = pieceSVG(c);
         else span.textContent = GLYPH[c.toLowerCase()];
         sq.appendChild(span);
+      }
+      // Buoy badge on the square the AI's lifeline move landed on — unmistakable.
+      if (lastMoveLifeline && lastMove && i === lastMove.to) {
+        const b = document.createElement("span");
+        b.className = "ll-badge"; b.textContent = "🛟"; b.title = "The AI used a lifeline for this move";
+        sq.appendChild(b);
       }
       sq.addEventListener("click", () => onSquareClick(i));
       boardEl.appendChild(sq);
@@ -1338,6 +1367,8 @@ function doPlay(from, to, promo) {
   const preFen = game.fen(); // position before the human's move (for the Player Model)
   const prov = provenanceOf(from, to); // classify BEFORE the move (assist is for this position)
   if (prov === "own") indepOwn += 1; else if (prov === "followed") indepFollowed += 1;
+  lastMoveLifeline = false; // your move — clear the AI's lifeline board badge
+  if (prov === "followed") { playerFollows += 1; playerTokens = Math.max(0, PLAYER_TOKENS_MAX - playerFollows); }
   // Strength telemetry (measured BEFORE the move): how far from best was it?
   if (!firstGame && assistData && (assistData.candidates || []).length) {
     try {
@@ -1410,6 +1441,7 @@ function engineReply() {
       ? game.engineMoveByElo(3000, 0)                 // lifeline: deepest search, top move
       : game.engineMoveByElo(baseElo, Math.random()); // strength by chosen AI level
     if (uci.length >= 4) lastMove = uciToSquares(uci);
+    lastMoveLifeline = usedLifeline; // mark the move on the board if it was assisted
     busy = false;
     if (usedLifeline) aiLifelineMoment(llKind);
     if (!firstGame) persistAiGame(game.status() !== "ongoing");

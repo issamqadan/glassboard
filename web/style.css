@@ -202,6 +202,20 @@ button {
   background: var(--lastmove);
   pointer-events: none;
 }
+/* The AI's lifeline move — marked unmistakably on the board (amber glow + ring). */
+.sq.lifeline-move::before {
+  background: rgba(242,180,109,0.34);
+  box-shadow: inset 0 0 0 3px rgba(242,180,109,0.9), inset 0 0 16px -2px rgba(242,180,109,0.75);
+  animation: lifeline-pulse 1.4s ease-in-out infinite;
+}
+@keyframes lifeline-pulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+.ll-badge {
+  position: absolute; top: 1px; right: 2px; font-size: clamp(11px, 3.2vw, 17px);
+  line-height: 1; pointer-events: none; z-index: 3; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+  animation: lifeline-badge-in 0.35s ease-out;
+}
+@keyframes lifeline-badge-in { from { transform: scale(0.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sq.lifeline-move::before, .ll-badge { animation: none; } }
 
 /* Coordinate labels tucked into the edge squares. */
 .coord {
@@ -465,11 +479,6 @@ button {
   background: rgba(126,224,214,0.08); border: 1px solid rgba(126,224,214,0.28); border-radius: 999px; padding: 3px 10px; }
 .players .ai-chip:hover { border-color: #7ee0d6; background: rgba(126,224,214,0.16); }
 .players .ai-chip .ai-caret { color: var(--accent); font-size: 0.72rem; }
-/* AI lifelines — buoys on the opponent chip; spent ones dim so scarcity is visible. */
-.ai-lifelines { display: inline-flex; align-items: center; gap: 1px; font-size: 0.74rem; line-height: 1; }
-.ai-lifelines .ll { transition: opacity 0.4s, filter 0.4s; }
-.ai-lifelines .ll.spent { opacity: 0.22; filter: grayscale(1); }
-
 /* Moment toast — transient personality; never touches the board. */
 .moment-toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 16px);
   display: flex; align-items: center; gap: 11px; max-width: min(92vw, 400px);
@@ -485,21 +494,28 @@ button {
 .moment-toast .mo-txt { display: flex; flex-direction: column; gap: 2px; }
 .moment-toast .mo-txt b { font-size: 0.9rem; color: #eef3fb; }
 .moment-toast .mo-txt small { font-size: 0.78rem; color: #9fb0c8; line-height: 1.32; }
-@media (prefers-reduced-motion: reduce) { .moment-toast { transition: opacity 0.2s; } }
+.moment-toast.show { pointer-events: auto; cursor: pointer; }
+.moment-toast .mo-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%;
+  transform-origin: left; background: rgba(255,255,255,0.5); border-radius: 0 0 14px 14px;
+  animation-name: mo-drain; animation-timing-function: linear; }
+@keyframes mo-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .moment-toast { transition: opacity 0.2s; } .moment-toast .mo-bar { display: none; } }
 
-/* Opponent's-assistance panel — the symmetric glass-box surface. */
-.ai-assist { background: rgba(242,180,109,0.07); border: 1px solid rgba(242,180,109,0.26);
+/* Symmetric assistance panel — help remaining for BOTH sides, in the open. */
+.ai-assist { background: rgba(126,224,214,0.06); border: 1px solid rgba(126,224,214,0.22);
   border-radius: 12px; padding: 11px 13px; margin-bottom: 10px; }
-.ai-assist .al-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.ai-assist .al-title { font-weight: 700; font-size: 0.9rem; color: #f0d6b3; }
-.ai-assist .al-pips { display: inline-flex; gap: 2px; font-size: 0.9rem; }
+.ai-assist .al-title { font-weight: 700; font-size: 0.9rem; color: #cfe6f2; margin-bottom: 8px; }
+.ai-assist .al-side { display: flex; align-items: center; gap: 9px; padding: 4px 0; }
+.ai-assist .al-who { font-weight: 700; font-size: 0.82rem; color: #e7eef8; min-width: 84px; }
+.ai-assist .al-pips { display: inline-flex; gap: 2px; font-size: 0.95rem; }
 .ai-assist .al-pips .ll { transition: opacity 0.4s, filter 0.4s; }
-.ai-assist .al-pips .ll.spent { opacity: 0.22; filter: grayscale(1); }
-.ai-assist .al-sub { font-size: 0.76rem; color: #b3a184; margin: 3px 0 7px; line-height: 1.4; }
-.ai-assist .al-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
-.ai-assist .al-log li { font-size: 0.79rem; color: #d8c6ac; line-height: 1.4;
-  padding: 5px 8px; background: rgba(0,0,0,0.16); border-radius: 7px; border-left: 2px solid rgba(242,180,109,0.5); }
-.ai-assist .al-log li.al-none { color: #9a8c76; border-left-color: rgba(154,140,118,0.4); font-style: italic; }
+.ai-assist .al-pips .ll.spent { opacity: 0.2; filter: grayscale(1); }
+.ai-assist .al-nohelp { font-size: 0.74rem; color: #8a9ab2; font-style: italic; }
+.ai-assist .al-side-note { font-size: 0.74rem; color: #93a3bc; margin-left: auto; text-align: right; }
+.ai-assist .al-log { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px solid rgba(255,255,255,0.08);
+  display: flex; flex-direction: column; gap: 5px; }
+.ai-assist .al-log li { font-size: 0.78rem; color: #d8c6ac; line-height: 1.4;
+  padding: 5px 8px; background: rgba(242,180,109,0.09); border-radius: 7px; border-left: 2px solid rgba(242,180,109,0.55); }
 .ai-assist .al-log b { color: #f2c98a; }
 .ai-assist .al-log .al-mv { color: #9a8c76; font-variant-numeric: tabular-nums; }
 
