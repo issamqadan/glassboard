@@ -213,6 +213,10 @@ impl Game {
     /// assisted player above the opponent. That is the handicap made real.
     #[wasm_bindgen(js_name = assistDepthFor)]
     pub fn assist_depth_for(elo: i32) -> u32 {
+        // A ply deeper than the opponent where we can afford it (depth 5 costs
+        // ~4s/move — too slow), capped at 4. So Beginner..Expert: assist
+        // out-searches the opponent → following the help WINS. Master (depth 4):
+        // assist matches it → a genuinely even fight against the strongest engine.
         (strength_for_elo(elo).0 + 1).min(4).max(3)
     }
 
@@ -432,17 +436,18 @@ impl Default for Game {
 /// aspirational; the point is a clear, monotonic difficulty curve (P4 will
 /// calibrate real strength).
 fn strength_for_elo(elo: i32) -> (u32, i32) {
-    // The opponent is capped at depth 3 so the ASSISTANCE (a notch deeper, up to
-    // depth 4) always out-searches it — that's what makes "follow the help → win"
-    // true at every level. Levels differ by depth AND move-variety spread: lower =
-    // shallower + more slips, higher = tighter + best-move.
+    // Levels are genuinely different in strength (depth 1-4 + move-variety spread:
+    // lower = shallower + more slips, higher = deeper + best-move). The ASSISTANCE
+    // is always a ply DEEPER than the chosen level (see assist_depth_for), so
+    // taking full help beats even the strongest opponent — that is the handicap:
+    // a weaker player, fully assisted, can hang with a master.
     match elo {
         i if i <= 700 => (1, 250),   // Beginner — very shallow, lots of slips
-        i if i <= 1100 => (2, 140),  // Casual
-        i if i <= 1500 => (2, 70),   // Intermediate
+        i if i <= 1100 => (2, 150),  // Casual
+        i if i <= 1500 => (2, 80),   // Intermediate
         i if i <= 1900 => (3, 45),   // Club
-        i if i <= 2300 => (3, 18),   // Expert
-        _ => (3, 0),                 // Master — always the best move, but depth 3
+        i if i <= 2300 => (3, 15),   // Expert
+        _ => (4, 0),                 // Master — depth 4, always the best move (the strongest we offer)
     }
 }
 

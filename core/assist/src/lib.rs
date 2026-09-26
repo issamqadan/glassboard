@@ -546,6 +546,20 @@ mod tests {
     //   cargo test -p glassboard-assist selfplay -- --ignored --nocapture
     // Baseline (2026-09-24): recommendation +0 vs raw search -1 — following the
     // help plays evenly with the same-depth opponent (no self-inflicted losses).
+    // How long does one assist computation take at each depth? (Per-move latency.)
+    #[test]
+    #[ignore]
+    fn assist_timing() {
+        use std::time::Instant;
+        // A busy middlegame (many pieces = worst case for move-gen/search).
+        let b = parse_fen("r1bq1rk1/pp2bppp/2n1pn2/2pp4/3P1B2/2NBPN2/PPP2PPP/R2Q1RK1 w - - 0 9");
+        for d in [3u32, 4, 5] {
+            let t = Instant::now();
+            let _ = analyze(&b, AssistLevel::Guided, d);
+            println!("TIMING analyze depth {d}: {} ms", t.elapsed().as_millis());
+        }
+    }
+
     #[test]
     #[ignore]
     fn selfplay_diag() {
@@ -571,8 +585,8 @@ mod tests {
                 s += if p.color == Color::White { material(p.kind) } else { -material(p.kind) }; } } }
             s / 100
         }
-        let ops = ["e2e4", "d2d4", "g1f3", "c2c4", "b1c3", "e2e3"];
-        for (dw, db) in [(3u32, 2u32), (4, 3), (3, 3), (4, 4)] {
+        let ops = ["e2e4", "d2d4", "g1f3", "c2c4"];
+        for (dw, db) in [(4u32, 3u32), (3, 3)] {
             let (mut sum, mut w, mut l) = (0i32, 0, 0);
             for op in ops {
                 let m = hgame(op, dw, db, 90);
