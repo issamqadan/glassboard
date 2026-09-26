@@ -213,11 +213,12 @@ impl Game {
     /// assisted player above the opponent. That is the handicap made real.
     #[wasm_bindgen(js_name = assistDepthFor)]
     pub fn assist_depth_for(elo: i32) -> u32 {
-        // A ply deeper than the opponent where we can afford it (depth 5 costs
-        // ~4s/move — too slow), capped at 4. So Beginner..Expert: assist
-        // out-searches the opponent → following the help WINS. Master (depth 4):
-        // assist matches it → a genuinely even fight against the strongest engine.
-        (strength_for_elo(elo).0 + 1).min(4).max(3)
+        // TWO plies deeper than the opponent where affordable (depth 5 is ~0.5s
+        // now, thanks to LMR/TT), capped at 5. Measured: a +2-ply assist edge is a
+        // COMFORTABLE win (+5 pawns); +1 or parity is an even, never-losing fight.
+        // So Beginner..Club (opp depth ≤3): assist is +2 → following the help wins.
+        // Expert (d4)/Master (d5): assist caps at 5 → a genuine, competitive fight.
+        (strength_for_elo(elo).0 + 2).min(5).max(3)
     }
 
     /// "ongoing" | "checkmate" | "stalemate" | "fifty-move".
@@ -444,10 +445,10 @@ fn strength_for_elo(elo: i32) -> (u32, i32) {
     match elo {
         i if i <= 700 => (1, 250),   // Beginner — very shallow, lots of slips
         i if i <= 1100 => (2, 150),  // Casual
-        i if i <= 1500 => (2, 80),   // Intermediate
-        i if i <= 1900 => (3, 45),   // Club
-        i if i <= 2300 => (3, 15),   // Expert
-        _ => (4, 0),                 // Master — depth 4, always the best move (the strongest we offer)
+        i if i <= 1500 => (2, 70),   // Intermediate
+        i if i <= 1900 => (3, 30),   // Club
+        i if i <= 2300 => (4, 12),   // Expert — deep, near-best
+        _ => (5, 0),                 // Master — deepest, always the best move
     }
 }
 
