@@ -162,21 +162,180 @@ fn from_tt(score: i32, ply: i32) -> i32 {
     }
 }
 
+
 // ---- Search ---------------------------------------------------------------
 
-/// Score every legal move to `depth` and return them best-first. Used by the
-/// assistance layer to offer ranked candidate moves. Full window per move so the
-/// scores are directly comparable; the shared TT speeds transpositions.
+const MAX_PLY: usize = 64;
+
+/// Holds the per-search state that powers strong move ordering and reductions:
+/// the transposition table, killer moves (quiet moves that caused a cutoff at a
+/// ply), and a history table (quiet moves that have been good, by from→to).
+struct Searcher {
+    tt: Tt,
+    killers: [[Option<Move>; 2]; MAX_PLY],
+    history: [[i32; 64]; 64],
+    nodes: u64,
+}
+
+impl Searcher {
+    fn new() -> Self {
+        Searcher { tt: Tt::new(), killers: [[None; 2]; MAX_PLY], history: [[0; 64]; 64], nodes: 0 }
+    }
+
+    fn negamax(&mut self, b: &Board, depth: u32, ply: i32, mut alpha: i32, beta: i32) -> i32 {
+        self.nodes += 1;
+
+        let mut moves = generate_legal(b);
+        if moves.is_empty() {
+            return if in_check(b) { -(MATE - ply) } else { 0 };
+        }
+        if depth == 0 {
+            return self.quiesce(b, alpha, beta);
+        }
+
+        let alpha_orig = alpha;
+        let key = zobrist(b);
+        let mut tt_move: Option<Move> = None;
+        if let Some(e) = self.tt.probe(key) {
+            tt_move = Some(e.mv);
+            if e.depth as u32 >= depth {
+                let sc = from_tt(e.score, ply);
+                match e.bound {
+                    Bound::Exact => return sc,
+                    Bound::Lower => if sc >= beta { return sc },
+                    Bound::Upper => if sc <= alpha { return sc },
+                }
+            }
+        }
+
+        let node_in_check = in_check(b);
+
+        // Null-move pruning (not in check, needs a piece to avoid zugzwang).
+        if depth >= 3 && beta < MATE_THRESHOLD && !node_in_check && has_non_pawn_material(b, b.side) {
+            let mut nb = *b;
+            nb.side = nb.side.opp();
+            nb.ep = None;
+            let s = -self.negamax(&nb, depth.saturating_sub(3), ply + 1, -beta, -beta + 1);
+            if s >= beta {
+                return beta;
+            }
+        }
+
+        self.order(b, &mut moves, tt_move, ply);
+        let mut best = -INF;
+        let mut best_move = moves[0];
+        let plyi = ply as usize;
+        for (i, &m) in moves.iter().enumerate() {
+            let mut nb = *b;
+            nb.make_move(m);
+            let quiet = !is_capture(b, &m) && m.promo.is_none();
+            let gives_check = in_check(&nb);
+            let s;
+            // Late-move reduction: search late, quiet, non-checking moves shallower
+            // first; only spend full depth if they beat alpha.
+            if i >= 3 && depth >= 3 && quiet && !node_in_check && !gives_check {
+                let reduced = -self.negamax(&nb, depth - 2, ply + 1, -beta, -alpha);
+                s = if reduced > alpha {
+                    -self.negamax(&nb, depth - 1, ply + 1, -beta, -alpha)
+                } else {
+                    reduced
+                };
+            } else {
+                s = -self.negamax(&nb, depth - 1, ply + 1, -beta, -alpha);
+            }
+            if s > best {
+                best = s;
+                best_move = m;
+            }
+            if best > alpha {
+                alpha = best;
+            }
+            if alpha >= beta {
+                // Beta cutoff by a quiet move → reward it (killer + history) so it's
+                // tried earlier next time.
+                if quiet && plyi < MAX_PLY {
+                    if self.killers[plyi][0] != Some(m) {
+                        self.killers[plyi][1] = self.killers[plyi][0];
+                        self.killers[plyi][0] = Some(m);
+                    }
+                    self.history[m.from as usize][m.to as usize] += (depth * depth) as i32;
+                }
+                break;
+            }
+        }
+
+        let bound = if best <= alpha_orig {
+            Bound::Upper
+        } else if best >= beta {
+            Bound::Lower
+        } else {
+            Bound::Exact
+        };
+        self.tt.store(key, depth, to_tt(best, ply), bound, best_move);
+        best
+    }
+
+    fn quiesce(&mut self, b: &Board, mut alpha: i32, beta: i32) -> i32 {
+        self.nodes += 1;
+        let stand = eval(b);
+        if stand >= beta {
+            return beta;
+        }
+        if stand > alpha {
+            alpha = stand;
+        }
+        let mut caps: Vec<Move> = generate_legal(b).into_iter().filter(|m| is_capture(b, m)).collect();
+        caps.sort_by_key(|m| -(1_000_000 + mvv_lva(b, m)));
+        for m in caps {
+            let mut nb = *b;
+            nb.make_move(m);
+            let s = -self.quiesce(&nb, -beta, -alpha);
+            if s >= beta {
+                return beta;
+            }
+            if s > alpha {
+                alpha = s;
+            }
+        }
+        alpha
+    }
+
+    /// Order: TT/PV move, then captures (MVV-LVA), then killers, then quiet moves
+    /// by their history score.
+    fn order(&self, b: &Board, moves: &mut [Move], tt_move: Option<Move>, ply: i32) {
+        let plyi = ply as usize;
+        let (k0, k1) = if plyi < MAX_PLY {
+            (self.killers[plyi][0], self.killers[plyi][1])
+        } else {
+            (None, None)
+        };
+        moves.sort_by_key(|m| {
+            let sc = if Some(*m) == tt_move {
+                10_000_000
+            } else if is_capture(b, m) {
+                1_000_000 + mvv_lva(b, m)
+            } else if Some(*m) == k0 {
+                900_000
+            } else if Some(*m) == k1 {
+                800_000
+            } else {
+                self.history[m.from as usize][m.to as usize]
+            };
+            -sc
+        });
+    }
+}
+
+/// Score every legal move to `depth`, best-first (for the assistance layer).
 pub fn rank_moves(b: &Board, depth: u32) -> Vec<(Move, i32)> {
-    let mut nodes = 0u64;
-    let mut tt = Tt::new();
+    let mut s = Searcher::new();
     let mut scored: Vec<(Move, i32)> = generate_legal(b)
         .into_iter()
         .map(|m| {
             let mut nb = *b;
             nb.make_move(m);
-            let s = -negamax(&nb, depth.saturating_sub(1), 1, -INF, INF, &mut nodes, &mut tt);
-            (m, s)
+            let sc = -s.negamax(&nb, depth.saturating_sub(1), 1, -INF, INF);
+            (m, sc)
         })
         .collect();
     scored.sort_by(|a, b| b.1.cmp(&a.1));
@@ -185,32 +344,29 @@ pub fn rank_moves(b: &Board, depth: u32) -> Vec<(Move, i32)> {
 
 /// Search `b` to `max_depth` with iterative deepening; returns the best move.
 pub fn search(b: &Board, max_depth: u32) -> SearchResult {
+    let mut s = Searcher::new();
     let mut best: Option<Move> = None;
     let mut score = 0;
-    let mut total_nodes = 0u64;
-    let mut tt = Tt::new();
 
     for d in 1..=max_depth {
         let mut moves = generate_legal(b);
         if moves.is_empty() {
-            let s = if in_check(b) { -MATE } else { 0 };
-            return SearchResult { best: None, score: s, nodes: total_nodes, depth: d };
+            let sc = if in_check(b) { -MATE } else { 0 };
+            return SearchResult { best: None, score: sc, nodes: s.nodes, depth: d };
         }
-        // Order by the TT/PV move from the previous iteration, then captures.
-        let tt_move = best.or_else(|| tt.probe(zobrist(b)).map(|e| e.mv));
-        order(b, &mut moves, tt_move);
+        let tt_move = best.or_else(|| s.tt.probe(zobrist(b)).map(|e| e.mv));
+        s.order(b, &mut moves, tt_move, 0);
 
         let mut alpha = -INF;
         let beta = INF;
         let mut local_best = -INF;
         let mut local_move = None;
-        let mut nodes = 0u64;
-        for m in moves {
+        for &m in &moves {
             let mut nb = *b;
             nb.make_move(m);
-            let s = -negamax(&nb, d - 1, 1, -beta, -alpha, &mut nodes, &mut tt);
-            if s > local_best {
-                local_best = s;
+            let sc = -s.negamax(&nb, d - 1, 1, -beta, -alpha);
+            if sc > local_best {
+                local_best = sc;
                 local_move = Some(m);
             }
             if local_best > alpha {
@@ -220,135 +376,21 @@ pub fn search(b: &Board, max_depth: u32) -> SearchResult {
 
         best = local_move;
         score = local_best;
-        total_nodes += nodes;
         if let Some(m) = best {
-            tt.store(zobrist(b), d, to_tt(score, 0), Bound::Exact, m);
+            s.tt.store(zobrist(b), d, to_tt(score, 0), Bound::Exact, m);
         }
         if score.abs() >= MATE_THRESHOLD {
-            break; // a forced mate is found — no need to search deeper
+            break;
         }
     }
 
-    SearchResult { best, score, nodes: total_nodes, depth: max_depth }
-}
-
-fn negamax(b: &Board, depth: u32, ply: i32, mut alpha: i32, beta: i32, nodes: &mut u64, tt: &mut Tt) -> i32 {
-    *nodes += 1;
-
-    let mut moves = generate_legal(b);
-    if moves.is_empty() {
-        return if in_check(b) { -(MATE - ply) } else { 0 };
-    }
-    if depth == 0 {
-        return quiesce(b, alpha, beta, nodes);
-    }
-
-    let alpha_orig = alpha;
-    let key = zobrist(b);
-    let mut tt_move: Option<Move> = None;
-    if let Some(e) = tt.probe(key) {
-        tt_move = Some(e.mv);
-        if e.depth as u32 >= depth {
-            let sc = from_tt(e.score, ply);
-            match e.bound {
-                Bound::Exact => return sc,
-                Bound::Lower => {
-                    if sc >= beta {
-                        return sc;
-                    }
-                }
-                Bound::Upper => {
-                    if sc <= alpha {
-                        return sc;
-                    }
-                }
-            }
-        }
-    }
-
-    // Null-move pruning: give the opponent a free move; if we're still so good
-    // that even then we'd exceed beta, this node is too strong to be relevant —
-    // cut it. Skipped in check and in pawn-only endgames (zugzwang risk).
-    if depth >= 3 && beta < MATE_THRESHOLD && !in_check(b) && has_non_pawn_material(b, b.side) {
-        let mut nb = *b;
-        nb.side = nb.side.opp();
-        nb.ep = None;
-        let r = 2; // reduction
-        let s = -negamax(&nb, depth.saturating_sub(1 + r), ply + 1, -beta, -beta + 1, nodes, tt);
-        if s >= beta {
-            return beta;
-        }
-    }
-
-    order(b, &mut moves, tt_move);
-    let mut best = -INF;
-    let mut best_move = moves[0];
-    for m in moves {
-        let mut nb = *b;
-        nb.make_move(m);
-        let s = -negamax(&nb, depth - 1, ply + 1, -beta, -alpha, nodes, tt);
-        if s > best {
-            best = s;
-            best_move = m;
-        }
-        if best > alpha {
-            alpha = best;
-        }
-        if alpha >= beta {
-            break; // beta cutoff
-        }
-    }
-
-    let bound = if best <= alpha_orig {
-        Bound::Upper
-    } else if best >= beta {
-        Bound::Lower
-    } else {
-        Bound::Exact
-    };
-    tt.store(key, depth, to_tt(best, ply), bound, best_move);
-    best
-}
-
-/// Quiescence search: extend along captures so the static eval is only trusted
-/// in "quiet" positions (avoids the horizon effect on tactics).
-fn quiesce(b: &Board, mut alpha: i32, beta: i32, nodes: &mut u64) -> i32 {
-    *nodes += 1;
-
-    let stand = eval(b);
-    if stand >= beta {
-        return beta;
-    }
-    if stand > alpha {
-        alpha = stand;
-    }
-
-    let mut caps: Vec<Move> = generate_legal(b)
-        .into_iter()
-        .filter(|m| is_capture(b, m))
-        .collect();
-    order(b, &mut caps, None);
-
-    for m in caps {
-        let mut nb = *b;
-        nb.make_move(m);
-        let s = -quiesce(&nb, -beta, -alpha, nodes);
-        if s >= beta {
-            return beta;
-        }
-        if s > alpha {
-            alpha = s;
-        }
-    }
-    alpha
+    SearchResult { best, score, nodes: s.nodes, depth: max_depth }
 }
 
 /// Does `side` have a piece other than pawns (and the king)? Null-move pruning is
 /// unsafe without one (zugzwang), so we gate on it.
 fn has_non_pawn_material(b: &Board, side: Color) -> bool {
-    b.squares.iter().flatten().any(|p| {
-        p.color == side && p.kind != PieceKind::Pawn && p.kind != PieceKind::King
-    })
+    b.squares.iter().flatten().any(|p| p.color == side && p.kind != PieceKind::Pawn && p.kind != PieceKind::King)
 }
 
 #[inline]
@@ -365,17 +407,4 @@ fn mvv_lva(b: &Board, m: &Move) -> i32 {
     };
     let attacker = b.squares[m.from as usize].map(|p| material(p.kind)).unwrap_or(0);
     victim * 10 - attacker
-}
-
-/// Order the TT/PV move first, then captures (MVV-LVA), then quiet moves.
-fn order(b: &Board, moves: &mut [Move], tt_move: Option<Move>) {
-    moves.sort_by_key(|m| {
-        if Some(*m) == tt_move {
-            -2_000_000
-        } else if is_capture(b, m) {
-            -(1_000_000 + mvv_lva(b, m))
-        } else {
-            0
-        }
-    });
 }

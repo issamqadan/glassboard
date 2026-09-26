@@ -585,11 +585,11 @@ mod tests {
                 s += if p.color == Color::White { material(p.kind) } else { -material(p.kind) }; } } }
             s / 100
         }
-        let ops = ["e2e4", "d2d4", "g1f3"];
-        for (dw, db) in [(4u32, 3u32), (4, 4)] {
+        let ops = ["e2e4", "d2d4", "g1f3", "c2c4"];
+        for (dw, db) in [(5u32, 3u32), (5, 4), (5, 5), (4, 3)] {
             let (mut sum, mut w, mut l) = (0i32, 0, 0);
             for op in ops {
-                let m = hgame(op, dw, db, 60);
+                let m = hgame(op, dw, db, 70);
                 sum += m; if m >= 500 { w += 1; } else if m <= -500 { l += 1; }
             }
             println!("HANDICAP follow-assist(d{dw}) vs opp(d{db}): avg material {:+} | wins {w}/{} losses {l}", sum / ops.len() as i32, ops.len());
