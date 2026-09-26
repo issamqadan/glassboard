@@ -124,7 +124,8 @@ async function resumeAiGame(id) {
   game.setRatings(rec.humanElo, rec.engineElo);
   aiAssistOverride = rec.assist || "guided";
   game.setAssistOverride(aiAssistOverride); // restore the chosen assistance
-  aiTokens = typeof rec.aiTokens === "number" ? rec.aiTokens : AI_TOKENS_MAX; aiLifelinePlies = [];
+  aiTokens = typeof rec.aiTokens === "number" ? rec.aiTokens : AI_TOKENS_MAX;
+  aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {};
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
@@ -166,7 +167,9 @@ const assistOverrideFor = () => setupMode === "off" ? "off" : setupMode === "ful
 // event with scarcity. "Oh — you needed help there too." Both sides play glass.
 const AI_TOKENS_MAX = 3;         // lifelines the AI gets per game
 let aiTokens = AI_TOKENS_MAX;    // how many remain
-let aiLifelinePlies = [];        // plies where the AI spent one (for the post-game reveal)
+let aiLifelineLog = [];          // [{move, kind, note}] — what the AI spent, for the panel + reveal
+let aiLastLifelineIdx = -9;      // move index of the last spend (spacing, so it doesn't spam)
+let momentSeen = {};             // one-shot guards for personality moments this game
 
 let selected = null;
 let legalTargets = [];
@@ -181,6 +184,7 @@ let indepOwn = 0, indepFollowed = 0;
 // measure how good your (assisted) play actually was in a real game.
 let moveReview = []; // [{cp, wasBest}]
 let lastEval = null; // engine's read of your position (white-relative cp), for the live pill
+let evalBeforeEngine = null; // white-relative eval right after YOUR move — to spot the AI slipping
 let freeCaptures = [];
 let lastStratSig = ""; // signature of strategies last seen while the fold was open
 let curStratSig = "";
@@ -378,7 +382,7 @@ function newGame() {
   game.setAssistOverride(firstGame ? "guided" : aiAssistOverride); // the help you chose at setup
   aiGameId = newAiId(); // a fresh slot; only saved once a move is played
   aiSaved = false;
-  aiTokens = AI_TOKENS_MAX; aiLifelinePlies = []; // AI's lifelines, fresh
+  aiTokens = AI_TOKENS_MAX; aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {}; // fresh
   mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
   selected = null;
@@ -431,7 +435,22 @@ function onPositionChanged() {
     threats = assistData.threats || [];
     threatSquares = threats.map((t) => t.sq);
     freeCaptures = assistData.freeCaptures || [];
-    if ((assistData.candidates || []).length) { helpWasAvailable = true; lastEval = assistData.candidates[0].score; }
+    if ((assistData.candidates || []).length) {
+      helpWasAvailable = true; lastEval = assistData.candidates[0].score;
+      // Personality moments (both sides), driven off the live eval:
+      if (!firstGame) {
+        // The AI's move swung the position your way → it slipped, you've a chance.
+        if (evalBeforeEngine != null) {
+          const swing = lastEval - evalBeforeEngine;
+          if (swing >= 160 && !momentSeen.slip) { opponentSlippedMoment(); momentSeen.slip = true; }
+          else if (swing < 120) momentSeen.slip = false; // re-arm once it calms
+        }
+        // First time the position turns genuinely sharp → a single "critical" beat.
+        if (Math.abs(lastEval) >= 180 && !momentSeen.crit) { criticalMoment(); momentSeen.crit = true; }
+        else if (Math.abs(lastEval) < 120) momentSeen.crit = false;
+      }
+    }
+    evalBeforeEngine = null;
   }
   // Vs the AI there's no opponent to hide help from, so suggestions show
   // immediately — the timed "thinking window" (which exists so a HUMAN opponent
@@ -565,6 +584,7 @@ function paint() {
   renderBoard();
   renderPlayers();
   renderEval();
+  renderAiAssist();
   renderCoach();
   renderAssist();
   renderStrategy();
@@ -733,6 +753,26 @@ function renderPlayers() {
   };
 }
 
+// The Opponent's-assistance panel — the symmetric glass-box. Always visible in a
+// real Play-AI game so "what help did the AI get?" has a clear, honest home:
+// lifelines remaining (buoys that dim as spent) + a live log of every one it used.
+function renderAiAssist() {
+  const el = document.getElementById("aiAssist");
+  if (!el) return;
+  if (firstGame || parseInt(engineEloEl.value, 10) >= 3000) { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  let pips = "";
+  for (let i = 0; i < AI_TOKENS_MAX; i++) pips += `<span class="ll${i < aiTokens ? "" : " spent"}">🛟</span>`;
+  const log = aiLifelineLog.length
+    ? aiLifelineLog.map((e) => `<li><span class="al-mv">move ${e.move}</span> <b>${e.tag}</b> — ${e.note}</li>`).join("")
+    : `<li class="al-none">Hasn't needed help yet — you'll see each lifeline the moment it's spent.</li>`;
+  el.innerHTML =
+    `<div class="al-head"><span class="al-title">🤖 ${levelName(engineEloEl.value)} plays glass too</span>` +
+    `<span class="al-pips" title="Lifelines left — the AI can dig deep for a stronger move">${pips}</span></div>` +
+    `<div class="al-sub">Same assistance as you — used in the open. ${aiTokens} of ${AI_TOKENS_MAX} lifelines left.</div>` +
+    `<ul class="al-log">${log}</ul>`;
+}
+
 // A transient "moment" — personality without touching the board. Fades on its own.
 let momentTimer = null;
 function showMoment(html, kind) {
@@ -743,13 +783,37 @@ function showMoment(html, kind) {
   if (momentTimer) clearTimeout(momentTimer);
   momentTimer = setTimeout(() => { const e = document.getElementById("momentToast"); if (e) e.classList.remove("show"); }, 3800);
 }
+// The kinds of assistance the AI can spend — the same glass-box capabilities a
+// human gets, named so its use reads as a game event, not an engine internal.
+const LIFELINE_KIND = {
+  danger:  { tag: "Danger check", note: "under attack — it dug deep to defend" },
+  defend:  { tag: "Deep think",   note: "under pressure — it calculated hard for the best reply" },
+  sharp:   { tag: "Deep think",   note: "a sharp position — it looked several moves ahead" },
+};
 // The AI spent a lifeline — a visible, glass-box game event (never a secret buff).
-function aiLifelineMoment() {
+function aiLifelineMoment(kind) {
+  const k = LIFELINE_KIND[kind] || LIFELINE_KIND.sharp;
   const left = aiTokens;
+  aiLifelineLog.push({ move: Math.floor(moveReview.length) + 1, kind, tag: k.tag, note: k.note });
   showMoment(
-    `<span class="mo-ic">🛟</span><span class="mo-txt"><b>${levelName(engineEloEl.value)} used a lifeline</b>`
-    + `<small>It was in trouble — so it dug deep for a stronger move. ${left} lifeline${left === 1 ? "" : "s"} left.</small></span>`,
+    `<span class="mo-ic">🛟</span><span class="mo-txt"><b>${levelName(engineEloEl.value)} used a lifeline · ${k.tag}</b>`
+    + `<small>It was ${k.note}. ${left} lifeline${left === 1 ? "" : "s"} left.</small></span>`,
     "ai");
+}
+// You played the engine's top move without peeking at the help — celebrate agency.
+function foundItMoment() {
+  showMoment(`<span class="mo-ic">💪</span><span class="mo-txt"><b>You found that on your own</b>`
+    + `<small>Best move on the board — and you didn't need the help. That's the ladder down.</small></span>`, "you");
+}
+// The AI's move handed you a real swing — it slipped, you've got a chance.
+function opponentSlippedMoment() {
+  showMoment(`<span class="mo-ic">🎁</span><span class="mo-txt"><b>Your opponent just gave you a chance</b>`
+    + `<small>That last move swung the position your way. Look for the punish.</small></span>`, "chance");
+}
+// The position turned sharp — a decisive moment, once per swing into danger.
+function criticalMoment() {
+  showMoment(`<span class="mo-ic">🔥</span><span class="mo-txt"><b>Critical position</b>`
+    + `<small>Sharp spot — the next few moves matter. Slow down and check for threats.</small></span>`, "crit");
 }
 
 function resign() {
@@ -1083,6 +1147,23 @@ function renderStatus() {
   setLevelPill(game.assistLevel());
 }
 
+// A playful character for a suggested move — derived from the board, not vibes:
+// a capture that wins material is Aggressive, an even trade is Simplify, a pawn
+// pushing into enemy territory is Sneaky, a quiet improving move is Safe.
+const PVAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+function moveFlavor(c) {
+  const bs = game.boardString();
+  const tgt = bs[c.to], mover = bs[c.from] || "";
+  const isCap = tgt >= "a" && tgt <= "z"; // an enemy (black) piece sits on the target
+  if (isCap) {
+    const gain = (PVAL[tgt] || 0) - (PVAL[mover.toLowerCase()] || 0);
+    if (gain === 0) return { key: "simp", ic: "♻", name: "Simplify" };
+    return { key: "aggr", ic: "⚔", name: "Aggressive" };
+  }
+  const toRank = 1 + Math.floor(c.to / 8);
+  if (mover === "P" && toRank >= 5) return { key: "sneak", ic: "🗡", name: "Sneaky" };
+  return { key: "safe", ic: "🛡", name: "Safe" };
+}
 function renderAssist() {
   assistEl.innerHTML = "";
   if (!assistData) {
@@ -1114,12 +1195,13 @@ function renderAssist() {
     a.candidates.forEach((c) => {
       const isRec = a.recommended && c.uci === a.recommended;
       const saves = c.from === hangSq;
+      const fl = moveFlavor(c);
       const el = document.createElement("div");
       el.className = "cand" + (isRec ? " rec" : "") + (saves ? " saves" : "");
       el.innerHTML =
         `<div class="cand-main">` +
         (saves ? `<span class="cand-tag saves-tag">🛡 moves your ${pieceNameAt(hangSq)} to safety</span>` : "") +
-        `<span class="cand-move">${c.san || c.uci}${isRec ? " ➤" : ""}</span>` +
+        `<span class="cand-move">${c.san || c.uci}${isRec ? " ➤" : ""}</span> <span class="cand-flavor fl-${fl.key}">${fl.ic} ${fl.name}</span>` +
         (c.note ? `<div class="cand-note">${escapeHtml(c.note)}</div>` : "") +
         `</div><span class="score">${fmtScore(c.score)}</span>`;
       el.addEventListener("click", () => playMove(c.from, c.to));
@@ -1265,6 +1347,11 @@ function doPlay(from, to, promo) {
         const cp = Math.max(0, bestScore - played);
         const wasBest = assistData.recommended && (sqName(from) + sqName(to)) === assistData.recommended.slice(0, 4);
         moveReview.push({ cp, wasBest, prov });
+        // You played the engine's top move, unaided, without peeking → celebrate it
+        // (a few times a game, not every move — the reward stays meaningful).
+        if (prov === "own" && wasBest && !revealedBest && (momentSeen.found || 0) < 3 && moveReview.length >= 3) {
+          momentSeen.found = (momentSeen.found || 0) + 1; foundItMoment();
+        }
         console.log(`[review] ply ${moveReview.length} ${sqName(from)}${sqName(to)} cpLoss=${cp}${wasBest ? " (best)" : ""} ${prov}`);
       }
     } catch {}
@@ -1277,6 +1364,9 @@ function doPlay(from, to, promo) {
   lastMove = { from, to };
   recordHumanMove(preFen, from, to, promo); // learn from this move too
   fgOn("move");
+  // White-relative eval right after your move (black to move → negate). Compared
+  // after the AI replies to detect a swing your way (the AI "slipping").
+  try { evalBeforeEngine = game.status() === "ongoing" ? -game.bestScore(2) : null; } catch { evalBeforeEngine = null; }
   if (!firstGame) persistAiGame(game.status() !== "ongoing"); // save progress (skip the guided game)
   onPositionChanged(); // now Black to move → assist cleared
   setTimeout(engineReply, 150);
@@ -1302,21 +1392,26 @@ function engineReply() {
   statusEl.textContent = "Engine thinking…";
   setTimeout(() => {
     const baseElo = parseInt(engineEloEl.value, 10);
-    // Does the AI sense trouble? bestScore is side-to-move (its own) relative, so
-    // a clearly negative read means it's worse. When it is — and it has a lifeline,
-    // and it isn't already searching at the ceiling — it spends one to dig deep
-    // (a Master-strength, best-move reply) and we show that as a visible event.
-    let usedLifeline = false;
-    if (!firstGame && aiTokens > 0 && baseElo < 3000) {
-      const sense = game.bestScore(3);
-      if (sense <= -110) { usedLifeline = true; aiTokens--; aiLifelinePlies.push(moveReview.length); }
+    // Should the AI reach for a lifeline? It "senses" the position with a quick
+    // shallow look (bestScore is its own side-to-move value). When it's even or
+    // worse — i.e. under real pressure — and it still has a lifeline, and hasn't
+    // just used one, it digs deep (a Master-strength best-move reply). This fires
+    // in ordinary competitive play, not only when it's already losing badly.
+    let usedLifeline = false, llKind = "", llSense = 0;
+    const spaced = moveReview.length - aiLastLifelineIdx >= 2;
+    if (!firstGame && aiTokens > 0 && baseElo < 3000 && moveReview.length >= 3 && spaced) {
+      llSense = game.bestScore(2); // its own (Black) eval — negative means you're ahead
+      if (llSense <= -40) {        // you've earned a real edge → it's under pressure
+        usedLifeline = true; aiTokens--; aiLastLifelineIdx = moveReview.length;
+        llKind = llSense <= -140 ? "danger" : "defend";
+      }
     }
     const uci = usedLifeline
       ? game.engineMoveByElo(3000, 0)                 // lifeline: deepest search, top move
       : game.engineMoveByElo(baseElo, Math.random()); // strength by chosen AI level
     if (uci.length >= 4) lastMove = uciToSquares(uci);
     busy = false;
-    if (usedLifeline) aiLifelineMoment();
+    if (usedLifeline) aiLifelineMoment(llKind);
     if (!firstGame) persistAiGame(game.status() !== "ongoing");
     onPositionChanged();
     fgOn("engine");

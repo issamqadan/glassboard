@@ -28,6 +28,7 @@
             <button class="amode" data-mode="custom" type="button"><span class="am-ic">🎚️</span><span class="am-txt"><b>Choose level</b><small>Pick exactly how much.</small></span></button>
           </div>
           <div class="rung-picker" id="rungPicker" hidden></div>
+          <div class="setup-symmetry">🤖 <b>The AI plays glass too.</b> It gets <b>3 lifelines</b> — when it's under pressure it can dig deep for a stronger move, and you'll see every one it spends. Assistance is a layer you both share, in the open.</div>
         </div>
         <button class="setup-start" id="setupStart" type="button">Start match →</button>
       </div>
@@ -80,6 +81,9 @@
           <div id="planDock" class="plan-dock" hidden></div>
         </div>
         <aside class="panels">
+          <!-- Opponent's assistance: the symmetric glass-box — the AI plays glass too.
+               Its lifelines and every one it spends are shown here, in the open. -->
+          <div id="aiAssist" class="ai-assist" hidden></div>
           <!-- Coach: transient safety net — speaks only for real danger/opportunity. -->
           <div id="coach" class="coach" aria-live="polite" hidden></div>
           <!-- Piece tip: teaches the piece the first time you touch it; tap for a full tour. -->

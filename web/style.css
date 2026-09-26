@@ -478,11 +478,44 @@ button {
   opacity: 0; pointer-events: none; transition: opacity 0.32s, transform 0.32s; }
 .moment-toast.show { opacity: 1; transform: translate(-50%, 0); }
 .moment-toast.ai { border-color: rgba(242,180,109,0.5); }
+.moment-toast.you { border-color: rgba(105,200,110,0.55); }
+.moment-toast.chance { border-color: rgba(126,224,214,0.55); }
+.moment-toast.crit { border-color: rgba(242,109,122,0.55); }
 .moment-toast .mo-ic { font-size: 1.5rem; line-height: 1; flex: none; }
 .moment-toast .mo-txt { display: flex; flex-direction: column; gap: 2px; }
 .moment-toast .mo-txt b { font-size: 0.9rem; color: #eef3fb; }
 .moment-toast .mo-txt small { font-size: 0.78rem; color: #9fb0c8; line-height: 1.32; }
 @media (prefers-reduced-motion: reduce) { .moment-toast { transition: opacity 0.2s; } }
+
+/* Opponent's-assistance panel — the symmetric glass-box surface. */
+.ai-assist { background: rgba(242,180,109,0.07); border: 1px solid rgba(242,180,109,0.26);
+  border-radius: 12px; padding: 11px 13px; margin-bottom: 10px; }
+.ai-assist .al-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ai-assist .al-title { font-weight: 700; font-size: 0.9rem; color: #f0d6b3; }
+.ai-assist .al-pips { display: inline-flex; gap: 2px; font-size: 0.9rem; }
+.ai-assist .al-pips .ll { transition: opacity 0.4s, filter 0.4s; }
+.ai-assist .al-pips .ll.spent { opacity: 0.22; filter: grayscale(1); }
+.ai-assist .al-sub { font-size: 0.76rem; color: #b3a184; margin: 3px 0 7px; line-height: 1.4; }
+.ai-assist .al-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.ai-assist .al-log li { font-size: 0.79rem; color: #d8c6ac; line-height: 1.4;
+  padding: 5px 8px; background: rgba(0,0,0,0.16); border-radius: 7px; border-left: 2px solid rgba(242,180,109,0.5); }
+.ai-assist .al-log li.al-none { color: #9a8c76; border-left-color: rgba(154,140,118,0.4); font-style: italic; }
+.ai-assist .al-log b { color: #f2c98a; }
+.ai-assist .al-log .al-mv { color: #9a8c76; font-variant-numeric: tabular-nums; }
+
+/* Suggestion flavors — a playful character on each candidate move. */
+.cand-flavor { font-size: 0.68rem; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  letter-spacing: 0.02em; white-space: nowrap; vertical-align: middle; }
+.fl-safe  { background: rgba(105,200,110,0.16); color: #7fd99a; }
+.fl-aggr  { background: rgba(242,109,122,0.16); color: #f4a2ab; }
+.fl-sneak { background: rgba(178,140,255,0.18); color: #c9b0ff; }
+.fl-simp  { background: rgba(126,224,214,0.16); color: #8fe0d6; }
+
+/* Setup: the symmetry note — assistance is a shared layer. */
+.setup-symmetry { margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+  background: rgba(242,180,109,0.09); border: 1px solid rgba(242,180,109,0.24);
+  font-size: 0.8rem; color: #c9b79c; line-height: 1.5; }
+.setup-symmetry b { color: #f2c98a; }
 
 /* friendly level chips (assess your level without a rating) */
 .lvl-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
