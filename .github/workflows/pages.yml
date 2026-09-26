@@ -62,8 +62,10 @@ jobs:
               -e 's#(src="\./[^"]+\.js)"#\1?v='"$V"'"#g' \
               -e 's#(href="\./[^"]+\.css)"#\1?v='"$V"'"#g' "$f"
           done
-          sed -i -E 's#(from "\./pkg/glassboard_wasm\.js)"#\1?v='"$V"'"#' web/main.js web/multiplayer.js web/twoplayer.js
+          sed -i -E 's#(from "\./pkg/glassboard_wasm\.js)"#\1?v='"$V"'"#' web/main.js web/multiplayer.js web/twoplayer.js web/engine-worker.js
           sed -i "s#new URL('glassboard_wasm_bg.wasm'#new URL('glassboard_wasm_bg.wasm?v=$V'#" web/pkg/glassboard_wasm.js
+          # The engine Web Worker is loaded by URL from main.js — stamp that URL too.
+          sed -i -E 's#(new URL\("\./engine-worker\.js)"#\1?v='"$V"'"#' web/main.js
           echo "Cache-busted static assets with v=$V"
 
       - name: Upload Pages artifact

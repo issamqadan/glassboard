@@ -553,7 +553,7 @@ mod tests {
         use std::time::Instant;
         // A busy middlegame (many pieces = worst case for move-gen/search).
         let b = parse_fen("r1bq1rk1/pp2bppp/2n1pn2/2pp4/3P1B2/2NBPN2/PPP2PPP/R2Q1RK1 w - - 0 9");
-        for d in [3u32, 4, 5] {
+        for d in [3u32, 4, 5, 6] {
             let t = Instant::now();
             let _ = analyze(&b, AssistLevel::Guided, d);
             println!("TIMING analyze depth {d}: {} ms", t.elapsed().as_millis());
@@ -586,7 +586,9 @@ mod tests {
             s / 100
         }
         let ops = ["e2e4", "d2d4", "g1f3", "c2c4"];
-        for (dw, db) in [(5u32, 3u32), (5, 4), (5, 5), (4, 3)] {
+        // New ladder: Intermediate assist5 vs opp3 (+2 win), Club assist6 vs opp4
+        // (+2 win), Expert/Master assist6 vs opp5 (+1 even), parity sanity (6,6).
+        for (dw, db) in [(5u32, 3u32), (5, 4), (6, 4), (6, 5), (6, 6)] {
             let (mut sum, mut w, mut l) = (0i32, 0, 0);
             for op in ops {
                 let m = hgame(op, dw, db, 70);

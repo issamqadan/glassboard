@@ -327,8 +327,48 @@ function startFromSetup() {
   newGame();
 }
 
+// ---- Engine worker: deep searches run off the main thread so the board never
+// freezes while the engine or the assistance is thinking. Requests are id-tagged
+// promises; the main thread keeps its own WASM for instant board operations. ----
+let engineWorker = null;
+let workerReqId = 0;
+const workerPending = new Map();
+function initEngineWorker() {
+  try {
+    engineWorker = new Worker(new URL("./engine-worker.js", import.meta.url), { type: "module" });
+    engineWorker.onmessage = (e) => {
+      const { id, ok, result, error } = e.data || {};
+      const p = workerPending.get(id);
+      if (!p) return;
+      workerPending.delete(id);
+      if (ok) p.resolve(result); else p.reject(new Error(error || "worker error"));
+    };
+    engineWorker.onerror = () => { engineWorker = null; }; // fall back to main-thread search
+  } catch { engineWorker = null; }
+}
+// Ask the worker to run `op`; falls back to a synchronous main-thread search if
+// the worker is unavailable (older browser / load failure) so play never breaks.
+function askEngine(op, args) {
+  if (!engineWorker) return Promise.resolve(syncEngine(op, args));
+  return new Promise((resolve, reject) => {
+    const id = ++workerReqId;
+    workerPending.set(id, { resolve, reject });
+    engineWorker.postMessage({ id, op, args });
+  }).catch(() => syncEngine(op, args));
+}
+// Synchronous fallback on the main thread's own Game (freezes briefly, but works).
+function syncEngine(op, args) {
+  const g = Game.fromFen(args.fen);
+  if (op === "bestMove") return g.engineMoveByElo(args.elo, args.rand);
+  if (op === "analyze") { g.setRatings(args.humanElo, args.engineElo); g.setAssistOverride(args.override); return g.assist(args.depth); }
+  if (op === "bestScore") return g.bestScore(args.depth);
+  if (op === "scoreMove") return g.scoreMove(args.from, args.to, args.depth);
+  return null;
+}
+
 async function main() {
   await init();
+  initEngineWorker();
   detectFirstGame();
   const nh = document.getElementById("newHereLink");
   if (nh) nh.hidden = firstGame; // hidden while the guided game is running
@@ -426,8 +466,14 @@ function renderBudget() {
     `<span class="bg-num">${budgetSpent} / ${BUDGET_TOTAL}</span>`;
 }
 
-// Called once whenever the position changes (after a move). Computes assistance
-// for White's turn exactly once, then repaints everything.
+// Bumped on every position change so a slow async assist result that arrives
+// after the player has already moved again is recognised as stale and dropped.
+let positionToken = 0;
+
+// Called whenever the position changes (after a move). Paints the board IMMEDIATELY
+// (so the move shows with no lag), then fetches the assistance off the main thread
+// and repaints with the overlays when it arrives — the board stays interactive
+// throughout. Assist is computed once per position, for White's turn.
 function onPositionChanged() {
   hanging = [];
   threats = [];
@@ -436,38 +482,49 @@ function onPositionChanged() {
   assistData = null;
   revealedSugg = false; // deeper help must be re-revealed (and re-paid) each position
   revealedBest = false;
+  const token = ++positionToken;
+  paint(); // instant: board, players, captured, material — before any deep search
+
   if (game.status() === "ongoing" && game.sideToMove() === "white") {
-    assistData = JSON.parse(game.assist(depth())); // records to glass-box once
-    hanging = assistData.hanging || [];
-    threats = assistData.threats || [];
-    threatSquares = threats.map((t) => t.sq);
-    freeCaptures = assistData.freeCaptures || [];
-    if ((assistData.candidates || []).length) {
-      helpWasAvailable = true; lastEval = assistData.candidates[0].score;
-      // Personality moments (both sides), driven off the live eval:
-      if (!firstGame) {
-        // The AI's move swung the position your way → it slipped, you've a chance.
-        if (evalBeforeEngine != null) {
-          const swing = lastEval - evalBeforeEngine;
-          if (swing >= 160 && !momentSeen.slip) { opponentSlippedMoment(); momentSeen.slip = true; }
-          else if (swing < 120) momentSeen.slip = false; // re-arm once it calms
+    const fen = game.fen();
+    const ov = firstGame ? "guided" : aiAssistOverride;
+    askEngine("analyze", { fen, depth: depth(), override: ov, humanElo: parseInt(humanEloEl.value, 10), engineElo: parseInt(engineEloEl.value, 10) })
+      .then((json) => {
+        if (token !== positionToken) return; // position moved on — drop stale result
+        assistData = JSON.parse(json);
+        hanging = assistData.hanging || [];
+        threats = assistData.threats || [];
+        threatSquares = threats.map((t) => t.sq);
+        freeCaptures = assistData.freeCaptures || [];
+        if ((assistData.candidates || []).length) {
+          helpWasAvailable = true; lastEval = assistData.candidates[0].score;
+          if (!firstGame) {
+            // The AI's move swung the position your way → it slipped, you've a chance.
+            if (evalBeforeEngine != null) {
+              const swing = lastEval - evalBeforeEngine;
+              if (swing >= 160 && !momentSeen.slip) { opponentSlippedMoment(); momentSeen.slip = true; }
+              else if (swing < 120) momentSeen.slip = false; // re-arm once it calms
+            }
+            // First time the position turns genuinely sharp → a single "critical" beat.
+            if (Math.abs(lastEval) >= 180 && !momentSeen.crit) { criticalMoment(); momentSeen.crit = true; }
+            else if (Math.abs(lastEval) < 120) momentSeen.crit = false;
+          }
         }
-        // First time the position turns genuinely sharp → a single "critical" beat.
-        if (Math.abs(lastEval) >= 180 && !momentSeen.crit) { criticalMoment(); momentSeen.crit = true; }
-        else if (Math.abs(lastEval) < 120) momentSeen.crit = false;
-      }
-    }
+        evalBeforeEngine = null;
+        // Vs the AI there's no opponent to hide help from, so suggestions show
+        // immediately — the timed "thinking window" (which exists so a HUMAN
+        // opponent doesn't watch you being fed moves) is a multiplayer-only thing.
+        const fold = document.getElementById("movesFold");
+        if (fold) fold.open = false;
+        if ((assistData.candidates || []).length && !firstGame) revealHint();
+        else clearThinkWindow(true);
+        paint(); // repaint with the assistance overlays
+      })
+      .catch(() => {});
+  } else {
     evalBeforeEngine = null;
+    clearThinkWindow(true);
   }
-  // Vs the AI there's no opponent to hide help from, so suggestions show
-  // immediately — the timed "thinking window" (which exists so a HUMAN opponent
-  // doesn't watch you being fed moves) is a multiplayer-only thing.
-  const fold = document.getElementById("movesFold");
-  if (fold) fold.open = false;
-  if (assistData && (assistData.candidates || []).length && !firstGame) {
-    revealHint();
-  } else clearThinkWindow(true);
-  paint();
 }
 
 // ---- Thinking window: give the player time before help appears. An
@@ -1369,23 +1426,21 @@ function doPlay(from, to, promo) {
   if (prov === "own") indepOwn += 1; else if (prov === "followed") indepFollowed += 1;
   lastMoveLifeline = false; // your move — clear the AI's lifeline board badge
   if (prov === "followed") { playerFollows += 1; playerTokens = Math.max(0, PLAYER_TOKENS_MAX - playerFollows); }
-  // Strength telemetry (measured BEFORE the move): how far from best was it?
+  // Strength telemetry: how far from best was this move? The cp-loss needs a deep
+  // search (scoreMove at depth()), so it runs on the worker and fills in the entry
+  // when it returns — the "found it on your own" moment (which only needs wasBest)
+  // fires immediately, and the review entry keeps its slot so counts stay correct.
   if (!firstGame && assistData && (assistData.candidates || []).length) {
-    try {
-      const bestScore = assistData.candidates[0].score;
-      const played = game.scoreMove(from, to, depth());
-      if (played > -1000000) {
-        const cp = Math.max(0, bestScore - played);
-        const wasBest = assistData.recommended && (sqName(from) + sqName(to)) === assistData.recommended.slice(0, 4);
-        moveReview.push({ cp, wasBest, prov });
-        // You played the engine's top move, unaided, without peeking → celebrate it
-        // (a few times a game, not every move — the reward stays meaningful).
-        if (prov === "own" && wasBest && !revealedBest && (momentSeen.found || 0) < 3 && moveReview.length >= 3) {
-          momentSeen.found = (momentSeen.found || 0) + 1; foundItMoment();
-        }
-        console.log(`[review] ply ${moveReview.length} ${sqName(from)}${sqName(to)} cpLoss=${cp}${wasBest ? " (best)" : ""} ${prov}`);
-      }
-    } catch {}
+    const bestScore = assistData.candidates[0].score;
+    const wasBest = assistData.recommended && (sqName(from) + sqName(to)) === assistData.recommended.slice(0, 4);
+    const entry = { cp: null, wasBest, prov };
+    moveReview.push(entry);
+    if (prov === "own" && wasBest && !revealedBest && (momentSeen.found || 0) < 3 && moveReview.length >= 3) {
+      momentSeen.found = (momentSeen.found || 0) + 1; foundItMoment();
+    }
+    askEngine("scoreMove", { fen: preFen, from, to, depth: depth() })
+      .then((played) => { if (played > -1000000) entry.cp = Math.max(0, bestScore - played); })
+      .catch(() => {});
   }
   const ok = game.makeMove(from, to, promo);
   selected = null;
@@ -1419,35 +1474,40 @@ function engineReply() {
     onPositionChanged();
     return;
   }
-  busy = true;
-  statusEl.textContent = "Engine thinking…";
-  setTimeout(() => {
-    const baseElo = parseInt(engineEloEl.value, 10);
-    // Should the AI reach for a lifeline? It "senses" the position with a quick
-    // shallow look (bestScore is its own side-to-move value). When it's even or
-    // worse — i.e. under real pressure — and it still has a lifeline, and hasn't
-    // just used one, it digs deep (a Master-strength best-move reply). This fires
-    // in ordinary competitive play, not only when it's already losing badly.
-    let usedLifeline = false, llKind = "", llSense = 0;
-    const spaced = moveReview.length - aiLastLifelineIdx >= 2;
-    if (!firstGame && aiTokens > 0 && baseElo < 3000 && moveReview.length >= 3 && spaced) {
-      llSense = game.bestScore(2); // its own (Black) eval — negative means you're ahead
-      if (llSense <= -40) {        // you've earned a real edge → it's under pressure
-        usedLifeline = true; aiTokens--; aiLastLifelineIdx = moveReview.length;
-        llKind = llSense <= -140 ? "danger" : "defend";
-      }
+  busy = true; // the board already shows "Engine…" from the prior repaint
+  const baseElo = parseInt(engineEloEl.value, 10);
+  // Should the AI reach for a lifeline? It "senses" the position with a quick
+  // shallow look (bestScore, depth 2 — cheap, stays on the main thread). When it's
+  // even or worse — under real pressure — and still has a lifeline unused-recently,
+  // it digs deep (a Master-strength reply). Fires in ordinary competitive play.
+  let usedLifeline = false, llKind = "";
+  const spaced = moveReview.length - aiLastLifelineIdx >= 2;
+  if (!firstGame && aiTokens > 0 && baseElo < 3000 && moveReview.length >= 3 && spaced) {
+    let llSense = 0;
+    try { llSense = game.bestScore(2); } catch { llSense = 0; }
+    if (llSense <= -40) { // you've earned a real edge → it's under pressure
+      usedLifeline = true; aiTokens--; aiLastLifelineIdx = moveReview.length;
+      llKind = llSense <= -140 ? "danger" : "defend";
     }
-    const uci = usedLifeline
-      ? game.engineMoveByElo(3000, 0)                 // lifeline: deepest search, top move
-      : game.engineMoveByElo(baseElo, Math.random()); // strength by chosen AI level
-    if (uci.length >= 4) lastMove = uciToSquares(uci);
-    lastMoveLifeline = usedLifeline; // mark the move on the board if it was assisted
-    busy = false;
-    if (usedLifeline) aiLifelineMoment(llKind);
-    if (!firstGame) persistAiGame(game.status() !== "ongoing");
-    onPositionChanged();
-    fgOn("engine");
-  }, 20);
+  }
+  const fenBefore = game.fen(); // guard: drop the reply if the game moved on / reset
+  askEngine("bestMove", { fen: fenBefore, elo: usedLifeline ? 3000 : baseElo, rand: usedLifeline ? 0 : Math.random() })
+    .then((uci) => {
+      // Stale/aborted (new game, resume, resign) — the position isn't the one we sent.
+      if (game.fen() !== fenBefore || game.status() !== "ongoing" || game.sideToMove() !== "black") { busy = false; return; }
+      if (uci && uci.length >= 4) {
+        const sq = uciToSquares(uci);
+        game.makeMove(sq.from, sq.to, uci.length > 4 ? uci[4] : undefined);
+        lastMove = sq;
+        lastMoveLifeline = usedLifeline; // mark the assisted move on the board
+      }
+      busy = false;
+      if (usedLifeline) aiLifelineMoment(llKind);
+      if (!firstGame) persistAiGame(game.status() !== "ongoing");
+      onPositionChanged();
+      fgOn("engine");
+    })
+    .catch(() => { busy = false; });
 }
 
 // --- helpers ---------------------------------------------------------------

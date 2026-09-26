@@ -213,12 +213,15 @@ impl Game {
     /// assisted player above the opponent. That is the handicap made real.
     #[wasm_bindgen(js_name = assistDepthFor)]
     pub fn assist_depth_for(elo: i32) -> u32 {
-        // TWO plies deeper than the opponent where affordable (depth 5 is ~0.5s
-        // now, thanks to LMR/TT), capped at 5. Measured: a +2-ply assist edge is a
-        // COMFORTABLE win (+5 pawns); +1 or parity is an even, never-losing fight.
-        // So Beginner..Club (opp depth ≤3): assist is +2 → following the help wins.
-        // Expert (d4)/Master (d5): assist caps at 5 → a genuine, competitive fight.
-        (strength_for_elo(elo).0 + 2).min(5).max(3)
+        // TWO plies deeper than the opponent, capped at 5 (~1s WASM in the worker —
+        // help appears a beat after your move, no freeze). Measured 2026-09-27 with
+        // the deeper ladder: assist5 vs opp3 = +501 (comfortable WIN); assist5 vs
+        // opp4 = +3 and assist6 vs opp4 = +4 (both EVEN — so depth 6 buys nothing but
+        // latency, hence the cap stays 5). So Beginner..Intermediate (opp ≤3):
+        // following help WINS; Club/Expert/Master (opp 4-5): a competitive, never-
+        // losing fight. A stronger opponent AND a decisive help-win aren't both
+        // possible with one engine — see [[strength-and-handicap-model]].
+        (strength_for_elo(elo).0 + 2).min(5).max(4)
     }
 
     /// "ongoing" | "checkmate" | "stalemate" | "fifty-move".
@@ -442,12 +445,16 @@ fn strength_for_elo(elo: i32) -> (u32, i32) {
     // is always a ply DEEPER than the chosen level (see assist_depth_for), so
     // taking full help beats even the strongest opponent — that is the handicap:
     // a weaker player, fully assisted, can hang with a master.
+    // Depths bumped one notch across the middle/top now that search runs in a Web
+    // Worker (no UI freeze): Club is a real depth-4 opponent, Expert depth-5. The
+    // per-move wait stays reasonable (depth 4 ~0.3s, depth 5 ~1s WASM) and, crucially,
+    // never blocks the board. Beginner/Casual stay shallow so lower rungs feel human.
     match elo {
         i if i <= 700 => (1, 250),   // Beginner — very shallow, lots of slips
         i if i <= 1100 => (2, 150),  // Casual
-        i if i <= 1500 => (2, 70),   // Intermediate
-        i if i <= 1900 => (3, 30),   // Club
-        i if i <= 2300 => (4, 12),   // Expert — deep, near-best
+        i if i <= 1500 => (3, 70),   // Intermediate
+        i if i <= 1900 => (4, 30),   // Club — genuinely strong now (was depth 3)
+        i if i <= 2300 => (5, 12),   // Expert — deep, near-best
         _ => (5, 0),                 // Master — deepest, always the best move
     }
 }
