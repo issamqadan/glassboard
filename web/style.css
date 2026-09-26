@@ -465,6 +465,24 @@ button {
   background: rgba(126,224,214,0.08); border: 1px solid rgba(126,224,214,0.28); border-radius: 999px; padding: 3px 10px; }
 .players .ai-chip:hover { border-color: #7ee0d6; background: rgba(126,224,214,0.16); }
 .players .ai-chip .ai-caret { color: var(--accent); font-size: 0.72rem; }
+/* AI lifelines — buoys on the opponent chip; spent ones dim so scarcity is visible. */
+.ai-lifelines { display: inline-flex; align-items: center; gap: 1px; font-size: 0.74rem; line-height: 1; }
+.ai-lifelines .ll { transition: opacity 0.4s, filter 0.4s; }
+.ai-lifelines .ll.spent { opacity: 0.22; filter: grayscale(1); }
+
+/* Moment toast — transient personality; never touches the board. */
+.moment-toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 16px);
+  display: flex; align-items: center; gap: 11px; max-width: min(92vw, 400px);
+  background: rgba(20,28,44,0.97); border: 1px solid rgba(126,224,214,0.34); border-radius: 14px;
+  padding: 11px 15px; box-shadow: 0 10px 34px rgba(0,0,0,0.44); z-index: 60;
+  opacity: 0; pointer-events: none; transition: opacity 0.32s, transform 0.32s; }
+.moment-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.moment-toast.ai { border-color: rgba(242,180,109,0.5); }
+.moment-toast .mo-ic { font-size: 1.5rem; line-height: 1; flex: none; }
+.moment-toast .mo-txt { display: flex; flex-direction: column; gap: 2px; }
+.moment-toast .mo-txt b { font-size: 0.9rem; color: #eef3fb; }
+.moment-toast .mo-txt small { font-size: 0.78rem; color: #9fb0c8; line-height: 1.32; }
+@media (prefers-reduced-motion: reduce) { .moment-toast { transition: opacity 0.2s; } }
 
 /* friendly level chips (assess your level without a rating) */
 .lvl-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
@@ -1043,6 +1061,9 @@ main.game .status:empty { display: none; }
   margin-bottom: 8px; animation: mate-stamp 0.5s cubic-bezier(.2,1.5,.4,1) both; }
 @keyframes mate-stamp { 0% { opacity: 0; transform: scale(2.2) rotate(-8deg); letter-spacing: 0.6em; } 100% { opacity: 1; transform: scale(1) rotate(0); letter-spacing: 0.22em; } }
 .over-how { color: #c3d0e6; font-size: 0.95rem; line-height: 1.45; }
+.over-lifeline { margin-top: 12px; padding: 9px 12px; border-radius: 10px; text-align: left; max-width: 340px;
+  background: rgba(242,180,109,0.1); border: 1px solid rgba(242,180,109,0.28); color: #d9c3a6; font-size: 0.85rem; line-height: 1.45; }
+.over-lifeline b { color: #f2c98a; }
 .over-result { animation: over-pop 0.35s cubic-bezier(.2,1.4,.4,1) both; }
 @keyframes over-pop { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .over-mate, .over-result { animation: none; } }

@@ -97,6 +97,7 @@ function persistAiGame(over) {
     humanElo: parseInt(humanEloEl.value, 10),
     engineElo: parseInt(engineEloEl.value, 10),
     assist: aiAssistOverride,
+    aiTokens: aiTokens,
     created: prev ? prev.created : Date.now(),
     updated: Date.now(),
   };
@@ -123,6 +124,7 @@ async function resumeAiGame(id) {
   game.setRatings(rec.humanElo, rec.engineElo);
   aiAssistOverride = rec.assist || "guided";
   game.setAssistOverride(aiAssistOverride); // restore the chosen assistance
+  aiTokens = typeof rec.aiTokens === "number" ? rec.aiTokens : AI_TOKENS_MAX; aiLifelinePlies = [];
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
@@ -157,6 +159,14 @@ let setupMode = "full";        // "off" | "full" | "custom"
 let setupRung = "suggestion";  // chosen rung when custom
 let aiAssistOverride = "guided"; // the override applied to the live game
 const assistOverrideFor = () => setupMode === "off" ? "off" : setupMode === "full" ? "guided" : setupRung;
+
+// --- AI lifelines: the symmetric Glassboard layer ------------------------------
+// You get assistance; so does the AI — and when it spends a lifeline to dig deep
+// for a stronger move, you SEE it. Not a secret buff: an explicit, visible game
+// event with scarcity. "Oh — you needed help there too." Both sides play glass.
+const AI_TOKENS_MAX = 3;         // lifelines the AI gets per game
+let aiTokens = AI_TOKENS_MAX;    // how many remain
+let aiLifelinePlies = [];        // plies where the AI spent one (for the post-game reveal)
 
 let selected = null;
 let legalTargets = [];
@@ -368,6 +378,7 @@ function newGame() {
   game.setAssistOverride(firstGame ? "guided" : aiAssistOverride); // the help you chose at setup
   aiGameId = newAiId(); // a fresh slot; only saved once a move is played
   aiSaved = false;
+  aiTokens = AI_TOKENS_MAX; aiLifelinePlies = []; // AI's lifelines, fresh
   mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
   selected = null;
@@ -690,6 +701,15 @@ function levelName(elo) {
   const e = parseInt(elo, 10);
   return e <= 700 ? "Beginner" : e <= 1100 ? "Casual" : e <= 1500 ? "Intermediate" : e <= 1900 ? "Club" : e <= 2300 ? "Expert" : "Master";
 }
+// The AI's lifelines, shown on its chip — spent ones dim so you can watch the
+// scarcity tick down ("it's used two, one left — push now"). Hidden for Master
+// (already at the search ceiling, so a lifeline changes nothing) and first games.
+function aiLifelinesHtml() {
+  if (firstGame || parseInt(engineEloEl.value, 10) >= 3000) return "";
+  let pips = "";
+  for (let i = 0; i < AI_TOKENS_MAX; i++) pips += `<span class="ll${i < aiTokens ? "" : " spent"}">🛟</span>`;
+  return ` <span class="ai-lifelines" title="Lifelines — the AI can dig deep for a stronger move. You'll see each one it spends.">${pips}</span>`;
+}
 function renderPlayers() {
   updateSetupSum();
   const el = document.getElementById("players");
@@ -702,7 +722,7 @@ function renderPlayers() {
   el.innerHTML =
     `<span class="pl"><span class="dot white"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span></span>` +
     `<span class="vs">·</span>` +
-    `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot black"></span> <b>🤖 ${levelName(engineEloEl.value)}</b> <span class="ai-caret">▾</span></button>` +
+    `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot black"></span> <b>🤖 ${levelName(engineEloEl.value)}</b>${aiLifelinesHtml()} <span class="ai-caret">▾</span></button>` +
     (turn ? (turn === "white"
       ? `<span class="turn you">💡 Your move</span>`
       : `<span class="turn wait">Engine…</span>`) : "");
@@ -711,6 +731,25 @@ function renderPlayers() {
     const f = document.getElementById("setupFold"); if (f) f.open = true;
     const s = document.getElementById("aiLevel"); if (s) { try { s.focus(); } catch {} }
   };
+}
+
+// A transient "moment" — personality without touching the board. Fades on its own.
+let momentTimer = null;
+function showMoment(html, kind) {
+  let el = document.getElementById("momentToast");
+  if (!el) { el = document.createElement("div"); el.id = "momentToast"; el.className = "moment-toast"; document.body.appendChild(el); }
+  el.className = "moment-toast show" + (kind ? " " + kind : "");
+  el.innerHTML = html;
+  if (momentTimer) clearTimeout(momentTimer);
+  momentTimer = setTimeout(() => { const e = document.getElementById("momentToast"); if (e) e.classList.remove("show"); }, 3800);
+}
+// The AI spent a lifeline — a visible, glass-box game event (never a secret buff).
+function aiLifelineMoment() {
+  const left = aiTokens;
+  showMoment(
+    `<span class="mo-ic">🛟</span><span class="mo-txt"><b>${levelName(engineEloEl.value)} used a lifeline</b>`
+    + `<small>It was in trouble — so it dug deep for a stronger move. ${left} lifeline${left === 1 ? "" : "s"} left.</small></span>`,
+    "ai");
 }
 
 function resign() {
@@ -777,7 +816,7 @@ function showGameOverIfNeeded() {
   res.innerHTML = (st === "checkmate" ? `<span class="over-mate">CHECKMATE</span>` : "") +
     (draw ? "Draw" : won ? "You win! 🎉" : "You lose");
   res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss");
-  rea.innerHTML = `<div class="over-how">${how}</div>` + reviewHtml() + independenceHtml() + agencySummaryHtml();
+  rea.innerHTML = `<div class="over-how">${how}</div>` + aiLifelineHtml() + reviewHtml() + independenceHtml() + agencySummaryHtml();
   if (window.gbFeedback) gbFeedback.render(document.getElementById("overFeedback"), { mode: "ai", gameId: aiGameId || "" });
   setBoardGlow(draw ? "draw" : won ? "win" : "loss"); // highlight the result on the board (which stays visible)
   ov.style.display = "grid";
@@ -808,6 +847,16 @@ function agencySummaryHtml() {
 // The ladder-down payoff: of the moves where help was on the table, how many you
 // found on your own (🧠) vs followed (🤖) — with the trend, because needing it
 // less over time is the whole point.
+// Post-game reveal of the AI's assistance — the symmetry made explicit: you both
+// played glass. How many lifelines it needed is a read on how close the game was.
+function aiLifelineHtml() {
+  if (firstGame || parseInt(engineEloEl.value, 10) >= 3000) return "";
+  const used = AI_TOKENS_MAX - aiTokens;
+  const line = used === 0
+    ? `🤖 ${levelName(engineEloEl.value)} never reached for a lifeline — it held its own all game.`
+    : `🤖 ${levelName(engineEloEl.value)} spent <b>${used}</b> of ${AI_TOKENS_MAX} lifeline${used === 1 ? "" : "s"} — moments it was in trouble and dug deep. You had it on the ropes ${used === 1 ? "once" : used + " times"}.`;
+  return `<div class="over-lifeline">${line}</div>`;
+}
 function independenceHtml() {
   const total = indepOwn + indepFollowed;
   if (total < 2) return "";
@@ -1252,9 +1301,22 @@ function engineReply() {
   busy = true;
   statusEl.textContent = "Engine thinking…";
   setTimeout(() => {
-    const uci = game.engineMoveByElo(parseInt(engineEloEl.value, 10), Math.random()); // strength by chosen AI level
+    const baseElo = parseInt(engineEloEl.value, 10);
+    // Does the AI sense trouble? bestScore is side-to-move (its own) relative, so
+    // a clearly negative read means it's worse. When it is — and it has a lifeline,
+    // and it isn't already searching at the ceiling — it spends one to dig deep
+    // (a Master-strength, best-move reply) and we show that as a visible event.
+    let usedLifeline = false;
+    if (!firstGame && aiTokens > 0 && baseElo < 3000) {
+      const sense = game.bestScore(3);
+      if (sense <= -110) { usedLifeline = true; aiTokens--; aiLifelinePlies.push(moveReview.length); }
+    }
+    const uci = usedLifeline
+      ? game.engineMoveByElo(3000, 0)                 // lifeline: deepest search, top move
+      : game.engineMoveByElo(baseElo, Math.random()); // strength by chosen AI level
     if (uci.length >= 4) lastMove = uciToSquares(uci);
     busy = false;
+    if (usedLifeline) aiLifelineMoment();
     if (!firstGame) persistAiGame(game.status() !== "ongoing");
     onPositionChanged();
     fgOn("engine");
