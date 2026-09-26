@@ -96,6 +96,7 @@ function persistAiGame(over) {
     fen: game.fen(),
     humanElo: parseInt(humanEloEl.value, 10),
     engineElo: parseInt(engineEloEl.value, 10),
+    assist: aiAssistOverride,
     created: prev ? prev.created : Date.now(),
     updated: Date.now(),
   };
@@ -120,6 +121,8 @@ async function resumeAiGame(id) {
   if (engineEloEl) engineEloEl.value = rec.engineElo;
   syncAiLevel();
   game.setRatings(rec.humanElo, rec.engineElo);
+  aiAssistOverride = rec.assist || "guided";
+  game.setAssistOverride(aiAssistOverride); // restore the chosen assistance
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
@@ -133,6 +136,28 @@ async function resumeAiGame(id) {
   if (game.status() === "ongoing" && game.sideToMove() === "black") setTimeout(engineReply, 300);
   return true;
 }
+// ---- AI-match setup: pick the opponent + how much help you want ----
+const AI_LEVELS = [
+  { elo: 700, ic: "🌱", name: "Beginner", desc: "Learning the moves" },
+  { elo: 1100, ic: "♟", name: "Casual", desc: "Plays for fun" },
+  { elo: 1500, ic: "♞", name: "Intermediate", desc: "Knows the basics" },
+  { elo: 1900, ic: "⚔", name: "Club", desc: "Solid, purposeful" },
+  { elo: 2300, ic: "★", name: "Expert", desc: "Sharp & strong" },
+  { elo: 3000, ic: "👑", name: "Master", desc: "The toughest test" },
+];
+const RUNGS = [
+  { id: "awareness", name: "Hint", desc: "Highlights threats & free material" },
+  { id: "coaching", name: "Coach", desc: "Explains threats in words" },
+  { id: "suggestion", name: "Guide", desc: "Suggests candidate moves + plans" },
+  { id: "guided", name: "Assist", desc: "Shows the single best move" },
+  { id: "autopilot", name: "Autopilot", desc: "Can play the move for you" },
+];
+let setupElo = 1500;            // chosen opponent rating
+let setupMode = "full";        // "off" | "full" | "custom"
+let setupRung = "suggestion";  // chosen rung when custom
+let aiAssistOverride = "guided"; // the override applied to the live game
+const assistOverrideFor = () => setupMode === "off" ? "off" : setupMode === "full" ? "guided" : setupRung;
+
 let selected = null;
 let legalTargets = [];
 let hanging = [];
@@ -235,6 +260,53 @@ function renderFirstGame() {
   if (skip) skip.addEventListener("click", fgExit);
 }
 
+// The pre-game setup screen: choose opponent + assistance, then start.
+function showSetup() {
+  const sc = document.getElementById("setupScreen");
+  if (!sc) { newGame(); return; }
+  const grid = document.getElementById("lvlGrid");
+  if (grid) {
+    grid.innerHTML = AI_LEVELS.map((l) =>
+      `<button class="lvl-card${l.elo === setupElo ? " on" : ""}" data-elo="${l.elo}" type="button"><span class="lc-ic">${l.ic}</span><span class="lc-name">${l.name}</span><span class="lc-desc">${l.desc}</span></button>`).join("");
+    grid.querySelectorAll(".lvl-card").forEach((c) => c.onclick = () => {
+      setupElo = +c.dataset.elo;
+      grid.querySelectorAll(".lvl-card").forEach((x) => x.classList.toggle("on", x === c));
+    });
+  }
+  const modes = document.getElementById("assistModes");
+  if (modes) modes.querySelectorAll(".amode").forEach((m) => {
+    m.classList.toggle("on", m.dataset.mode === setupMode);
+    m.onclick = () => {
+      setupMode = m.dataset.mode;
+      modes.querySelectorAll(".amode").forEach((x) => x.classList.toggle("on", x === m));
+      renderRungPicker();
+    };
+  });
+  renderRungPicker();
+  const start = document.getElementById("setupStart");
+  if (start) start.onclick = startFromSetup;
+  sc.hidden = false;
+}
+function renderRungPicker() {
+  const rp = document.getElementById("rungPicker");
+  if (!rp) return;
+  if (setupMode !== "custom") { rp.hidden = true; return; }
+  rp.hidden = false;
+  const note = (RUNGS.find((r) => r.id === setupRung) || {}).desc || "";
+  rp.innerHTML = RUNGS.map((r) => `<button class="rung${r.id === setupRung ? " on" : ""}" data-id="${r.id}" type="button">${r.name}</button>`).join("") +
+    `<span class="rung-note">${escapeHtml(note)}</span>`;
+  rp.querySelectorAll(".rung").forEach((b) => b.onclick = () => { setupRung = b.dataset.id; renderRungPicker(); });
+}
+function startFromSetup() {
+  const sc = document.getElementById("setupScreen");
+  if (sc) sc.hidden = true;
+  engineEloEl.value = setupElo;
+  syncAiLevel();
+  aiAssistOverride = assistOverrideFor();
+  firstGame = false;
+  newGame();
+}
+
 async function main() {
   await init();
   detectFirstGame();
@@ -265,7 +337,7 @@ async function main() {
     setLevelPill(game ? game.assistLevel() : "off");
     onPositionChanged();
   });
-  document.getElementById("new").addEventListener("click", () => { closeMenu(); firstGame = false; newGame(); });
+  document.getElementById("new").addEventListener("click", () => { closeMenu(); firstGame = false; showSetup(); });
   const mf = document.getElementById("movesFold");
   if (mf) mf.addEventListener("toggle", () => { if (mf.open && hintState === "pending") revealHint(); });
   const psheet = document.getElementById("pieceSheet"), pclose = document.getElementById("pieceSheetClose");
@@ -282,16 +354,18 @@ async function main() {
   if (orm) orm.addEventListener("click", () => { hideOver(); newGame(); });
   const ocl = document.getElementById("overClose");
   if (ocl) ocl.addEventListener("click", hideOver);
-  // Resume a saved game if the lobby sent us here with ?g=<id>; else start fresh.
+  // Resume a saved game if the lobby sent us here with ?g=<id>; a total beginner
+  // goes straight into the guided first game; otherwise show the match setup.
   const gid = new URLSearchParams(location.search).get("g");
   if (gid && !firstGame && await resumeAiGame(gid)) return;
-  newGame();
+  if (firstGame) newGame(); else showSetup();
 }
 const hideOver = () => { const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; };
 
 function newGame() {
   game = new Game();
   game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
+  game.setAssistOverride(firstGame ? "guided" : aiAssistOverride); // the help you chose at setup
   aiGameId = newAiId(); // a fresh slot; only saved once a move is played
   aiSaved = false;
   mateKingSq = -1;

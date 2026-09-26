@@ -8,6 +8,30 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
+    <!-- Pre-game setup: lock in the opponent and how much help you want. -->
+    <div id="setupScreen" class="setup-screen" hidden>
+      <div class="setup-card">
+        <div class="setup-head">
+          <span class="setup-eyebrow">Play the AI</span>
+          <h2 class="setup-title">Set up your match</h2>
+          <p class="setup-sub">Choose who you're up against — and how much help you want in your corner.</p>
+        </div>
+        <div class="setup-section">
+          <div class="setup-label">Opponent</div>
+          <div class="lvl-grid" id="lvlGrid"></div>
+        </div>
+        <div class="setup-section">
+          <div class="setup-label">Your assistance</div>
+          <div class="assist-modes" id="assistModes">
+            <button class="amode" data-mode="off" type="button"><span class="am-ic">🚫</span><span class="am-txt"><b>No help</b><small>Pure chess — just you and the board.</small></span></button>
+            <button class="amode" data-mode="full" type="button"><span class="am-ic">♾️</span><span class="am-txt"><b>Full help</b><small>Threats, plans &amp; the best move. Learn as you play.</small></span></button>
+            <button class="amode" data-mode="custom" type="button"><span class="am-ic">🎚️</span><span class="am-txt"><b>Choose level</b><small>Pick exactly how much.</small></span></button>
+          </div>
+          <div class="rung-picker" id="rungPicker" hidden></div>
+        </div>
+        <button class="setup-start" id="setupStart" type="button">Start match →</button>
+      </div>
+    </div>
     <main class="game">
       <!-- Game Mode: one slim glanceable bar. Board owns the rest of the space. -->
       <div class="gamebar">
