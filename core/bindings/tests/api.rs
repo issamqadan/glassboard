@@ -60,5 +60,6 @@ fn assist_and_glassbox_expose_help() {
 
     let glass = g.glassbox();
     assert!(glass.starts_with('['), "glassbox is a JSON array: {glass}");
-    assert!(glass.contains("Guided"), "glassbox records the help: {glass}");
+    // Guided-level help logs an "Assist: recommended …" summary (public label).
+    assert!(glass.contains("recommended"), "glassbox records the help: {glass}");
 }
