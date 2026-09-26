@@ -549,102 +549,37 @@ mod tests {
     #[test]
     #[ignore]
     fn selfplay_diag() {
-        fn mat(b: &Board) -> i32 {
-            let mut s = 0;
-            for sq in 0..64u8 {
-                if let Some(p) = b.squares[sq as usize] {
-                    if p.kind == PieceKind::King { continue; }
-                    let v = material(p.kind);
-                    s += if p.color == Color::White { v } else { -v };
-                }
-            }
-            s
-        }
-        fn play(white_safe: bool, plies: u32) -> (i32, String, u32) {
+        // HANDICAP TEST — the exit criterion: does FOLLOWING THE ASSISTANCE (White,
+        // playing analyze().best at depth `dw`) beat the opponent (Black, search at
+        // depth `db`)? Reports avg final material + win/loss over several openings.
+        fn hgame(first: &str, dw: u32, db: u32, plies: u32) -> i32 {
             let mut b = Board::startpos();
-            for ply in 0..plies {
-                if generate_legal(&b).is_empty() {
-                    let res = if in_check(&b) { format!("{:?} wins", b.side.opp()) } else { "draw".into() };
-                    return (mat(&b), res, ply);
-                }
-                let m = if b.side == Color::White && white_safe {
-                    analyze(&b, AssistLevel::Guided, 3).best.expect("best").mv
-                } else {
-                    search(&b, 3).best.expect("move")
-                };
-                b.make_move(m);
-            }
-            (mat(&b), "ongoing".into(), plies)
-        }
-        // Average over several fixed openings so one noisy line doesn't mislead.
-        // White follows the recommendation (or raw search); Black is raw search.
-        // White strategy: 0 = engine recommendation, 1 = raw search, 2 = follow the top plan.
-        fn top_plan_move(b: &Board) -> Move {
-            let ranked = rank_moves(b, 3);
-            let sr = crate::strategy::strategize(b, &ranked);
-            let uci = sr.strategies.first().map(|s| s.move_uci.clone());
-            match uci {
-                Some(u) => generate_legal(b).into_iter().find(|m| to_uci(*m) == u).unwrap_or(ranked[0].0),
-                None => ranked[0].0,
-            }
-        }
-        fn from_opening(first: &str, mode: u8, plies: u32) -> i32 {
-            let mut b = Board::startpos();
-            if let Some(m) = generate_legal(&b).into_iter().find(|m| to_uci(*m) == first) {
-                b.make_move(m);
-            }
+            if let Some(m) = generate_legal(&b).into_iter().find(|m| to_uci(*m) == first) { b.make_move(m); }
             for _ in 0..plies {
                 if generate_legal(&b).is_empty() {
-                    return if in_check(&b) { if b.side == Color::White { -99 } else { 99 } } else { 0 };
+                    return if in_check(&b) { if b.side == Color::White { -1000 } else { 1000 } } else { 0 };
                 }
                 let m = if b.side == Color::White {
-                    match mode {
-                        0 => analyze(&b, AssistLevel::Guided, 3).best.expect("best").mv,
-                        2 => top_plan_move(&b),
-                        _ => search(&b, 3).best.expect("move"),
-                    }
+                    analyze(&b, AssistLevel::Guided, dw).best.expect("best").mv
                 } else {
-                    search(&b, 3).best.expect("move")
+                    search(&b, db).best.expect("m")
                 };
                 b.make_move(m);
             }
-            mat(&b) / 100
+            let mut s = 0;
+            for sq in 0..64u8 { if let Some(p) = b.squares[sq as usize] { if p.kind != PieceKind::King {
+                s += if p.color == Color::White { material(p.kind) } else { -material(p.kind) }; } } }
+            s / 100
         }
-        let _ = from_opening; // (kept for ad-hoc material checks)
-        // The real measure of plan move quality: in EACH position, how far below
-        // the best move is the top plan's recommendation? (Same position → no
-        // divergent-game noise.) Flags the worst offender plan.
-        let openings = ["e2e4", "d2d4", "g1f3", "c2c4"];
-        let (mut sum_def, mut cnt, mut worst, mut worst_id) = (0i64, 0i64, 0i32, String::new());
-        let mut over100 = 0;
-        for op in openings {
-            let mut b = Board::startpos();
-            if let Some(m) = generate_legal(&b).into_iter().find(|m| to_uci(*m) == op) { b.make_move(m); }
-            for _ in 0..60 {
-                if generate_legal(&b).is_empty() { break; }
-                if b.side == Color::White {
-                    let ranked = rank_moves(&b, 3);
-                    let top = ranked[0].1;
-                    let sr = crate::strategy::strategize(&b, &ranked);
-                    if let Some(s) = sr.strategies.first() {
-                        let ms = generate_legal(&b).into_iter()
-                            .find(|m| to_uci(*m) == s.move_uci)
-                            .and_then(|m| ranked.iter().find(|(rm, _)| *rm == m).map(|(_, sc)| *sc));
-                        if let Some(sc) = ms {
-                            let def = top - sc;
-                            sum_def += def as i64; cnt += 1;
-                            if def > 100 { over100 += 1; }
-                            if def > worst { worst = def; worst_id = s.id.to_string(); }
-                        }
-                    }
-                    b.make_move(ranked[0].0);
-                } else {
-                    b.make_move(search(&b, 3).best.expect("m"));
-                }
+        let ops = ["e2e4", "d2d4", "g1f3", "c2c4", "b1c3", "e2e3"];
+        for (dw, db) in [(3u32, 2u32), (4, 3), (3, 3), (4, 4)] {
+            let (mut sum, mut w, mut l) = (0i32, 0, 0);
+            for op in ops {
+                let m = hgame(op, dw, db, 90);
+                sum += m; if m >= 500 { w += 1; } else if m <= -500 { l += 1; }
             }
+            println!("HANDICAP follow-assist(d{dw}) vs opp(d{db}): avg material {:+} | wins {w}/{} losses {l}", sum / ops.len() as i32, ops.len());
         }
-        println!("\nTOP-PLAN move deficit vs best: avg {}cp over {} moves | {} moves >100cp | worst {}cp ({})",
-            sum_def / cnt.max(1), cnt, over100, worst, worst_id);
     }
 
     /// A defended piece attacked only by something at least as valuable is safe.

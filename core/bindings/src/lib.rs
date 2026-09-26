@@ -432,13 +432,17 @@ impl Default for Game {
 /// aspirational; the point is a clear, monotonic difficulty curve (P4 will
 /// calibrate real strength).
 fn strength_for_elo(elo: i32) -> (u32, i32) {
+    // The opponent is capped at depth 3 so the ASSISTANCE (a notch deeper, up to
+    // depth 4) always out-searches it — that's what makes "follow the help → win"
+    // true at every level. Levels differ by depth AND move-variety spread: lower =
+    // shallower + more slips, higher = tighter + best-move.
     match elo {
         i if i <= 700 => (1, 250),   // Beginner — very shallow, lots of slips
         i if i <= 1100 => (2, 140),  // Casual
-        i if i <= 1500 => (2, 60),   // Intermediate
-        i if i <= 1900 => (3, 30),   // Club
-        i if i <= 2300 => (3, 10),   // Expert
-        _ => (4, 0),                 // Master — deepest, always the best move
+        i if i <= 1500 => (2, 70),   // Intermediate
+        i if i <= 1900 => (3, 45),   // Club
+        i if i <= 2300 => (3, 18),   // Expert
+        _ => (3, 0),                 // Master — always the best move, but depth 3
     }
 }
 

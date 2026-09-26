@@ -9,7 +9,7 @@ import init, { Game } from "./pkg/glassboard_wasm.js";
 // ︎ forces text-style (not emoji) glyphs so colors render on mobile.
 const GLYPH = { p: "♟︎", n: "♞︎", b: "♝︎", r: "♜︎", q: "♛︎", k: "♚︎" };
 const FILES = "abcdefgh";
-const DEPTH = 3;
+const DEPTH = 4; // strong, consistent with Play-AI's assist — the help is a real edge
 const RUNGS = [
   [100, "Off", "an even match — no assistance"],
   [300, "Hint", "safety signals — hanging pieces & checks"],
