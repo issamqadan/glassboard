@@ -159,14 +159,29 @@ async function resumeAiGame(id) {
   return true;
 }
 // ---- AI-match setup: pick the opponent + how much help you want ----
+// `rating` is an APPROXIMATE (≈) engine-grade estimate — Stockfish 11 limits
+// strength by Skill Level (0-20; this build has no dev-calibrated UCI_Elo), plus a
+// depth/movetime cap on the low rungs. Honest ballpark, not an official Elo.
 const AI_LEVELS = [
-  { elo: 700, ic: "🌱", name: "Beginner", desc: "Learning the moves" },
-  { elo: 1100, ic: "♟", name: "Casual", desc: "Plays for fun" },
-  { elo: 1500, ic: "♞", name: "Intermediate", desc: "Knows the basics" },
-  { elo: 1900, ic: "⚔", name: "Club", desc: "Solid, purposeful" },
-  { elo: 2300, ic: "★", name: "Expert", desc: "Sharp & strong" },
-  { elo: 3000, ic: "👑", name: "Master", desc: "The toughest test" },
+  { elo: 700, ic: "🌱", name: "Beginner", desc: "Learning the moves", rating: "≈900", skill: 0, depth: 1 },
+  { elo: 1100, ic: "♟", name: "Casual", desc: "Plays for fun", rating: "≈1200", skill: 2, depth: 3 },
+  { elo: 1500, ic: "♞", name: "Intermediate", desc: "Knows the basics", rating: "≈1500", skill: 5, movetime: 150 },
+  { elo: 1900, ic: "⚔", name: "Club", desc: "Solid, purposeful", rating: "≈1800", skill: 9, movetime: 250 },
+  { elo: 2300, ic: "★", name: "Expert", desc: "Sharp & strong", rating: "≈2100", skill: 14, movetime: 500 },
+  { elo: 3000, ic: "👑", name: "Master", desc: "The toughest test", rating: "≈2500+", skill: 20, movetime: 800 },
 ];
+// Stockfish parameters (and the ≈rating) for an engine rating from the ladder.
+function sfLevelFor(elo) { return AI_LEVELS.reduce((a, l) => (elo <= l.elo && !a ? l : a), null) || AI_LEVELS[AI_LEVELS.length - 1]; }
+function ratingFor(elo) { return sfLevelFor(elo).rating; }
+// The opponent's move: Stockfish (accurate levels) with a Rust-core fallback if it
+// isn't available. A lifeline makes the AI "dig deep" → full-strength Skill 20.
+function opponentMove(fen, usedLifeline, baseElo) {
+  const rustFallback = () => askEngine("bestMove", { fen, elo: usedLifeline ? 3000 : baseElo, rand: usedLifeline ? 0 : Math.random() });
+  if (firstGame || !window.GBEngine) return rustFallback();
+  const lvl = sfLevelFor(baseElo);
+  const opts = usedLifeline ? { skill: 20, movetime: 900 } : { skill: lvl.skill, movetime: lvl.movetime, depth: lvl.depth };
+  return GBEngine.bestMove(fen, opts).then((u) => u || rustFallback()).catch(rustFallback);
+}
 const RUNGS = [
   { id: "awareness", name: "Hint", desc: "Highlights threats & free material" },
   { id: "coaching", name: "Coach", desc: "Explains threats in words" },
@@ -342,7 +357,7 @@ function showSetup() {
   const grid = document.getElementById("lvlGrid");
   if (grid) {
     grid.innerHTML = AI_LEVELS.map((l) =>
-      `<button class="lvl-card${l.elo === setupElo ? " on" : ""}" data-elo="${l.elo}" type="button"><span class="lc-ic">${l.ic}</span><span class="lc-name">${l.name}</span><span class="lc-desc">${l.desc}</span></button>`).join("");
+      `<button class="lvl-card${l.elo === setupElo ? " on" : ""}" data-elo="${l.elo}" type="button"><span class="lc-ic">${l.ic}</span><span class="lc-name">${l.name}</span><span class="lc-rating">${l.rating}</span><span class="lc-desc">${l.desc}</span></button>`).join("");
     grid.querySelectorAll(".lvl-card").forEach((c) => c.onclick = () => {
       setupElo = +c.dataset.elo;
       grid.querySelectorAll(".lvl-card").forEach((x) => x.classList.toggle("on", x === c));
@@ -461,6 +476,7 @@ function syncEngine(op, args) {
 async function main() {
   await init();
   initEngineWorker();
+  if (window.GBEngine) GBEngine.init().catch(() => {}); // warm up Stockfish in the background
   detectFirstGame();
   const nh = document.getElementById("newHereLink");
   if (nh) nh.hidden = firstGame; // hidden while the guided game is running
@@ -546,6 +562,7 @@ function newGame() {
   animMoveKey = null;
   hideOver();
   if (window.GBTheme) GBTheme.setContext(aiGameId); // this game's own board
+  if (window.GBEngine) GBEngine.newGame(); // reset the opponent engine's state
   setLevelPill(game.assistLevel());
   onPositionChanged();
   startClock();
@@ -943,7 +960,7 @@ function renderPlayers() {
   el.innerHTML =
     `<span class="pl"><span class="dot ${humanColor}"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span></span>` +
     `<span class="vs">·</span>` +
-    `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot ${engineColor()}"></span> <b>🤖 ${levelName(engineEloEl.value)}</b> <span class="ai-caret">▾</span></button>` +
+    `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot ${engineColor()}"></span> <b>🤖 ${levelName(engineEloEl.value)}</b> <span class="ai-rating">${ratingFor(engineEloEl.value)}</span> <span class="ai-caret">▾</span></button>` +
     (turn ? (turn === humanColor
       ? `<span class="turn you">💡 Your move</span>`
       : `<span class="turn wait">Engine…</span>`) : "");
@@ -1800,7 +1817,7 @@ function engineReply() {
     }
   }
   const fenBefore = game.fen(); // guard: drop the reply if the game moved on / reset
-  askEngine("bestMove", { fen: fenBefore, elo: usedLifeline ? 3000 : baseElo, rand: usedLifeline ? 0 : Math.random() })
+  opponentMove(fenBefore, usedLifeline, baseElo)
     .then((uci) => {
       // Stale/aborted (new game, resume, resign) — the position isn't the one we sent.
       if (flagged || game.fen() !== fenBefore || game.status() !== "ongoing" || game.sideToMove() !== engineColor()) { busy = false; return; }
