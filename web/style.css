@@ -874,6 +874,17 @@ main.game .board-wrap.glow-draw { box-shadow: 0 0 0 2px rgba(147,162,192,.5), 0 
 .amode .am-txt b { color: #eaf0fb; font-size: 0.96rem; }
 .amode .am-txt small { color: #8ea0b8; font-size: 0.78rem; line-height: 1.3; }
 .amode.on { border-color: #7ee0d6; background: linear-gradient(140deg, rgba(126,224,214,0.16), rgba(92,201,236,0.06)); box-shadow: 0 0 0 1px rgba(126,224,214,0.5), 0 10px 30px -14px rgba(126,224,214,0.5); }
+/* Colour picker — which side you play. */
+.color-choice { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.cchoice { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 12px 8px; border-radius: 14px;
+  cursor: pointer; text-align: center; border: 1px solid var(--line, #1d2740); background: rgba(255,255,255,0.03);
+  color: #dbe4f0; transition: transform .12s, border-color .12s, background .12s; }
+.cchoice:hover { transform: translateY(-2px); border-color: #3a5980; }
+.cchoice .cc-ic { font-size: 1.7rem; line-height: 1; }
+.cchoice b { color: #eaf0fb; font-size: 0.92rem; }
+.cchoice small { color: #8ea0b8; font-size: 0.72rem; line-height: 1.2; }
+.cchoice.on { border-color: #7ee0d6; background: linear-gradient(140deg, rgba(126,224,214,0.16), rgba(92,201,236,0.06)); box-shadow: 0 0 0 1px rgba(126,224,214,0.5), 0 10px 30px -14px rgba(126,224,214,0.5); }
+
 .rung-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 12px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--line, #1d2740); }
 .rung-picker .rung { padding: 8px 13px; border-radius: 999px; cursor: pointer; font-size: 0.85rem; font-weight: 640;
   border: 1px solid var(--line-2, #2b3856); background: rgba(255,255,255,0.03); color: #cdd8e8; }

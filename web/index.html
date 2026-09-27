@@ -21,6 +21,14 @@
           <div class="lvl-grid" id="lvlGrid"></div>
         </div>
         <div class="setup-section">
+          <div class="setup-label">You play</div>
+          <div class="color-choice" id="colorChoice">
+            <button class="cchoice" data-color="white" type="button"><span class="cc-ic">♔</span><b>White</b><small>you move first</small></button>
+            <button class="cchoice" data-color="black" type="button"><span class="cc-ic">♚</span><b>Black</b><small>engine opens</small></button>
+            <button class="cchoice" data-color="random" type="button"><span class="cc-ic">🎲</span><b>Random</b><small>surprise me</small></button>
+          </div>
+        </div>
+        <div class="setup-section">
           <div class="setup-label">Your assistance</div>
           <div class="assist-modes" id="assistModes">
             <button class="amode" data-mode="off" type="button"><span class="am-ic">🚫</span><span class="am-txt"><b>No help</b><small>Pure chess — just you and the board.</small></span></button>
@@ -104,9 +112,9 @@
       </div>
 
       <p class="foot">
-        You are White. The help you get is set by the rating gap and recorded in
-        the glass-box for your opponent to see. Tap a piece, then a highlighted
-        square — or tap a suggested move.
+        You play the side you chose at setup. The help you get is set by the rating
+        gap and recorded in the glass-box for your opponent to see. Tap a piece,
+        then a highlighted square — or tap a suggested move.
       </p>
       <div id="pieceSheet" class="sheet-overlay" style="display:none">
         <div class="sheet">

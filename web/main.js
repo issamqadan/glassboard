@@ -98,6 +98,7 @@ function persistAiGame(over) {
     engineElo: parseInt(engineEloEl.value, 10),
     assist: aiAssistOverride,
     aiTokens: aiTokens,
+    humanColor: humanColor,
     created: prev ? prev.created : Date.now(),
     updated: Date.now(),
   };
@@ -124,6 +125,7 @@ async function resumeAiGame(id) {
   game.setRatings(rec.humanElo, rec.engineElo);
   aiAssistOverride = rec.assist || "guided";
   game.setAssistOverride(aiAssistOverride); // restore the chosen assistance
+  humanColor = rec.humanColor === "black" ? "black" : "white"; // restore your side + orientation
   aiTokens = typeof rec.aiTokens === "number" ? rec.aiTokens : AI_TOKENS_MAX;
   aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {};
   lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX;
@@ -137,7 +139,7 @@ async function resumeAiGame(id) {
   setLevelPill(game.assistLevel());
   onPositionChanged();
   // Resumed mid-cycle on the engine's move → let it reply.
-  if (game.status() === "ongoing" && game.sideToMove() === "black") setTimeout(engineReply, 300);
+  if (game.status() === "ongoing" && game.sideToMove() === engineColor()) setTimeout(engineReply, 300);
   return true;
 }
 // ---- AI-match setup: pick the opponent + how much help you want ----
@@ -159,8 +161,22 @@ const RUNGS = [
 let setupElo = 1500;            // chosen opponent rating
 let setupMode = "full";        // "off" | "full" | "custom"
 let setupRung = "suggestion";  // chosen rung when custom
+let setupColor = "white";      // "white" | "black" | "random" — the side YOU play
 let aiAssistOverride = "guided"; // the override applied to the live game
 const assistOverrideFor = () => setupMode === "off" ? "off" : setupMode === "full" ? "guided" : setupRung;
+
+// Which colour the human plays this game (the engine plays the other). Drives the
+// board orientation and every "your turn / your pieces" check.
+let humanColor = "white";
+const engineColor = () => (humanColor === "white" ? "black" : "white");
+const flipped = () => humanColor === "black"; // Black at the bottom when you play Black
+// A logical square (0=a1..63=h8) → its rendered {row,col} (row 0 = top of the board).
+function rc(sq) {
+  const f = sq % 8, r = Math.floor(sq / 8);
+  return flipped() ? { row: r, col: 7 - f } : { row: 7 - r, col: f };
+}
+// Does board char `c` belong to the human? (Case = colour; upper = White.)
+const isHumanPiece = (c) => c !== "." && (humanColor === "white" ? c === c.toUpperCase() : c === c.toLowerCase());
 
 // --- AI lifelines: the symmetric Glassboard layer ------------------------------
 // You get assistance; so does the AI — and when it spends a lifeline to dig deep
@@ -293,6 +309,14 @@ function showSetup() {
       grid.querySelectorAll(".lvl-card").forEach((x) => x.classList.toggle("on", x === c));
     });
   }
+  const colors = document.getElementById("colorChoice");
+  if (colors) colors.querySelectorAll(".cchoice").forEach((c) => {
+    c.classList.toggle("on", c.dataset.color === setupColor);
+    c.onclick = () => {
+      setupColor = c.dataset.color;
+      colors.querySelectorAll(".cchoice").forEach((x) => x.classList.toggle("on", x === c));
+    };
+  });
   const modes = document.getElementById("assistModes");
   if (modes) modes.querySelectorAll(".amode").forEach((m) => {
     m.classList.toggle("on", m.dataset.mode === setupMode);
@@ -323,6 +347,9 @@ function startFromSetup() {
   engineEloEl.value = setupElo;
   syncAiLevel();
   aiAssistOverride = assistOverrideFor();
+  // Resolve the side you play (random picks one now). Randomness comes from the UI,
+  // not the engine — Math.random is fine here (no reproducibility requirement).
+  humanColor = setupColor === "black" ? "black" : setupColor === "white" ? "white" : (Math.random() < 0.5 ? "white" : "black");
   firstGame = false;
   newGame();
 }
@@ -445,6 +472,8 @@ function newGame() {
   if (window.GBTheme) GBTheme.setContext(aiGameId); // this game's own board
   setLevelPill(game.assistLevel());
   onPositionChanged();
+  // You chose Black → the engine (White) makes the opening move.
+  if (game.sideToMove() === engineColor()) setTimeout(engineReply, 300);
 }
 
 // Spend from the agency budget when the player reveals deeper help.
@@ -485,7 +514,7 @@ function onPositionChanged() {
   const token = ++positionToken;
   paint(); // instant: board, players, captured, material — before any deep search
 
-  if (game.status() === "ongoing" && game.sideToMove() === "white") {
+  if (game.status() === "ongoing" && game.sideToMove() === humanColor) {
     const fen = game.fen();
     const ov = firstGame ? "guided" : aiAssistOverride;
     askEngine("analyze", { fen, depth: depth(), override: ov, humanElo: parseInt(humanEloEl.value, 10), engineElo: parseInt(engineEloEl.value, 10) })
@@ -708,7 +737,7 @@ function openStepsSheet(picked) {
 // Captured material as one tug-bar above the board (you are White → left side).
 function renderCaptured() {
   const el = document.getElementById("materialBar");
-  if (el && window.renderMaterialBar) window.renderMaterialBar(el, game.boardString(), true);
+  if (el && window.renderMaterialBar) window.renderMaterialBar(el, game.boardString(), humanColor === "white");
 }
 
 // The coach: one prominent, concrete piece of advice under the board. This is
@@ -795,10 +824,10 @@ function renderPlayers() {
   // Compact: whose-move stays on one row. The 🤖 chip shows the AI LEVEL and is
   // tappable to change it — that's where you look for "who am I playing".
   el.innerHTML =
-    `<span class="pl"><span class="dot white"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span></span>` +
+    `<span class="pl"><span class="dot ${humanColor}"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span></span>` +
     `<span class="vs">·</span>` +
-    `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot black"></span> <b>🤖 ${levelName(engineEloEl.value)}</b> <span class="ai-caret">▾</span></button>` +
-    (turn ? (turn === "white"
+    `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot ${engineColor()}"></span> <b>🤖 ${levelName(engineEloEl.value)}</b> <span class="ai-caret">▾</span></button>` +
+    (turn ? (turn === humanColor
       ? `<span class="turn you">💡 Your move</span>`
       : `<span class="turn wait">Engine…</span>`) : "");
   const ac = document.getElementById("aiChip");
@@ -929,11 +958,11 @@ function showGameOverIfNeeded() {
   if (rb) rb.hidden = over;
   if (!over) { ov.style.display = "none"; mateKingSq = -1; return; }
   let winner = "", reason = "";
-  if (resigned) { winner = "black"; reason = "resignation"; }        // you (White) resigned
+  if (resigned) { winner = engineColor(); reason = "resignation"; } // you resigned → the engine wins
   else if (st === "checkmate") { winner = game.sideToMove() === "white" ? "black" : "white"; reason = "checkmate"; }
   else if (st === "stalemate") { reason = "stalemate"; }
   else if (st === "fifty-move") { reason = "fifty-move rule"; }
-  const draw = winner === "", won = winner === "white";
+  const draw = winner === "", won = winner === humanColor;
   const res = document.getElementById("overResult"), rea = document.getElementById("overReason");
 
   let how = "";
@@ -1046,7 +1075,7 @@ const STRAT_ICON = { save_piece: "🛡", win_material: "⚔", develop: "♞", ce
 const STRAT_COLOR = { save_piece: "#f2b03a", win_material: "#f2707e", develop: "#5cc9ec", center: "#7ee0d6", attack_king: "#f2707e", simplify: "#e0be79", passer: "#5cc9ec", iso_attack: "#f2707e", open_file: "#7ee0d6", pawn_storm: "#f2707e", fianchetto: "#e0be79", outpost: "#7ee0d6", rook_seventh: "#f2707e", improve: "#9fc0ff", pawn_break: "#e0be79" };
 const PLAN_COLOR = { dev: "#5cc9ec", attack: "#f2707e", support: "#7ee0d6", castle: "#e0be79" };
 let pickedStrategyId = null;
-const planCxy = (sq) => ({ x: ((sq % 8) + 0.5) * 100, y: ((7 - Math.floor(sq / 8)) + 0.5) * 100 }); // White at bottom
+const planCxy = (sq) => { const p = rc(sq); return { x: (p.col + 0.5) * 100, y: (p.row + 0.5) * 100 }; }; // orientation-aware
 function uciSquares(u) {
   if (!u || u.length < 4) return null;
   return { from: (u.charCodeAt(0) - 97) + (u.charCodeAt(1) - 49) * 8, to: (u.charCodeAt(2) - 97) + (u.charCodeAt(3) - 49) * 8 };
@@ -1140,15 +1169,19 @@ function renderBoard() {
   const s = game.boardString();
   const chkKing = (game.status() === "ongoing" && game.inCheck()) ? (game.sideToMove() === "white" ? "K" : "k") : null;
   boardEl.innerHTML = "";
-  for (let rank = 7; rank >= 0; rank--) {
-    for (let file = 0; file < 8; file++) {
+  // Render top→bottom, left→right in the VIEWER's orientation. When you play Black
+  // the board flips (Black at the bottom) so your pieces face you.
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const rank = flipped() ? row : 7 - row;
+      const file = flipped() ? 7 - col : col;
       const i = idx(file, rank);
       const sq = document.createElement("div");
       sq.className = "sq " + ((file + rank) % 2 === 1 ? "light" : "dark");
       sq.dataset.sq = i;
       if (i === mateKingSq) sq.classList.add("mate");
       if (chkKing && s[i] === chkKing) sq.classList.add("check");
-      if (assistData && assistData.mateThreat && !assistData.inCheck && s[i] === "K") sq.classList.add("king-danger");
+      if (assistData && assistData.mateThreat && !assistData.inCheck && s[i] === (humanColor === "white" ? "K" : "k")) sq.classList.add("king-danger");
       if (selected === i) sq.classList.add("selected");
       if (legalTargets.includes(i)) { sq.classList.add("target"); if (s[i] !== ".") sq.classList.add("capture"); }
       if (threatSquares.includes(i)) sq.classList.add("threat");
@@ -1160,9 +1193,9 @@ function renderBoard() {
         if (lastMoveLifeline) sq.classList.add("lifeline-move"); // the AI's assisted move, marked on the board
       }
 
-      // Coordinate labels on the edge squares.
-      if (rank === 0) sq.appendChild(coord("file", FILES[file]));
-      if (file === 0) sq.appendChild(coord("rank", String(rank + 1)));
+      // Coordinate labels on the edge squares (bottom row = files, left col = ranks).
+      if (row === 7) sq.appendChild(coord("file", FILES[file]));
+      if (col === 0) sq.appendChild(coord("rank", String(rank + 1)));
 
       const c = s[i];
       if (c !== ".") {
@@ -1194,15 +1227,16 @@ function animateLastMove() {
   const key = lastMove.from + "-" + lastMove.to;
   if (key === animMoveKey) return;
   animMoveKey = key;
-  const rIdx = (sq) => (7 - Math.floor(sq / 8)) * 8 + (sq % 8); // square → rendered cell index
+  const rIdx = (sq) => { const p = rc(sq); return p.row * 8 + p.col; }; // square → rendered cell (orientation-aware)
   const toEl = boardEl.children[rIdx(lastMove.to)];
   const piece = toEl && toEl.querySelector(".piece");
   if (!piece) return;
   if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const cell = toEl.getBoundingClientRect().width || 0;
   if (!cell) return;
-  const dCol = (lastMove.from % 8) - (lastMove.to % 8);
-  const dRow = (7 - Math.floor(lastMove.from / 8)) - (7 - Math.floor(lastMove.to / 8));
+  const from = rc(lastMove.from), to = rc(lastMove.to);
+  const dCol = from.col - to.col; // start offset in rendered space, then glide to 0
+  const dRow = from.row - to.row;
   piece.classList.add("moving");
   piece.style.transition = "none";
   piece.style.transform = `translate(${dCol * cell}px, ${dRow * cell}px)`;
@@ -1324,11 +1358,11 @@ function renderGlass() {
 }
 
 function onSquareClick(i) {
-  if (busy || game.status() !== "ongoing" || game.sideToMove() !== "white") return;
+  if (busy || game.status() !== "ongoing" || game.sideToMove() !== humanColor) return;
   const c = game.boardString()[i];
 
   if (selected === null) {
-    if (isWhitePiece(c)) selectSquare(i);
+    if (isHumanPiece(c)) selectSquare(i);
     return;
   }
   if (i === selected) {
@@ -1339,7 +1373,7 @@ function onSquareClick(i) {
     playMove(selected, i);
     return;
   }
-  if (isWhitePiece(c)) selectSquare(i);
+  if (isHumanPiece(c)) selectSquare(i);
   else clearSelection();
 }
 
@@ -1461,9 +1495,11 @@ function showPromotion(from, to) {
   const ov = document.getElementById("promoOverlay");
   if (!ov) { doPlay(from, to, "q"); return; }
   const choices = ov.querySelector(".promo-choices");
+  const white = humanColor === "white";
   choices.innerHTML = ["q", "r", "b", "n"].map((p) => {
-    const g = typeof pieceSVG === "function" ? pieceSVG(p.toUpperCase()) : p.toUpperCase();
-    return `<button class="promo-pick" data-p="${p}"><span class="piece white">${g}</span></button>`;
+    const glyphChar = white ? p.toUpperCase() : p;
+    const g = typeof pieceSVG === "function" ? pieceSVG(glyphChar) : glyphChar;
+    return `<button class="promo-pick" data-p="${p}"><span class="piece ${white ? "white" : "black"}">${g}</span></button>`;
   }).join("");
   choices.querySelectorAll(".promo-pick").forEach((b) => { b.onclick = () => { ov.style.display = "none"; doPlay(from, to, b.dataset.p); }; });
   ov.style.display = "grid";
@@ -1494,7 +1530,7 @@ function engineReply() {
   askEngine("bestMove", { fen: fenBefore, elo: usedLifeline ? 3000 : baseElo, rand: usedLifeline ? 0 : Math.random() })
     .then((uci) => {
       // Stale/aborted (new game, resume, resign) — the position isn't the one we sent.
-      if (game.fen() !== fenBefore || game.status() !== "ongoing" || game.sideToMove() !== "black") { busy = false; return; }
+      if (game.fen() !== fenBefore || game.status() !== "ongoing" || game.sideToMove() !== engineColor()) { busy = false; return; }
       if (uci && uci.length >= 4) {
         const sq = uciToSquares(uci);
         game.makeMove(sq.from, sq.to, uci.length > 4 ? uci[4] : undefined);
