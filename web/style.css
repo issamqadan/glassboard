@@ -874,6 +874,23 @@ main.game .board-wrap.glow-draw { box-shadow: 0 0 0 2px rgba(147,162,192,.5), 0 
 .amode .am-txt b { color: #eaf0fb; font-size: 0.96rem; }
 .amode .am-txt small { color: #8ea0b8; font-size: 0.78rem; line-height: 1.3; }
 .amode.on { border-color: #7ee0d6; background: linear-gradient(140deg, rgba(126,224,214,0.16), rgba(92,201,236,0.06)); box-shadow: 0 0 0 1px rgba(126,224,214,0.5), 0 10px 30px -14px rgba(126,224,214,0.5); }
+/* Opening book line — names the professional strategy in play (both sides). */
+.opening-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin: 0 0 8px; padding: 8px 12px; border-radius: 10px;
+  background: rgba(147,162,192,0.08); border: 1px solid rgba(147,162,192,0.2); }
+.opening-line .ol-ic { font-size: 1rem; }
+.opening-line .ol-name { font-weight: 700; color: #e7eef8; font-size: 0.9rem; }
+.opening-line .ol-eco { font-size: 0.68rem; font-weight: 700; color: #8ea0b8; letter-spacing: 0.06em;
+  padding: 1px 6px; border-radius: 999px; background: rgba(147,162,192,0.16); }
+.opening-line .ol-idea { flex: 1 1 100%; font-size: 0.78rem; color: #9fb0c8; line-height: 1.4; }
+
+/* Symmetric-assistance panel extras: opponent's opening + itemised help log. */
+.ai-assist .al-open { font-size: 0.8rem; color: #c9d4e6; margin: 2px 0 8px; line-height: 1.4; }
+.ai-assist .al-open b { color: #e7eef8; }
+.ai-assist .al-who-sm { color: #93a3bc; font-weight: 700; font-size: 0.72rem; }
+.ai-assist .al-empty { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08);
+  font-size: 0.76rem; color: #8a9ab2; font-style: italic; line-height: 1.4; }
+
 /* Ask-for-help button (On Call / Gentleman's Game) — shown instead of the move. */
 .ask-help { display: block; width: 100%; padding: 12px 14px; border-radius: 12px; cursor: pointer;
   font: inherit; font-weight: 700; font-size: 0.95rem; color: #06202b; text-align: center;

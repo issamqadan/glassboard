@@ -139,8 +139,8 @@ async function resumeAiGame(id) {
   flagged = false; flagLoser = "";
   aiTokens = typeof rec.aiTokens === "number" ? rec.aiTokens : AI_TOKENS_MAX;
   aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {};
-  lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX;
-  history = [];
+  lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX; playerHelpLog = [];
+  history = []; uciHistory = []; // resumed from a FEN — opening history can't be reconstructed
   helpDelivery = rec.helpDelivery || "open";
   helpReceived = typeof rec.helpReceived === "number" ? rec.helpReceived : 0;
   helpRevealed = helpDelivery === "open"; helpRequestPending = false;
@@ -210,6 +210,7 @@ let momentSeen = {};             // one-shot guards for personality moments this
 const PLAYER_TOKENS_MAX = 3;
 let playerFollows = 0;           // how many times you've played the suggested move
 let playerTokens = PLAYER_TOKENS_MAX;
+let playerHelpLog = [];          // [{move, note}] — YOUR help events, shown in the glass panel
 
 let selected = null;
 let legalTargets = [];
@@ -239,6 +240,9 @@ let helpWasAvailable = false; // was move-level help on the table at all this ga
 // Takeback history: a snapshot captured just before each of YOUR moves, so Undo
 // rolls back your move AND the engine's reply, restoring the counters too.
 let history = [];
+// UCI move list (both sides), from the start of the game — used to name the opening
+// via the strategy catalog. Only meaningful for games played from move 1 this session.
+let uciHistory = [];
 // Chess clock (optional). Each side's remaining ms ticks down on its turn; the
 // engine's think-time counts against its own clock. Running out = loss on time.
 let timedGame = false, humanMs = 0, engineMs = 0;
@@ -521,8 +525,8 @@ function newGame() {
   aiGameId = newAiId(); // a fresh slot; only saved once a move is played
   aiSaved = false;
   aiTokens = AI_TOKENS_MAX; aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {}; // fresh
-  lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX;
-  history = [];
+  lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX; playerHelpLog = [];
+  history = []; uciHistory = [];
   if (firstGame) helpDelivery = "open"; // the guided game always shows help
   helpReceived = 0; helpRevealed = helpDelivery === "open"; helpRequestPending = false;
   // Clock: from the chosen time control (kept across rematches). Untimed if 0.
@@ -762,6 +766,7 @@ function paint() {
   renderStrategy();
   renderPlanDock();
   renderCaptured();
+  renderOpening();
   renderClocks();
   renderGlass();
   renderStatus();
@@ -825,6 +830,25 @@ function openStepsSheet(picked) {
   if (pa) pa.onclick = () => { const sh = document.getElementById("stepsSheet"); if (sh) sh.style.display = "none"; askForHelp(); };
   const sh = document.getElementById("stepsSheet");
   if (sh) sh.style.display = "grid";
+}
+
+// Name the opening in play (from the strategy catalog) and show its professional
+// plan — this is the "real named strategies" surface, and it names what BOTH sides
+// (including the opponent) are playing. Hidden if off-book or resumed mid-game.
+function currentOpening() {
+  return (window.GBStrategies && !firstGame) ? GBStrategies.identify(uciHistory) : null;
+}
+function renderOpening() {
+  const el = document.getElementById("openingLine");
+  if (!el) return;
+  const op = currentOpening();
+  if (!op) { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  el.innerHTML =
+    `<span class="ol-ic">📖</span>` +
+    `<span class="ol-name">${escapeHtml(op.name)}</span>` +
+    (op.eco ? `<span class="ol-eco">${escapeHtml(op.eco)}</span>` : "") +
+    `<span class="ol-idea">${escapeHtml(op.idea)}</span>`;
 }
 
 // Captured material as one tug-bar above the board (you are White → left side).
@@ -941,8 +965,9 @@ function pipRow(left, max) {
 function renderAiAssist() {
   const el = document.getElementById("aiAssist");
   if (!el) return;
-  if (firstGame || parseInt(engineEloEl.value, 10) >= 3000) { el.hidden = true; el.innerHTML = ""; return; }
+  if (firstGame) { el.hidden = true; el.innerHTML = ""; return; }
   el.hidden = false;
+  const isMaster = parseInt(engineEloEl.value, 10) >= 3000; // Master plays at full depth, no lifelines
   const noHelp = aiAssistOverride === "off";
   // Your row: lifelines you cash in by following the suggested move. No-help mode
   // = pure chess (no pips). Otherwise show how many "follows" you have in hand.
@@ -952,14 +977,23 @@ function renderAiAssist() {
   const youNote = noHelp ? "you chose no assistance"
     : playerFollows === 0 ? "playing on your own so far"
     : `you've followed the help ${playerFollows}×`;
-  const aiPips = pipRow(aiTokens, AI_TOKENS_MAX);
   const aiUsed = AI_TOKENS_MAX - aiTokens;
-  const aiNote = aiUsed === 0 ? "hasn't needed help yet" : `dug deep ${aiUsed}×`;
-  const log = aiLifelineLog.length
-    ? `<ul class="al-log">` + aiLifelineLog.map((e) => `<li><span class="al-mv">move ${e.move}</span> <b>${e.tag}</b> — ${e.note}</li>`).join("") + `</ul>`
-    : "";
+  const aiPips = isMaster ? `<span class="al-nohelp">no lifelines</span>` : pipRow(aiTokens, AI_TOKENS_MAX);
+  const aiNote = isMaster ? "full strength — plays unaided"
+    : aiUsed === 0 ? "hasn't needed help yet" : `dug deep ${aiUsed}×`;
+  // The opponent's strategy — the opening/plan it's playing (glass, both sides see it).
+  const op = currentOpening();
+  const openLine = op ? `<div class="al-open">📖 <b>${escapeHtml(op.name)}</b> — the line you're both in.</div>` : "";
+  // Full glass: itemise EVERY help event — yours and the AI's — not just a count.
+  const events = playerHelpLog.map((e) => ({ mv: e.move, who: "🧑 You", txt: e.note }))
+    .concat(aiLifelineLog.map((e) => ({ mv: e.move, who: "🤖 " + levelName(engineEloEl.value), txt: `<b>${e.tag}</b> — ${e.note}` })))
+    .sort((a, b) => a.mv - b.mv);
+  const log = events.length
+    ? `<ul class="al-log">` + events.map((e) => `<li><span class="al-mv">move ${e.mv}</span> <span class="al-who-sm">${e.who}</span> ${e.txt}</li>`).join("") + `</ul>`
+    : `<div class="al-empty">No help taken yet — every time either side takes help, it lands here, in the open.</div>`;
   el.innerHTML =
     `<div class="al-title">🔎 Assistance — in the open</div>` +
+    openLine +
     `<div class="al-side"><span class="al-who">🧑 You</span><span class="al-pips">${youPips}</span><span class="al-side-note">${youNote}</span></div>` +
     `<div class="al-side"><span class="al-who">🤖 ${levelName(engineEloEl.value)}</span><span class="al-pips" title="Lifelines left">${aiPips}</span><span class="al-side-note">${aiNote}</span></div>` +
     log;
@@ -1072,6 +1106,7 @@ function askForHelp() {
   if (helpRevealed || game.sideToMove() !== humanColor || game.status() !== "ongoing") return;
   if (helpDelivery === "gentleman") { requestHelpFromOpponent(); return; }
   helpRevealed = true; helpReceived += 1;
+  playerHelpLog.push({ move: Math.floor(uciHistory.length / 2) + 1, note: "asked to see a move" });
   showMoment(`<span class="mo-ic">🔔</span><span class="mo-txt"><b>Help on call</b><small>Shown for this move — ${helpReceived} used so far.</small></span>`, "you");
   revealHint(); paint();
 }
@@ -1089,6 +1124,7 @@ function requestHelpFromOpponent() {
       paint();
     } else {
       helpRevealed = true; helpReceived += 1;
+      playerHelpLog.push({ move: Math.floor(uciHistory.length / 2) + 1, note: "opponent allowed help" });
       showMoment(`<span class="mo-ic">🤝</span><span class="mo-txt"><b>Opponent allowed it</b><small>Help granted — ${helpReceived} so far. It's on the record.</small></span>`, "you");
       revealHint(); paint();
     }
@@ -1107,6 +1143,8 @@ function undoMove() {
   indepOwn = snap.indepOwn; indepFollowed = snap.indepFollowed;
   playerFollows = snap.playerFollows; playerTokens = Math.max(0, PLAYER_TOKENS_MAX - playerFollows);
   if (moveReview.length > snap.reviewLen) moveReview.length = snap.reviewLen;
+  if (typeof snap.uciLen === "number" && uciHistory.length > snap.uciLen) uciHistory.length = snap.uciLen;
+  if (typeof snap.helpLogLen === "number" && playerHelpLog.length > snap.helpLogLen) playerHelpLog.length = snap.helpLogLen;
   selected = null; legalTargets = []; lastMove = null; lastMoveLifeline = false;
   resigned = false; mateKingSq = -1; busy = false; evalBeforeEngine = null;
   hideOver();
@@ -1685,11 +1723,15 @@ function doPlay(from, to, promo, viaHelp) {
   if (flagged || busy) return; // clock's out, or it's the engine's turn
   const preFen = game.fen(); // position before the human's move (for the Player Model)
   // Takeback snapshot: this position + the pre-move counters. Undo restores here.
-  history.push({ fen: preFen, indepOwn, indepFollowed, reviewLen: moveReview.length, playerFollows });
+  history.push({ fen: preFen, indepOwn, indepFollowed, reviewLen: moveReview.length, playerFollows, uciLen: uciHistory.length, helpLogLen: playerHelpLog.length });
   const prov = provenanceOf(viaHelp); // by SOURCE (clicked help vs your own board move)
   if (prov === "own") indepOwn += 1; else if (prov === "followed") indepFollowed += 1;
   lastMoveLifeline = false; // your move — clear the AI's lifeline board badge
-  if (prov === "followed") { playerFollows += 1; playerTokens = Math.max(0, PLAYER_TOKENS_MAX - playerFollows); }
+  if (prov === "followed") {
+    playerFollows += 1; playerTokens = Math.max(0, PLAYER_TOKENS_MAX - playerFollows);
+    // Glass: taking a suggested move is help received — put it on the record.
+    playerHelpLog.push({ move: Math.floor(uciHistory.length / 2) + 1, note: "played the suggested move" });
+  }
   // Strength telemetry: how far from best was this move? The cp-loss needs a deep
   // search (scoreMove at depth()), so it runs on the worker and fills in the entry
   // when it returns — the "found it on your own" moment (which only needs wasBest)
@@ -1710,8 +1752,9 @@ function doPlay(from, to, promo, viaHelp) {
   selected = null;
   legalTargets = [];
   renderPieceTip(null);
-  if (!ok) { paint(); return; }
+  if (!ok) { history.pop(); paint(); return; } // illegal → undo the snapshot we pushed
   lastMove = { from, to };
+  uciHistory.push(sqName(from) + sqName(to) + (promo || "")); // for opening identification
   recordHumanMove(preFen, from, to, promo); // learn from this move too
   fgOn("move");
   // White-relative eval right after your move (black to move → negate). Compared
@@ -1765,6 +1808,7 @@ function engineReply() {
         const sq = uciToSquares(uci);
         game.makeMove(sq.from, sq.to, uci.length > 4 ? uci[4] : undefined);
         lastMove = sq;
+        uciHistory.push(uci); // for opening identification
         lastMoveLifeline = usedLifeline; // mark the assisted move on the board
       }
       busy = false;
