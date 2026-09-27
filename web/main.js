@@ -756,7 +756,7 @@ function renderPlanDock() {
       `<button class="pd-steps" id="pdSteps">Steps</button><button class="pd-x" id="pdX" title="Drop this plan" aria-label="Drop this plan">✕</button></div>` +
     `<div class="pd-next"><span class="pd-lab">NEXT</span><button class="pd-move" id="pdMove" title="Play this move">${escapeHtml(picked.moveSan || picked.moveUci)}</button>` +
       `<span class="pd-note">${escapeHtml(picked.moveNote)}</span></div>`;
-  dock.querySelector("#pdMove").onclick = () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to); };
+  dock.querySelector("#pdMove").onclick = () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); };
   dock.querySelector("#pdSteps").onclick = () => openStepsSheet(picked);
   dock.querySelector("#pdX").onclick = () => { pickedStrategyId = null; paint(); renderAssist(); };
 }
@@ -769,7 +769,7 @@ function openStepsSheet(picked) {
     `<div class="ss-steps">${picked.steps.map((st) => `<div class="ss-step ${st.done ? "done" : ""}"><span class="ss-dot">${st.done ? "✓" : "•"}</span><span>${escapeHtml(st.text)}</span></div>`).join("")}</div>` +
     `<button class="ss-play" id="ssPlay">Play next — ${escapeHtml(picked.moveSan || picked.moveUci)}</button>`;
   const p = document.getElementById("ssPlay");
-  if (p) p.onclick = () => { const sh = document.getElementById("stepsSheet"); if (sh) sh.style.display = "none"; const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to); };
+  if (p) p.onclick = () => { const sh = document.getElementById("stepsSheet"); if (sh) sh.style.display = "none"; const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); };
   const sh = document.getElementById("stepsSheet");
   if (sh) sh.style.display = "grid";
 }
@@ -1255,7 +1255,7 @@ function renderStrategy() {
         `<div class="snext${onHold ? " dimmed" : ""}">Next — <b>your move</b><span class="smove" title="Click to play">${escapeHtml(picked.moveSan || picked.moveUci)}</span>${escapeHtml(picked.moveNote)}</div><div class="steps${onHold ? " dimmed" : ""}">${steps}</div>`;
       host.appendChild(d);
       const mv = d.querySelector(".smove");
-      if (mv) { mv.style.cursor = "pointer"; mv.addEventListener("click", () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to); }); }
+      if (mv) { mv.style.cursor = "pointer"; mv.addEventListener("click", () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); }); }
     } else {
       const hint = document.createElement("div"); hint.className = "shint"; hint.textContent = "Pick a plan to see it on the board.";
       host.appendChild(hint);
@@ -1422,7 +1422,7 @@ function renderAssist() {
       `<span class="cand-move">${escapeHtml(picked.moveSan || picked.moveUci)}</span>` +
       (picked.moveNote ? `<div class="cand-note">${escapeHtml(picked.moveNote)}</div>` : "") +
       `</div><span class="score">plan</span>`;
-    if (q) sm.addEventListener("click", () => playMove(q.from, q.to));
+    if (q) sm.addEventListener("click", () => playMove(q.from, q.to, true));
     assistEl.appendChild(sm);
   }
   // Move-by-move help is free here (vs AI / casual). It's collapsed by default
@@ -1441,7 +1441,7 @@ function renderAssist() {
         `<span class="cand-move">${c.san || c.uci}${isRec ? " ➤" : ""}</span> <span class="cand-flavor fl-${fl.key}">${fl.ic} ${fl.name}</span>` +
         (c.note ? `<div class="cand-note">${escapeHtml(c.note)}</div>` : "") +
         `</div><span class="score">${fmtScore(c.score)}</span>`;
-      el.addEventListener("click", () => playMove(c.from, c.to));
+      el.addEventListener("click", () => playMove(c.from, c.to, true));
       assistEl.appendChild(el);
     });
   }
@@ -1555,28 +1555,27 @@ function openPieceSheet(c) {
   if (typeof pauseThinkWindow === "function") pauseThinkWindow(); // don't rush a learner reading the tip
 }
 
-function playMove(from, to) {
-  if (game.isPromotion(from, to)) { showPromotion(from, to); return; }
-  doPlay(from, to, undefined);
+// viaHelp = the move was played by CLICKING the assistance UI (a suggested move,
+// the plan move, the best-move chip). A move you make on the board yourself is
+// your own choice — even if it happens to match the recommendation.
+function playMove(from, to, viaHelp) {
+  if (game.isPromotion(from, to)) { showPromotion(from, to, viaHelp); return; }
+  doPlay(from, to, undefined, viaHelp);
 }
-// Did this move match the advice that was live? (null = no help was on offer.)
-function provenanceOf(from, to) {
+// How was this move sourced? "followed" = you clicked the help; "own" = you moved
+// on the board yourself; null = no help was on offer this position. NOT based on
+// whether the move matches the advice — matching your own good move is still YOURS.
+function provenanceOf(viaHelp) {
   const a = assistData;
   if (!a || a.level === "off" || !(a.candidates || []).length) return null;
-  const uci = sqName(from) + sqName(to);
-  if ((a.candidates || []).some((c) => c.from === from && c.to === to)) return "followed";
-  if (a.recommended && a.recommended.slice(0, 4) === uci) return "followed";
-  const sr = a.strategy;
-  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
-  if (picked && picked.moveUci && picked.moveUci.slice(0, 4) === uci) return "followed";
-  return "own";
+  return viaHelp ? "followed" : "own";
 }
-function doPlay(from, to, promo) {
+function doPlay(from, to, promo, viaHelp) {
   if (flagged || busy) return; // clock's out, or it's the engine's turn
   const preFen = game.fen(); // position before the human's move (for the Player Model)
   // Takeback snapshot: this position + the pre-move counters. Undo restores here.
   history.push({ fen: preFen, indepOwn, indepFollowed, reviewLen: moveReview.length, playerFollows });
-  const prov = provenanceOf(from, to); // classify BEFORE the move (assist is for this position)
+  const prov = provenanceOf(viaHelp); // by SOURCE (clicked help vs your own board move)
   if (prov === "own") indepOwn += 1; else if (prov === "followed") indepFollowed += 1;
   lastMoveLifeline = false; // your move — clear the AI's lifeline board badge
   if (prov === "followed") { playerFollows += 1; playerTokens = Math.max(0, PLAYER_TOKENS_MAX - playerFollows); }
@@ -1611,9 +1610,9 @@ function doPlay(from, to, promo) {
   onPositionChanged(); // now Black to move → assist cleared
   setTimeout(engineReply, 150);
 }
-function showPromotion(from, to) {
+function showPromotion(from, to, viaHelp) {
   const ov = document.getElementById("promoOverlay");
-  if (!ov) { doPlay(from, to, "q"); return; }
+  if (!ov) { doPlay(from, to, "q", viaHelp); return; }
   const choices = ov.querySelector(".promo-choices");
   const white = humanColor === "white";
   choices.innerHTML = ["q", "r", "b", "n"].map((p) => {
@@ -1621,7 +1620,7 @@ function showPromotion(from, to) {
     const g = typeof pieceSVG === "function" ? pieceSVG(glyphChar) : glyphChar;
     return `<button class="promo-pick" data-p="${p}"><span class="piece ${white ? "white" : "black"}">${g}</span></button>`;
   }).join("");
-  choices.querySelectorAll(".promo-pick").forEach((b) => { b.onclick = () => { ov.style.display = "none"; doPlay(from, to, b.dataset.p); }; });
+  choices.querySelectorAll(".promo-pick").forEach((b) => { b.onclick = () => { ov.style.display = "none"; doPlay(from, to, b.dataset.p, viaHelp); }; });
   ov.style.display = "grid";
 }
 
