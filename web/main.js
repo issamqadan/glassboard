@@ -99,6 +99,8 @@ function persistAiGame(over) {
     assist: aiAssistOverride,
     aiTokens: aiTokens,
     humanColor: humanColor,
+    helpDelivery: helpDelivery,
+    helpReceived: helpReceived,
     minutes: setupMinutes,
     timedGame: timedGame,
     humanMs: humanMs,
@@ -139,6 +141,9 @@ async function resumeAiGame(id) {
   aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {};
   lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX;
   history = [];
+  helpDelivery = rec.helpDelivery || "open";
+  helpReceived = typeof rec.helpReceived === "number" ? rec.helpReceived : 0;
+  helpRevealed = helpDelivery === "open"; helpRequestPending = false;
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
@@ -174,6 +179,7 @@ let setupMode = "full";        // "off" | "full" | "custom"
 let setupRung = "suggestion";  // chosen rung when custom
 let setupColor = "white";      // "white" | "black" | "random" — the side YOU play
 let setupMinutes = 0;          // 0 = untimed; else per-side minutes for the clock
+let setupDelivery = "open";    // how help arrives: "open" | "oncall" | "gentleman"
 let aiAssistOverride = "guided"; // the override applied to the live game
 const assistOverrideFor = () => setupMode === "off" ? "off" : setupMode === "full" ? "guided" : setupRung;
 
@@ -237,6 +243,15 @@ let history = [];
 // engine's think-time counts against its own clock. Running out = loss on time.
 let timedGame = false, humanMs = 0, engineMs = 0;
 let clockTimer = null, clockLast = 0, flagged = false, flagLoser = "";
+
+// How help ARRIVES this game (orthogonal to how MUCH help = the assist level):
+//   open      — always on screen (no "received" tally; we still log taps you take)
+//   oncall    — hidden; you summon it, and every summon is tallied
+//   gentleman — start with none; you request mid-game, the opponent must accept
+let helpDelivery = "open";
+let helpRevealed = false;  // has the move-answer been revealed THIS position?
+let helpReceived = 0;      // times you pulled help this game (on-call / granted)
+let helpRequestPending = false; // gentleman: a request awaiting the opponent's answer
 const COST_SUGG = 2, COST_BEST = 4;
 // First Game Mode: a learn-by-playing layer for a total beginner. Guides the
 // first couple of moves (pulse a piece → show its squares → tap), then fades.
@@ -352,12 +367,27 @@ function showSetup() {
       setupMode = m.dataset.mode;
       modes.querySelectorAll(".amode").forEach((x) => x.classList.toggle("on", x === m));
       renderRungPicker();
+      syncDeliveryVisibility();
     };
   });
+  const deliv = document.getElementById("deliveryModes");
+  if (deliv) deliv.querySelectorAll(".amode").forEach((d) => {
+    d.classList.toggle("on", d.dataset.delivery === setupDelivery);
+    d.onclick = () => {
+      setupDelivery = d.dataset.delivery;
+      deliv.querySelectorAll(".amode").forEach((x) => x.classList.toggle("on", x === d));
+    };
+  });
+  syncDeliveryVisibility();
   renderRungPicker();
   const start = document.getElementById("setupStart");
   if (start) start.onclick = startFromSetup;
   sc.hidden = false;
+}
+// The delivery picker only applies when help is enabled ("No help" → hide it).
+function syncDeliveryVisibility() {
+  const sec = document.getElementById("deliverySection");
+  if (sec) sec.hidden = setupMode === "off";
 }
 function renderRungPicker() {
   const rp = document.getElementById("rungPicker");
@@ -375,6 +405,9 @@ function startFromSetup() {
   engineEloEl.value = setupElo;
   syncAiLevel();
   aiAssistOverride = assistOverrideFor();
+  // Gentleman's Game starts with no help on the board (you request it); the chosen
+  // level is what gets GRANTED. On Call also starts hidden. Open Hand shows it.
+  helpDelivery = setupMode === "off" ? "open" : setupDelivery;
   // Resolve the side you play (random picks one now). Randomness comes from the UI,
   // not the engine — Math.random is fine here (no reproducibility requirement).
   humanColor = setupColor === "black" ? "black" : setupColor === "white" ? "white" : (Math.random() < 0.5 ? "white" : "black");
@@ -490,6 +523,8 @@ function newGame() {
   aiTokens = AI_TOKENS_MAX; aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {}; // fresh
   lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX;
   history = [];
+  if (firstGame) helpDelivery = "open"; // the guided game always shows help
+  helpReceived = 0; helpRevealed = helpDelivery === "open"; helpRequestPending = false;
   // Clock: from the chosen time control (kept across rematches). Untimed if 0.
   timedGame = !firstGame && setupMinutes > 0;
   humanMs = engineMs = setupMinutes * 60000;
@@ -549,6 +584,8 @@ function onPositionChanged() {
   assistData = null;
   revealedSugg = false; // deeper help must be re-revealed (and re-paid) each position
   revealedBest = false;
+  helpRevealed = helpDelivery === "open"; // On Call / Gentleman start each move hidden
+  helpRequestPending = false;
   const token = ++positionToken;
   clockLast = Date.now(); // the side to move just changed — don't charge them the gap
   paint(); // instant: board, players, captured, material — before any deep search
@@ -584,8 +621,11 @@ function onPositionChanged() {
         // opponent doesn't watch you being fed moves) is a multiplayer-only thing.
         const fold = document.getElementById("movesFold");
         if (fold) fold.open = false;
-        if ((assistData.candidates || []).length && !firstGame) revealHint();
+        // Open Hand reveals immediately; On Call / Gentleman stay hidden until you ask.
+        if ((assistData.candidates || []).length && !firstGame && helpRevealed) revealHint();
         else clearThinkWindow(true);
+        // In ask-mode, open the panel so the "Ask for a move" button is visible.
+        if (fold && !firstGame && !showAnswer() && (assistData.candidates || []).length) fold.open = true;
         paint(); // repaint with the assistance overlays
       })
       .catch(() => {});
@@ -750,13 +790,22 @@ function renderPlanDock() {
   const doneN = picked.steps.filter((s) => s.done).length;
   const pips = picked.steps.map((s, i) => `<span class="pd-pip${s.done ? " done" : i === doneN ? " now" : ""}"></span>`).join("");
   dock.style.setProperty("--sc", STRAT_COLOR[picked.id] || "#5cc9ec");
+  // The plan (name + steps) always shows — that's strategic direction. The concrete
+  // NEXT move is the answer: gated in On Call / Gentleman until you pull help.
+  const nextHtml = showAnswer()
+    ? `<div class="pd-next"><span class="pd-lab">NEXT</span><button class="pd-move" id="pdMove" title="Play this move">${escapeHtml(picked.moveSan || picked.moveUci)}</button>` +
+        `<span class="pd-note">${escapeHtml(picked.moveNote)}</span></div>`
+    : `<div class="pd-next"><span class="pd-lab">NEXT</span><button class="pd-move pd-ask" id="pdAsk" type="button">${helpDelivery === "gentleman" ? "🤝 Request" : "🔔 Reveal"}</button>` +
+        `<span class="pd-note">move hidden — ask to see it</span></div>`;
   dock.innerHTML =
     `<div class="pd-top"><span class="pd-ic">${STRAT_ICON[picked.id] || "◆"}</span><span class="pd-name">${escapeHtml(picked.name)}</span>` +
       `<span class="pd-pips" title="${doneN}/${picked.steps.length} steps">${pips}</span>` +
       `<button class="pd-steps" id="pdSteps">Steps</button><button class="pd-x" id="pdX" title="Drop this plan" aria-label="Drop this plan">✕</button></div>` +
-    `<div class="pd-next"><span class="pd-lab">NEXT</span><button class="pd-move" id="pdMove" title="Play this move">${escapeHtml(picked.moveSan || picked.moveUci)}</button>` +
-      `<span class="pd-note">${escapeHtml(picked.moveNote)}</span></div>`;
-  dock.querySelector("#pdMove").onclick = () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); };
+    nextHtml;
+  const pm = dock.querySelector("#pdMove");
+  if (pm) pm.onclick = () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); };
+  const pa = dock.querySelector("#pdAsk");
+  if (pa) pa.onclick = askForHelp;
   dock.querySelector("#pdSteps").onclick = () => openStepsSheet(picked);
   dock.querySelector("#pdX").onclick = () => { pickedStrategyId = null; paint(); renderAssist(); };
 }
@@ -767,9 +816,13 @@ function openStepsSheet(picked) {
   if (b) b.innerHTML =
     `<div class="ss-idea">${escapeHtml(picked.idea)}</div>` +
     `<div class="ss-steps">${picked.steps.map((st) => `<div class="ss-step ${st.done ? "done" : ""}"><span class="ss-dot">${st.done ? "✓" : "•"}</span><span>${escapeHtml(st.text)}</span></div>`).join("")}</div>` +
-    `<button class="ss-play" id="ssPlay">Play next — ${escapeHtml(picked.moveSan || picked.moveUci)}</button>`;
+    (showAnswer()
+      ? `<button class="ss-play" id="ssPlay">Play next — ${escapeHtml(picked.moveSan || picked.moveUci)}</button>`
+      : `<button class="ss-play" id="ssAsk">${helpDelivery === "gentleman" ? "🤝 Request the move" : "🔔 Reveal the move"}</button>`);
   const p = document.getElementById("ssPlay");
   if (p) p.onclick = () => { const sh = document.getElementById("stepsSheet"); if (sh) sh.style.display = "none"; const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); };
+  const pa = document.getElementById("ssAsk");
+  if (pa) pa.onclick = () => { const sh = document.getElementById("stepsSheet"); if (sh) sh.style.display = "none"; askForHelp(); };
   const sh = document.getElementById("stepsSheet");
   if (sh) sh.style.display = "grid";
 }
@@ -1011,6 +1064,37 @@ function renderClocks() {
   }
 }
 
+// ---- Help delivery: is the move-answer shown right now? --------------------
+// Open Hand → always. On Call / Gentleman → only once you've pulled it this move.
+function showAnswer() { return helpDelivery === "open" || helpRevealed; }
+// On Call: summon help for this move (instant, tallied).
+function askForHelp() {
+  if (helpRevealed || game.sideToMove() !== humanColor || game.status() !== "ongoing") return;
+  if (helpDelivery === "gentleman") { requestHelpFromOpponent(); return; }
+  helpRevealed = true; helpReceived += 1;
+  showMoment(`<span class="mo-ic">🔔</span><span class="mo-txt"><b>Help on call</b><small>Shown for this move — ${helpReceived} used so far.</small></span>`, "you");
+  revealHint(); paint();
+}
+// Gentleman's Game: ask, and the opponent decides. The AI grants unless it's
+// comfortably ahead — then it may decline (and gloat a little).
+function requestHelpFromOpponent() {
+  if (helpRequestPending || helpRevealed) return;
+  helpRequestPending = true; paint();
+  setTimeout(() => {
+    let sense = 0; try { sense = game.bestScore(2); } catch {} // human-to-move relative
+    const decline = sense <= -180 && Math.random() < 0.5; // AI ahead → might refuse
+    helpRequestPending = false;
+    if (decline) {
+      showMoment(`<span class="mo-ic">🚫</span><span class="mo-txt"><b>Opponent declined</b><small>“I like my position.” No help this time — play on.</small></span>`, "ai");
+      paint();
+    } else {
+      helpRevealed = true; helpReceived += 1;
+      showMoment(`<span class="mo-ic">🤝</span><span class="mo-txt"><b>Opponent allowed it</b><small>Help granted — ${helpReceived} so far. It's on the record.</small></span>`, "you");
+      revealHint(); paint();
+    }
+  }, 650);
+}
+
 // Takeback: roll back your last move (and the engine's reply) to before you moved.
 // Only when it's your turn and the engine isn't mid-search. Board-only + counters;
 // the AI's lifelines aren't refunded (they're a spent game event, not a mistake).
@@ -1141,9 +1225,19 @@ function aiLifelineHtml() {
   return `<div class="over-lifeline">${line}</div>`;
 }
 function independenceHtml() {
-  const total = indepOwn + indepFollowed;
-  if (total < 2) return "";
-  const pct = Math.round((indepOwn / total) * 100);
+  // In On Call / Gentleman the answer was hidden, so independence is HONEST:
+  // help received (asked/granted) vs moves you made without it. In Open Hand the
+  // answer was always visible, so we don't claim independence — we report taps.
+  const moves = moveReview.length;
+  if (moves < 2) return "";
+  if (helpDelivery === "open") {
+    return `<div class="over-indep">` +
+      `<div class="oi-head">☀️ Open Hand</div>` +
+      `<div class="oi-sub">Help was on screen all game. You <b>took the suggested move ${indepFollowed}</b> time${indepFollowed === 1 ? "" : "s"} of ${moves}. (Independence isn't scored when the answer's visible — switch to <b>On Call</b> to measure it.)</div>` +
+      `</div>`;
+  }
+  const onOwn = Math.max(0, moves - helpReceived);
+  const pct = Math.round((onOwn / moves) * 100);
   let prev = null;
   try { prev = JSON.parse(localStorage.getItem("gb_indep_last")); } catch {}
   localStorage.setItem("gb_indep_last", JSON.stringify(pct));
@@ -1152,10 +1246,11 @@ function independenceHtml() {
     const d = pct - prev;
     trend = d > 0 ? ` <span class="oi-up">▲ up from ${prev}%</span>` : d < 0 ? ` <span class="oi-dn">▼ from ${prev}%</span>` : " · same as last game";
   }
+  const label = helpDelivery === "gentleman" ? "🤝 Gentleman's Game" : "🔔 On Call";
   return `<div class="over-indep">` +
     `<div class="oi-head">🧠 Independence <b>${pct}%</b>${trend}</div>` +
     `<div class="indep-bar"><div class="indep-fill" style="width:${pct}%"></div></div>` +
-    `<div class="oi-sub">You found <b>${indepOwn}</b> of ${total} assisted moves on your own — 🤖 followed ${indepFollowed}. Needing help less is the whole idea.</div>` +
+    `<div class="oi-sub">${label}: you played <b>${onOwn}</b> of ${moves} moves without asking — help was pulled <b>${helpReceived}</b> time${helpReceived === 1 ? "" : "s"}. Needing it less is the whole idea.</div>` +
     `</div>`;
 }
 
@@ -1408,6 +1503,22 @@ function renderAssist() {
     return;
   }
   const a = assistData;
+  // On Call / Gentleman: until you pull help this move, show the ask button — never
+  // the move itself (so it can't be read off the screen). Safety highlights + coach
+  // stay on the board regardless; only the move-answer is gated.
+  if (!firstGame && !showAnswer() && (a.candidates || []).length) {
+    if (helpDelivery === "gentleman") {
+      assistEl.innerHTML = helpRequestPending
+        ? `<div class="ask-help waiting">🤝 Waiting for your opponent to allow it…</div>`
+        : `<button class="ask-help" id="askHelp" type="button">🤝 Request help <span class="ask-sub">opponent must allow</span></button>`;
+    } else {
+      assistEl.innerHTML = `<button class="ask-help" id="askHelp" type="button">🔔 Ask for a move${helpReceived ? ` <span class="ask-n">${helpReceived} used</span>` : ""}</button>`;
+    }
+    assistEl.innerHTML += `<div class="ask-note">Play on your own, or ask — every ask is on the record.</div>`;
+    const b = document.getElementById("askHelp");
+    if (b) b.onclick = askForHelp;
+    return;
+  }
   // If a strategy is picked, surface its move at the top of the list so the
   // plan and the concrete move live in one place.
   const sr = a.strategy;
