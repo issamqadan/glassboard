@@ -616,6 +616,7 @@ function onPositionChanged() {
   helpRevealed = helpDelivery === "open"; // On Call / Gentleman start each move hidden
   helpRequestPending = false;
   previewedMove = null; // a new position — clear any lens preview
+  sfBest = null; // full-strength advice, fetched fresh each turn
   const token = ++positionToken;
   clockLast = Date.now(); // the side to move just changed — don't charge them the gap
   paint(); // instant: board, players, captured, material — before any deep search
@@ -623,6 +624,16 @@ function onPositionChanged() {
   if (game.status() === "ongoing" && game.sideToMove() === humanColor) {
     const fen = game.fen();
     const ov = firstGame ? "guided" : aiAssistOverride;
+    // Strong advice: the recommended move comes from Stockfish at FULL strength, so
+    // following it genuinely holds up against the (skill-limited) Stockfish opponent.
+    if (!firstGame && window.GBEngine && ov !== "off") {
+      GBEngine.bestMove(fen, { skill: 20, movetime: 500 }).then((uci) => {
+        if (token !== positionToken || !uci || uci.length < 4) return;
+        const q = uciToSquares(uci), cand = candByUci(uci);
+        sfBest = { uci, from: q.from, to: q.to, san: (cand && cand.san) || approxSan(uci), note: (cand && cand.note) || "" };
+        if (!busy) paint(); // upgrade the lens to the full-strength recommendation
+      }).catch(() => {});
+    }
     askEngine("analyze", { fen, depth: depth(), override: ov, humanElo: parseInt(humanEloEl.value, 10), engineElo: parseInt(engineEloEl.value, 10) })
       .then((json) => {
         if (token !== positionToken) return; // position moved on — drop stale result
@@ -1630,18 +1641,31 @@ const STRAT_VERB = { attack_king: "attack", pawn_storm: "attack", win_material: 
   iso_attack: "attack", open_file: "file pressure", fianchetto: "fianchetto plan", outpost: "outpost plan",
   rook_seventh: "rook lift", improve: "piece play", pawn_break: "pawn break" };
 let previewedMove = null; // {from,to,uci,san} currently previewed by the lens
+let sfBest = null;        // {from,to,uci,san,note} — Stockfish full-strength best move this turn
 
 function candByUci(uci) { const a = assistData; return (a && (a.candidates || []).find((c) => c.uci === uci)) || null; }
 function asMove(c) { return c && { from: c.from, to: c.to, uci: c.uci, san: c.san }; }
+// Approximate SAN from a UCI move using the current board (piece letter + capture +
+// target) — good enough to label a Stockfish move we don't have a candidate for.
+function approxSan(uci) {
+  const from = uciToSquares(uci).from, to = uciToSquares(uci).to;
+  const bs = game.boardString();
+  const p = (bs[from] || "p").toLowerCase(), cap = bs[to] && bs[to] !== ".";
+  const dst = sqName(to);
+  if (p === "p") return (cap ? sqName(from)[0] + "x" : "") + dst + (uci.length > 4 ? "=" + uci[4].toUpperCase() : "");
+  return p.toUpperCase() + (cap ? "x" : "") + dst;
+}
 
 // The single most-relevant piece of advice right now, from EXISTING analysis only.
 // Returns { move, label, why, tag, kind, altBest }. null if no help on offer.
 function pickPriority() {
   const a = assistData;
   if (!a || a.level === "off" || !(a.candidates || []).length) return null;
+  // The recommended move is Stockfish's full-strength best when available (so it
+  // actually holds up vs the SF opponent), else our Rust engine's top move.
   const best = a.candidates[0];
-  const recUci = a.recommended || best.uci;
-  const rec = candByUci(recUci) || best;
+  const rec = sfBest || candByUci(a.recommended || best.uci) || best;
+  const recUci = rec.uci;
   // 1 — Urgent: a threat that overrides the plan.
   if (a.mateThreat) return { move: asMove(rec), label: "Stop the checkmate", why: "The opponent threatens mate next move — this addresses it first.", tag: "Urgent", kind: "urgent" };
   const big = (a.threats || []).filter((t) => t.loss >= 200)[0];

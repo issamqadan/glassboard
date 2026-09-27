@@ -36,8 +36,10 @@
 
   // Ask for the best move from `fen` at a given Skill Level (0-20). `depth` caps
   // search for the weakest rungs; otherwise `movetime` (ms) keeps replies snappy.
-  function bestMove(fen, opts) {
-    opts = opts || {};
+  // Calls are SERIALIZED (one `go` at a time) so the opponent-move and the
+  // full-strength assist request never collide on the single UCI channel.
+  let chain = Promise.resolve();
+  function runBestMove(fen, opts) {
     return ensure().then(() => new Promise((resolve) => {
       pendingResolve = resolve;
       const skill = Math.max(0, Math.min(20, opts.skill == null ? 20 : opts.skill | 0));
@@ -46,6 +48,12 @@
       if (opts.depth) worker.postMessage("go depth " + (opts.depth | 0));
       else worker.postMessage("go movetime " + (opts.movetime ? opts.movetime | 0 : 400));
     }));
+  }
+  function bestMove(fen, opts) {
+    opts = opts || {};
+    const p = chain.then(() => runBestMove(fen, opts), () => runBestMove(fen, opts));
+    chain = p.catch(() => {});
+    return p;
   }
 
   function newGame() { if (worker) worker.postMessage("ucinewgame"); }
