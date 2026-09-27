@@ -54,29 +54,41 @@
     function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = "status " + cls; }
     function send(cmd) { log(cmd, "» "); worker.postMessage(cmd); }
 
-    document.getElementById("init").onclick = () => {
+    document.getElementById("init").onclick = async () => {
       if (worker) { setStatus("Already loading/loaded.", "wait"); return; }
-      setStatus("Loading Stockfish (first time downloads ~7MB)…", "wait");
+      setStatus("Fetching Stockfish (first time ~1MB of JS, then ~7MB wasm)…", "wait");
       try {
-        // A tiny blob worker that points Emscripten at the CDN for its .wasm, then
-        // loads the single-threaded Stockfish build. Cross-origin is allowed for
-        // importScripts (CDN sends CORS *), and locateFile fixes the wasm path.
+        // Safari blocks cross-origin importScripts from a blob worker. So instead we
+        // FETCH the engine's JS (CORS-allowed), inline it into a SAME-ORIGIN blob
+        // worker, and set Module.locateFile so Emscripten fetches the .wasm from the
+        // CDN (a plain cross-origin fetch, which is allowed).
+        const resp = await fetch(SF);
+        if (!resp.ok) { setStatus("Couldn't fetch engine JS: HTTP " + resp.status, "err"); return; }
+        const js = await resp.text();
+        log("fetched engine JS (" + js.length + " bytes)");
         const boot =
           'self.Module = { locateFile: function(p){ return ' + JSON.stringify(CDN) + ' + p; } };\n' +
-          'try { importScripts(' + JSON.stringify(SF) + '); } catch(e){ self.postMessage("BOOT_ERROR: " + e.message); }';
+          'self.onerror = function(m){ self.postMessage("BOOT_ERROR: " + m); };\n' +
+          js;
         const url = URL.createObjectURL(new Blob([boot], { type: "text/javascript" }));
         worker = new Worker(url);
         worker.onmessage = (e) => {
           const line = typeof e.data === "string" ? e.data : (e.data && e.data.data) || JSON.stringify(e.data);
           log(line, "« ");
           if (line.indexOf("BOOT_ERROR") === 0) { setStatus("Failed to load: " + line, "err"); return; }
-          if (line === "uciok") { setStatus("Stockfish loaded ✓ — UCI ready.", "ok"); ready = true; document.getElementById("go").disabled = false; document.getElementById("bench").disabled = false; }
+          if (line === "uciok") { setStatus("Stockfish loaded ✓ — UCI ready.", "ok"); ready = true; if (uciRetry) clearInterval(uciRetry); document.getElementById("go").disabled = false; document.getElementById("bench").disabled = false; }
           if (line.indexOf("bestmove") === 0) { const mv = line.split(" ")[1]; bestEl.textContent = "bestmove: " + mv; setStatus("Stockfish returned a move ✓ — it works here!", "ok"); }
         };
         worker.onerror = (e) => setStatus("Worker error: " + (e.message || e.filename || "unknown") + " (line " + e.lineno + ")", "err");
-        send("uci");
+        // The wasm compiles asynchronously; a too-early "uci" can be dropped. Send it
+        // after a beat and keep retrying until "uciok" comes back (or we give up).
+        let tries = 0;
+        const fire = () => { if (ready) return; tries++; if (tries > 20) { clearInterval(uciRetry); if (!ready) setStatus("Loaded the JS but no UCI response — the engine may not have started.", "err"); return; } send("uci"); };
+        setTimeout(fire, 400);
+        uciRetry = setInterval(fire, 800);
       } catch (err) { setStatus("Couldn't start the worker: " + err.message, "err"); }
     };
+    let uciRetry = null;
 
     function elo() { return Math.max(1320, Math.min(3190, parseInt(document.getElementById("elo").value, 10) || 1500)); }
     document.getElementById("go").onclick = () => {
