@@ -57,10 +57,13 @@ jobs:
       - name: Cache-bust static assets
         run: |
           V="${GITHUB_SHA::8}"
+          # Version marker the auto-updater fetches (uncached) to detect stale tabs.
+          printf '%s' "$V" > web/version.txt
           for f in web/*.html; do
             sed -i -E \
               -e 's#(src="\./[^"]+\.js)"#\1?v='"$V"'"#g' \
               -e 's#(href="\./[^"]+\.css)"#\1?v='"$V"'"#g' "$f"
+            sed -i "s/__GBVER__/$V/g" "$f"
           done
           sed -i -E 's#(from "\./pkg/glassboard_wasm\.js)"#\1?v='"$V"'"#' web/main.js web/multiplayer.js web/twoplayer.js web/engine-worker.js
           sed -i "s#new URL('glassboard_wasm_bg.wasm'#new URL('glassboard_wasm_bg.wasm?v=$V'#" web/pkg/glassboard_wasm.js

@@ -1500,20 +1500,17 @@ main.game .strat-panel { display: none; }
 .sheet-overlay, .promo-overlay { z-index: 200 !important; }
 
 @media (max-width: 860px) {
-  main.game { display: flex; flex-direction: column; gap: 6px; max-width: none;
-    height: calc(100vh - 122px); height: calc(100dvh - 122px); /* between fixed top(58)+bottom(64) nav */
-    overflow: hidden; padding: 8px 10px; }
-  main.game .gamebar { flex: 0 0 auto; margin: 0; padding: 0 0 2px; }
-  main.game .layout { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 6px; width: 100%; }
-  main.game .board-col { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: 100%; gap: 6px; margin: 0; }
-  main.game .panels { display: none; }        /* aside folded into the HUD + sheets */
-  main.game #materialBar { flex: 0 0 auto; }
-  main.game #openingLine { flex: 0 0 auto; margin: 0; padding: 6px 10px; }
-  main.game #openingLine .ol-idea { display: none; }   /* keep just the name on the phone */
-  main.game .board-wrap { flex: 1 1 auto; min-height: 0; width: auto; height: auto;
-    max-width: 94vw; max-height: 100%; aspect-ratio: 1 / 1; margin: 0 auto; align-self: center; }
-  main.game #glassLens { flex: 0 0 auto; margin: 0; }
-  /* Compact gamebar so the board keeps as much height as possible. */
-  main.game .players { margin: 0; padding: 7px 10px; gap: 8px; }
+  main.game { max-width: none; padding: 8px 10px; }
+  main.game .layout { display: flex; flex-direction: column; gap: 6px; width: 100%; margin: 0; }
+  main.game .board-col { display: block; width: 100%; margin: 0; }
+  main.game .panels { display: none; }                 /* aside folded into HUD + sheets */
+  main.game #materialBar, main.game #openingLine { display: none; }  /* retired from above the board */
+  /* THE key rule: cap the board by height so the gamebar + board + HUD fit one
+     screen without scrolling. (viewport − top/bottom nav − gamebar − HUD ≈ 340px). */
+  main.game .board-wrap { width: min(94vw, calc(100dvh - 340px)); max-width: 94vw;
+    height: auto; aspect-ratio: 1 / 1; margin: 0 auto; }
+  main.game #glassLens { margin: 8px auto 0; width: 100%; }
+  main.game .players { margin: 0 0 6px; padding: 7px 10px; gap: 8px; }
   main.game .gb-actions { gap: 8px; }
+  main.game #status { display: none; }
 }

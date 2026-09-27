@@ -908,16 +908,10 @@ function currentOpening() {
   return (window.GBStrategies && !firstGame) ? GBStrategies.identify(uciHistory) : null;
 }
 function renderOpening() {
+  // Retired from above the board (it flashed on every move and wasn't actionable).
+  // The opening name now rides quietly inside the Glass Lens instead.
   const el = document.getElementById("openingLine");
-  if (!el) return;
-  const op = currentOpening();
-  if (!op) { el.hidden = true; el.innerHTML = ""; return; }
-  el.hidden = false;
-  el.innerHTML =
-    `<span class="ol-ic">📖</span>` +
-    `<span class="ol-name">${escapeHtml(op.name)}</span>` +
-    (op.eco ? `<span class="ol-eco">${escapeHtml(op.eco)}</span>` : "") +
-    `<span class="ol-idea">${escapeHtml(op.idea)}</span>`;
+  if (el) { el.hidden = true; el.innerHTML = ""; }
 }
 
 // Captured material as one tug-bar above the board (you are White → left side).
