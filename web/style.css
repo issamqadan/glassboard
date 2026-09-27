@@ -920,6 +920,58 @@ main.game .board-wrap.glow-draw { box-shadow: 0 0 0 2px rgba(147,162,192,.5), 0 
 .ai-assist .al-empty { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08);
   font-size: 0.76rem; color: #8a9ab2; font-style: italic; line-height: 1.4; }
 
+/* ---- Glass Lens: the thumb-first "what matters now" control ---- */
+.glass-lens { position: relative; display: flex; align-items: stretch; gap: 10px; margin: 10px 0 0;
+  padding: 11px 13px; border-radius: 14px; background: linear-gradient(150deg, rgba(92,201,236,0.12), rgba(126,224,214,0.05));
+  border: 1px solid rgba(92,201,236,0.34); box-shadow: 0 10px 30px -18px rgba(92,201,236,0.6); }
+.glass-lens.kind-urgent { background: linear-gradient(150deg, rgba(242,109,122,0.16), rgba(242,109,122,0.05)); border-color: rgba(242,109,122,0.5); }
+.glass-lens.kind-strategy { background: linear-gradient(150deg, rgba(126,224,214,0.14), rgba(92,201,236,0.05)); border-color: rgba(126,224,214,0.45); }
+.glass-lens.previewing { box-shadow: 0 0 0 1px rgba(126,224,214,0.7), 0 12px 32px -16px rgba(126,224,214,0.7); }
+.glass-lens .gl-main { flex: 1; min-width: 0; cursor: pointer; touch-action: none; -webkit-user-select: none; user-select: none; }
+.glass-lens .gl-r1 { display: flex; align-items: center; gap: 8px; }
+.glass-lens .gl-label { font-weight: 800; font-size: 1rem; color: #eef4fb; letter-spacing: -0.01em; }
+.glass-lens .gl-tag { font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 2px 7px; border-radius: 999px; background: rgba(147,162,192,0.2); color: #b9c6da; white-space: nowrap; }
+.glass-lens .gl-tag.t-urgent { background: rgba(242,109,122,0.22); color: #f4a2ab; }
+.glass-lens .gl-tag.t-strategy { background: rgba(126,224,214,0.2); color: #8fe0d6; }
+.glass-lens .gl-r2 { display: flex; align-items: baseline; gap: 9px; margin-top: 3px; flex-wrap: wrap; }
+.glass-lens .gl-move { font-weight: 800; font-size: 1.05rem; color: #7ee0d6; font-variant-numeric: tabular-nums; }
+.glass-lens .gl-why { font-size: 0.82rem; color: #b9c6da; line-height: 1.35; flex: 1; min-width: 120px; }
+.glass-lens .gl-hint { margin-top: 5px; font-size: 0.68rem; color: #7d8ba6; }
+.glass-lens .gl-side { display: flex; flex-direction: column; gap: 6px; justify-content: center; flex: none; }
+.glass-lens .gl-play { font: inherit; font-weight: 800; font-size: 0.9rem; cursor: pointer; color: #04222d;
+  background: linear-gradient(140deg, #7ee0d6, #4bb3a6); border: 0; border-radius: 10px; padding: 9px 14px; white-space: nowrap; }
+.glass-lens.kind-urgent .gl-play { background: linear-gradient(140deg, #f2707e, #c94b5a); color: #fff; }
+.glass-lens .gl-more { font: inherit; font-weight: 800; cursor: pointer; color: #cfe0f0;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); border-radius: 10px; padding: 6px 12px; }
+.glass-lens .gl-askbtn { display: block; width: 100%; font: inherit; font-weight: 800; font-size: 0.95rem; cursor: pointer;
+  color: #04222d; background: linear-gradient(140deg, #8fe0d6, #5cc9ec); border: 0; border-radius: 11px; padding: 13px; text-align: center; }
+.glass-lens .gl-askbtn small { display: block; font-weight: 600; font-size: 0.72rem; opacity: 0.85; margin-top: 2px; }
+.glass-lens .gl-askbtn.waiting { background: rgba(126,224,214,0.12); color: #9fd8d0; border: 1px dashed rgba(126,224,214,0.5); }
+
+/* Hold-to-explore chip strip (floats above the lens during a press-drag). */
+.lens-strip { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 8px); z-index: 30;
+  display: flex; gap: 6px; overflow-x: auto; padding: 8px; border-radius: 12px;
+  background: rgba(12,17,27,0.98); border: 1px solid var(--line-2, #2b3856); box-shadow: 0 16px 40px -16px rgba(0,0,0,0.7); }
+.lens-chip { flex: 0 0 auto; min-width: 64px; text-align: center; padding: 8px 10px; border-radius: 9px;
+  background: rgba(255,255,255,0.05); border: 1px solid transparent; }
+.lens-chip b { display: block; font-size: 0.95rem; color: #eaf0fb; font-variant-numeric: tabular-nums; }
+.lens-chip small { font-size: 0.66rem; color: #93a2c0; }
+.lens-chip.on { background: rgba(126,224,214,0.18); border-color: #7ee0d6; }
+
+/* Lens preview on the board — dashed teal, deliberately DIFFERENT from a real move. */
+.sq.preview-to::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  box-shadow: inset 0 0 0 3px #7ee0d6; border-radius: 2px; animation: preview-pulse 1.1s ease-in-out infinite; }
+.sq.preview-from::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  box-shadow: inset 0 0 0 2px rgba(126,224,214,0.55); }
+@keyframes preview-pulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sq.preview-to::after { animation: none; } }
+
+/* Tiny assistance indicators beside player names. */
+.name-pips { display: inline-flex; gap: 1px; margin-left: 5px; font-size: 0.66rem; line-height: 1; vertical-align: middle; }
+.name-pips .ll { transition: opacity 0.4s, filter 0.4s; }
+.name-pips .ll.spent { opacity: 0.2; filter: grayscale(1); }
+
 /* Ask-for-help button (On Call / Gentleman's Game) — shown instead of the move. */
 .ask-help { display: block; width: 100%; padding: 12px 14px; border-radius: 12px; cursor: pointer;
   font: inherit; font-weight: 700; font-size: 0.95rem; color: #06202b; text-align: center;

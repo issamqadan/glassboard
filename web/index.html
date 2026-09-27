@@ -105,7 +105,10 @@
             <div id="board" class="board" aria-label="chess board"></div>
             <svg id="planOverlay" class="plan-overlay" viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg>
           </div>
-          <!-- Plan Dock: the always-visible strategy summary (plan · progress · next move). -->
+          <!-- Glass Lens: the thumb-first "what matters now" control. Shows the one
+               most-relevant recommendation; hold to explore alternatives, tap to preview. -->
+          <div id="glassLens" class="glass-lens" hidden></div>
+          <!-- Plan Dock: the always-visible strategy summary (plan · progress). -->
           <div id="planDock" class="plan-dock" hidden></div>
         </div>
         <aside class="panels">

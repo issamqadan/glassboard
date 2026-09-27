@@ -615,6 +615,7 @@ function onPositionChanged() {
   revealedBest = false;
   helpRevealed = helpDelivery === "open"; // On Call / Gentleman start each move hidden
   helpRequestPending = false;
+  previewedMove = null; // a new position — clear any lens preview
   const token = ++positionToken;
   clockLast = Date.now(); // the side to move just changed — don't charge them the gap
   paint(); // instant: board, players, captured, material — before any deep search
@@ -645,18 +646,15 @@ function onPositionChanged() {
           }
         }
         evalBeforeEngine = null;
-        // Vs the AI there's no opponent to hide help from, so suggestions show
-        // immediately — the timed "thinking window" (which exists so a HUMAN
-        // opponent doesn't watch you being fed moves) is a multiplayer-only thing.
+        // The Glass Lens is now the primary surface — it shows the prioritised move
+        // (or the ask/reveal control) every turn. The old "Suggested moves" fold is
+        // just the alternatives list, opened on demand from the lens (⋯), so we no
+        // longer auto-open it (that's what used to pile content down the page).
         keepScroll(() => {
           const fold = document.getElementById("movesFold");
           if (fold) fold.open = false;
-          // Open Hand reveals immediately; On Call / Gentleman stay hidden until you ask.
-          if ((assistData.candidates || []).length && !firstGame && helpRevealed) revealHint();
-          else clearThinkWindow(true);
-          // In ask-mode, open the panel so the "Ask for a move" button is visible.
-          if (fold && !firstGame && !showAnswer() && (assistData.candidates || []).length) fold.open = true;
-          paint(); // repaint with the assistance overlays
+          clearThinkWindow(true);
+          paint(); // repaint with the lens + overlays
         });
       })
       .catch(() => {});
@@ -821,6 +819,7 @@ function paint() {
     renderAssist();
     renderStrategy();
     renderPlanDock();
+    renderGlassLens();
     renderCaptured();
     renderOpening();
     renderClocks();
@@ -852,22 +851,12 @@ function renderPlanDock() {
   const doneN = picked.steps.filter((s) => s.done).length;
   const pips = picked.steps.map((s, i) => `<span class="pd-pip${s.done ? " done" : i === doneN ? " now" : ""}"></span>`).join("");
   dock.style.setProperty("--sc", STRAT_COLOR[picked.id] || "#5cc9ec");
-  // The plan (name + steps) always shows — that's strategic direction. The concrete
-  // NEXT move is the answer: gated in On Call / Gentleman until you pull help.
-  const nextHtml = showAnswer()
-    ? `<div class="pd-next"><span class="pd-lab">NEXT</span><button class="pd-move" id="pdMove" title="Play this move">${escapeHtml(picked.moveSan || picked.moveUci)}</button>` +
-        `<span class="pd-note">${escapeHtml(picked.moveNote)}</span></div>`
-    : `<div class="pd-next"><span class="pd-lab">NEXT</span><button class="pd-move pd-ask" id="pdAsk" type="button">${helpDelivery === "gentleman" ? "🤝 Request" : "🔔 Reveal"}</button>` +
-        `<span class="pd-note">move hidden — ask to see it</span></div>`;
+  // The plan (name + step progress) shows here as strategic CONTEXT. The concrete
+  // next move now lives in the Glass Lens, so it isn't repeated here.
   dock.innerHTML =
     `<div class="pd-top"><span class="pd-ic">${STRAT_ICON[picked.id] || "◆"}</span><span class="pd-name">${escapeHtml(picked.name)}</span>` +
       `<span class="pd-pips" title="${doneN}/${picked.steps.length} steps">${pips}</span>` +
-      `<button class="pd-steps" id="pdSteps">Steps</button><button class="pd-x" id="pdX" title="Drop this plan" aria-label="Drop this plan">✕</button></div>` +
-    nextHtml;
-  const pm = dock.querySelector("#pdMove");
-  if (pm) pm.onclick = () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); };
-  const pa = dock.querySelector("#pdAsk");
-  if (pa) pa.onclick = askForHelp;
+      `<button class="pd-steps" id="pdSteps">Steps</button><button class="pd-x" id="pdX" title="Drop this plan" aria-label="Drop this plan">✕</button></div>`;
   dock.querySelector("#pdSteps").onclick = () => openStepsSheet(picked);
   dock.querySelector("#pdX").onclick = () => { pickedStrategyId = null; paint(); renderAssist(); };
 }
@@ -998,9 +987,11 @@ function renderPlayers() {
   // Compact: whose-move stays on one row. The 🤖 chip shows the AI LEVEL and is
   // tappable to change it — that's where you look for "who am I playing".
   el.innerHTML =
-    `<span class="pl"><span class="dot ${humanColor}"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span></span>` +
+    `<span class="pl"><span class="dot ${humanColor}"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span>` +
+      (firstGame || aiAssistOverride === "off" ? "" : `<span class="name-pips" title="your help remaining">${pipRow(playerTokens, PLAYER_TOKENS_MAX)}</span>`) + `</span>` +
     `<span class="vs">·</span>` +
-    `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot ${engineColor()}"></span> <b>🤖 ${levelName(engineEloEl.value)}</b> <span class="ai-rating">${ratingFor(engineEloEl.value)}</span> <span class="ai-caret">▾</span></button>` +
+    `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot ${engineColor()}"></span> <b>🤖 ${levelName(engineEloEl.value)}</b> <span class="ai-rating">${ratingFor(engineEloEl.value)}</span>` +
+      (firstGame || parseInt(engineEloEl.value, 10) >= 3000 ? "" : `<span class="name-pips" title="opponent lifelines">${pipRow(aiTokens, AI_TOKENS_MAX)}</span>`) + ` <span class="ai-caret">▾</span></button>` +
     (turn ? (turn === humanColor
       ? `<span class="turn you">💡 Your move</span>`
       : `<span class="turn wait">Engine…</span>`) : "");
@@ -1515,6 +1506,11 @@ function renderBoard() {
         sq.classList.add("lastmove");
         if (lastMoveLifeline) sq.classList.add("lifeline-move"); // the AI's assisted move, marked on the board
       }
+      // Lens preview — visually DISTINCT from a real move (dashed teal, not solid).
+      if (previewedMove) {
+        if (i === previewedMove.from) sq.classList.add("preview-from");
+        if (i === previewedMove.to) sq.classList.add("preview-to");
+      }
 
       // Coordinate labels on the edge squares (bottom row = files, left col = ranks).
       if (row === 7) sq.appendChild(coord("file", FILES[file]));
@@ -1598,6 +1594,141 @@ function renderStatus() {
 // a capture that wins material is Aggressive, an even trade is Simplify, a pawn
 // pushing into enemy territory is Sneaky, a quiet improving move is Safe.
 const PVAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+// ---- Glass Lens: the thumb-first "what matters NOW" control ----------------
+// One prioritised recommendation surfaced every turn (urgent threat → your plan →
+// best move), previewed on the board, with alternatives a thumb-drag away.
+const STRAT_VERB = { attack_king: "attack", pawn_storm: "attack", win_material: "material win", save_piece: "defense",
+  develop: "development", center: "central control", simplify: "simplification", passer: "passed pawn",
+  iso_attack: "attack", open_file: "file pressure", fianchetto: "fianchetto plan", outpost: "outpost plan",
+  rook_seventh: "rook lift", improve: "piece play", pawn_break: "pawn break" };
+let previewedMove = null; // {from,to,uci,san} currently previewed by the lens
+
+function candByUci(uci) { const a = assistData; return (a && (a.candidates || []).find((c) => c.uci === uci)) || null; }
+function asMove(c) { return c && { from: c.from, to: c.to, uci: c.uci, san: c.san }; }
+
+// The single most-relevant piece of advice right now, from EXISTING analysis only.
+// Returns { move, label, why, tag, kind, altBest }. null if no help on offer.
+function pickPriority() {
+  const a = assistData;
+  if (!a || a.level === "off" || !(a.candidates || []).length) return null;
+  const best = a.candidates[0];
+  const recUci = a.recommended || best.uci;
+  const rec = candByUci(recUci) || best;
+  // 1 — Urgent: a threat that overrides the plan.
+  if (a.mateThreat) return { move: asMove(rec), label: "Stop the checkmate", why: "The opponent threatens mate next move — this addresses it first.", tag: "Urgent", kind: "urgent" };
+  const big = (a.threats || []).filter((t) => t.loss >= 200)[0];
+  if (big) { const nm = pieceNameAt(big.sq); return { move: asMove(rec), label: `Protect your ${nm}`, why: `Your ${nm} on ${sqName(big.sq)} is under attack — handle it before continuing your plan.`, tag: "Urgent", kind: "urgent" }; }
+  // 2 — Your chosen plan (distinguish "fits plan" from "best move" when they differ).
+  const sr = a.strategy, picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  if (picked && picked.moveUci) {
+    const q = uciToSquares(picked.moveUci);
+    const move = { from: q.from, to: q.to, uci: picked.moveUci, san: picked.moveSan };
+    const fits = picked.moveUci.slice(0, 4) === recUci.slice(0, 4);
+    return { move, label: `Continue your ${STRAT_VERB[picked.id] || "plan"}`, why: picked.moveNote || `Follows your ${picked.name} plan.`,
+      tag: fits ? "Fits plan · best move" : "Fits your plan", kind: "strategy", altBest: fits ? null : rec };
+  }
+  // 3 — Best available.
+  const fl = moveFlavor(rec);
+  const byFlavor = { aggr: "Press the attack", simp: "Simplify the position", sneak: "A sneaky move", safe: "Build your position" };
+  return { move: asMove(rec), label: byFlavor[fl.key] || "Best move", why: rec.note || "The engine's strongest move here.", tag: "Best move", kind: "best" };
+}
+
+// Preview a move on the board (distinct from a real move): select its piece so the
+// destination lights up, mark the recommended target, and remember it. Playing is a
+// separate, deliberate action (tap the board target, or the lens Play button).
+function previewMove(m, boardOnly) {
+  if (!m) return;
+  previewedMove = m;
+  selected = m.from;
+  try { legalTargets = Array.from(game.legalTo(m.from)); } catch { legalTargets = []; }
+  if (boardOnly) renderBoard(); else paint(); // boardOnly during a drag so the lens strip survives
+}
+function clearPreview() { if (previewedMove) { previewedMove = null; } }
+
+function renderGlassLens() {
+  const el = document.getElementById("glassLens");
+  if (!el) return;
+  const active = !firstGame && game.status() === "ongoing" && game.sideToMove() === humanColor && assistData && (assistData.candidates || []).length;
+  if (!active) { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  // Modes: don't reveal the move until it's been requested (accounting preserved).
+  if (!showAnswer()) {
+    el.className = "glass-lens ask";
+    el.innerHTML = helpDelivery === "gentleman"
+      ? (helpRequestPending ? `<div class="gl-askbtn waiting">🤝 Waiting for your opponent…</div>` : `<button class="gl-askbtn" id="lensAsk" type="button">🤝 Ask for the key move <small>opponent must allow</small></button>`)
+      : `<button class="gl-askbtn" id="lensAsk" type="button">🔔 Show the key move${helpReceived ? ` <small>${helpReceived} used</small>` : ""}</button>`;
+    const b = document.getElementById("lensAsk"); if (b) b.onclick = askForHelp;
+    return;
+  }
+  const p = pickPriority();
+  if (!p) { el.hidden = true; el.innerHTML = ""; return; }
+  el.className = "glass-lens kind-" + p.kind + (previewedMove && previewedMove.uci === p.move.uci ? " previewing" : "");
+  el.innerHTML =
+    `<div class="gl-main" id="lensMain">` +
+      `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span></div>` +
+      `<div class="gl-r2"><span class="gl-move">${escapeHtml(p.move.san || "")}</span>` +
+        `<span class="gl-why">${escapeHtml(p.why || "")}</span></div>` +
+      `<div class="gl-hint">Hold to explore ▸ · tap to preview</div>` +
+    `</div>` +
+    `<div class="gl-side"><button class="gl-play" id="lensPlay" type="button">Play ▸</button>` +
+      `<button class="gl-more" id="lensMore" type="button" title="Other moves">⋯</button></div>`;
+  const main = document.getElementById("lensMain"); if (main) main.onclick = () => previewMove(p.move);
+  const play = document.getElementById("lensPlay"); if (play) play.onclick = () => playMove(p.move.from, p.move.to, true);
+  const more = document.getElementById("lensMore"); if (more) more.onclick = openAlternatives;
+  attachLensGesture(el, p);
+}
+
+// Alternatives: open the (existing) suggestions panel — reachable, but not equal weight.
+function openAlternatives() {
+  const fold = document.getElementById("movesFold");
+  if (fold) { keepScroll(() => { fold.open = true; }); fold.scrollIntoView({ block: "nearest" }); }
+}
+
+// Hold-to-explore: press the lens to reveal a chip strip of the top moves; slide a
+// thumb across to preview each on the board; release keeps the last one selected.
+// Plain tap (no hold) just previews the primary. Pointer events → works for touch+mouse.
+function attachLensGesture(el, primary) {
+  const main = el.querySelector(".gl-main");
+  if (!main) return;
+  let held = false, timer = null, strip = null, opts = [];
+  const buildOpts = () => {
+    const a = assistData, seen = new Set(), list = [];
+    const add = (mv, lab) => { if (mv && !seen.has(mv.uci)) { seen.add(mv.uci); list.push({ mv, lab }); } };
+    add(primary.move, primary.label);
+    if (primary.altBest) add(asMove(primary.altBest), "Best move");
+    (a.candidates || []).slice(0, 5).forEach((c) => add(asMove(c), moveFlavor(c).name));
+    return list.slice(0, 5);
+  };
+  const openStrip = () => {
+    opts = buildOpts();
+    strip = document.createElement("div");
+    strip.className = "lens-strip";
+    strip.innerHTML = opts.map((o, i) => `<div class="lens-chip${i === 0 ? " on" : ""}" data-i="${i}"><b>${escapeHtml(o.mv.san || "")}</b><small>${escapeHtml(o.lab)}</small></div>`).join("");
+    el.appendChild(strip);
+    el.classList.add("exploring");
+  };
+  const closeStrip = () => { if (strip) { strip.remove(); strip = null; } el.classList.remove("exploring"); };
+  const previewAt = (x, y) => {
+    const t = document.elementFromPoint(x, y);
+    const chip = t && t.closest && t.closest(".lens-chip");
+    if (chip && strip) { const o = opts[+chip.dataset.i]; if (o) { strip.querySelectorAll(".lens-chip").forEach((c) => c.classList.toggle("on", c === chip)); previewMove(o.mv, true); } }
+  };
+  main.onpointerdown = (e) => {
+    held = false;
+    timer = setTimeout(() => { held = true; openStrip(); previewMove(primary.move, true); try { main.setPointerCapture(e.pointerId); } catch {} }, 180);
+  };
+  main.onpointermove = (e) => { if (held && strip) { e.preventDefault(); previewAt(e.clientX, e.clientY); } };
+  const end = () => {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (held) { main._suppressClick = true; closeStrip(); paint(); } // sync the lens to the kept preview
+    held = false;
+  };
+  main.onpointerup = end;
+  main.onpointercancel = end;
+  // Tap (no hold) previews the primary; suppress the click that trails a hold.
+  main.onclick = () => { if (main._suppressClick) { main._suppressClick = false; return; } previewMove(primary.move); };
+}
+
 function moveFlavor(c) {
   const bs = game.boardString();
   const tgt = bs[c.to], mover = bs[c.from] || "";
@@ -1721,6 +1852,7 @@ function onSquareClick(i) {
 }
 
 function selectSquare(i) {
+  if (previewedMove && i !== previewedMove.from) previewedMove = null; // picking your own piece drops the lens preview
   selected = i;
   legalTargets = Array.from(game.legalTo(i));
   fgOn("select");
@@ -1731,6 +1863,7 @@ function selectSquare(i) {
 function clearSelection() {
   selected = null;
   legalTargets = [];
+  previewedMove = null;
   renderPieceTip(null);
   paint();
 }
