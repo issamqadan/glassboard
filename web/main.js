@@ -129,6 +129,7 @@ async function resumeAiGame(id) {
   aiTokens = typeof rec.aiTokens === "number" ? rec.aiTokens : AI_TOKENS_MAX;
   aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {};
   lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX;
+  history = [];
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
@@ -218,6 +219,9 @@ let budgetSpent = 0;
 let revealedSugg = false; // did we reveal the candidate list this position?
 let revealedBest = false; // did we reveal the single best move this position?
 let helpWasAvailable = false; // was move-level help on the table at all this game?
+// Takeback history: a snapshot captured just before each of YOUR moves, so Undo
+// rolls back your move AND the engine's reply, restoring the counters too.
+let history = [];
 const COST_SUGG = 2, COST_BEST = 4;
 // First Game Mode: a learn-by-playing layer for a total beginner. Guides the
 // first couple of moves (pulse a piece → show its squares → tap), then fades.
@@ -437,8 +441,12 @@ async function main() {
   if (ssheet) ssheet.addEventListener("click", (e) => { if (e.target === ssheet) closeSteps(); });
   const rb = document.getElementById("resignBtn");
   if (rb) rb.addEventListener("click", () => { closeMenu(); resign(); });
+  const ub = document.getElementById("undoBtn");
+  if (ub) ub.addEventListener("click", () => { closeMenu(); undoMove(); });
   const orm = document.getElementById("overRematch");
-  if (orm) orm.addEventListener("click", () => { hideOver(); newGame(); });
+  if (orm) orm.addEventListener("click", () => { hideOver(); newGame(); }); // same settings (opponent, colour, assistance)
+  const ons = document.getElementById("overNewSetup");
+  if (ons) ons.addEventListener("click", () => { hideOver(); firstGame = false; showSetup(); });
   const ocl = document.getElementById("overClose");
   if (ocl) ocl.addEventListener("click", hideOver);
   // Resume a saved game if the lobby sent us here with ?g=<id>; a total beginner
@@ -457,6 +465,7 @@ function newGame() {
   aiSaved = false;
   aiTokens = AI_TOKENS_MAX; aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {}; // fresh
   lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX;
+  history = [];
   mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
   selected = null;
@@ -922,6 +931,25 @@ function criticalMoment() {
     + `<small>Sharp spot — the next few moves matter. Slow down and check for threats.</small></span>`, "crit");
 }
 
+// Takeback: roll back your last move (and the engine's reply) to before you moved.
+// Only when it's your turn and the engine isn't mid-search. Board-only + counters;
+// the AI's lifelines aren't refunded (they're a spent game event, not a mistake).
+function undoMove() {
+  if (busy || history.length === 0) return;
+  const snap = history.pop();
+  game = Game.fromFen(snap.fen);
+  game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
+  game.setAssistOverride(firstGame ? "guided" : aiAssistOverride);
+  indepOwn = snap.indepOwn; indepFollowed = snap.indepFollowed;
+  playerFollows = snap.playerFollows; playerTokens = Math.max(0, PLAYER_TOKENS_MAX - playerFollows);
+  if (moveReview.length > snap.reviewLen) moveReview.length = snap.reviewLen;
+  selected = null; legalTargets = []; lastMove = null; lastMoveLifeline = false;
+  resigned = false; mateKingSq = -1; busy = false; evalBeforeEngine = null;
+  hideOver();
+  if (!firstGame) persistAiGame(false);
+  onPositionChanged();
+}
+
 function resign() {
   if (resigned || game.status() !== "ongoing") return;
   if (!confirm("Resign to the engine? It'll count as a loss.")) return;
@@ -1265,6 +1293,10 @@ function renderStatus() {
   else msg = `${cap} to move` + (game.inCheck() ? " — check!" : "");
   statusEl.textContent = msg;
   setLevelPill(game.assistLevel());
+  // Undo is offered only when it's your turn (the engine has replied), you have a
+  // move to take back, and it's a real game.
+  const ub = document.getElementById("undoBtn");
+  if (ub) ub.hidden = firstGame || st !== "ongoing" || side !== humanColor || history.length === 0;
 }
 
 // A playful character for a suggested move — derived from the board, not vibes:
@@ -1456,6 +1488,8 @@ function provenanceOf(from, to) {
 }
 function doPlay(from, to, promo) {
   const preFen = game.fen(); // position before the human's move (for the Player Model)
+  // Takeback snapshot: this position + the pre-move counters. Undo restores here.
+  history.push({ fen: preFen, indepOwn, indepFollowed, reviewLen: moveReview.length, playerFollows });
   const prov = provenanceOf(from, to); // classify BEFORE the move (assist is for this position)
   if (prov === "own") indepOwn += 1; else if (prov === "followed") indepFollowed += 1;
   lastMoveLifeline = false; // your move — clear the AI's lifeline board badge
