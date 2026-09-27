@@ -11,6 +11,7 @@ function gbnav() {
   const items = [
     { href: "portal.html", label: "Lobby", icon: "🏠", match: ["portal.html"] },
     { href: "index.html", label: "Play AI", icon: "🤖", match: ["index.html", ""] },
+    { href: "strategy.html", label: "Strategies", icon: "📖", match: ["strategy.html"] },
     { href: "learn.html", label: "Learn", icon: "♟", match: ["learn.html"] },
   ];
   let me = null;
