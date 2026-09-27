@@ -43,8 +43,9 @@
   <p style="margin-top:16px"><a href="./index.html">← back to the game</a></p>
 
   <script>
-    const CDN = "https://cdn.jsdelivr.net/npm/stockfish@16.0.0/src/";
-    const SF = CDN + "stockfish-nnue-16-single.js";
+    // Stockfish 11 (classical, netless) vendored SAME-ORIGIN — no CDN, no blob, no
+    // cross-origin worker, so Safari is happy. ~3.7MB, cached after first load.
+    const SF = "./vendor/stockfish/stockfish.js";
     const logEl = document.getElementById("log");
     const statusEl = document.getElementById("status");
     const bestEl = document.getElementById("best");
@@ -54,24 +55,13 @@
     function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = "status " + cls; }
     function send(cmd) { log(cmd, "» "); worker.postMessage(cmd); }
 
-    document.getElementById("init").onclick = async () => {
+    document.getElementById("init").onclick = () => {
       if (worker) { setStatus("Already loading/loaded.", "wait"); return; }
-      setStatus("Fetching Stockfish (first time ~1MB of JS, then ~7MB wasm)…", "wait");
+      setStatus("Loading Stockfish (first time ~3.7MB, then cached)…", "wait");
       try {
-        // Safari blocks cross-origin importScripts from a blob worker. So instead we
-        // FETCH the engine's JS (CORS-allowed), inline it into a SAME-ORIGIN blob
-        // worker, and set Module.locateFile so Emscripten fetches the .wasm from the
-        // CDN (a plain cross-origin fetch, which is allowed).
-        const resp = await fetch(SF);
-        if (!resp.ok) { setStatus("Couldn't fetch engine JS: HTTP " + resp.status, "err"); return; }
-        const js = await resp.text();
-        log("fetched engine JS (" + js.length + " bytes)");
-        const boot =
-          'self.Module = { locateFile: function(p){ return ' + JSON.stringify(CDN) + ' + p; } };\n' +
-          'self.onerror = function(m){ self.postMessage("BOOT_ERROR: " + m); };\n' +
-          js;
-        const url = URL.createObjectURL(new Blob([boot], { type: "text/javascript" }));
-        worker = new Worker(url);
+        // Same-origin classic worker — the vendored engine finds its wasm relative
+        // to itself. No CDN / blob / cross-origin, so no Safari restrictions.
+        worker = new Worker(SF);
         worker.onmessage = (e) => {
           const line = typeof e.data === "string" ? e.data : (e.data && e.data.data) || JSON.stringify(e.data);
           log(line, "« ");
