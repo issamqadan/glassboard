@@ -477,6 +477,10 @@ async function main() {
   await init();
   initEngineWorker();
   if (window.GBEngine) GBEngine.init().catch(() => {}); // warm up Stockfish in the background
+  // Track real user scrolls so the anti-jump restore never fights intentional scrolling.
+  const markScroll = () => { userScrollAt = nowMs(); };
+  window.addEventListener("wheel", markScroll, { passive: true });
+  window.addEventListener("touchmove", markScroll, { passive: true });
   detectFirstGame();
   const nh = document.getElementById("newHereLink");
   if (nh) nh.hidden = firstGame; // hidden while the guided game is running
@@ -711,13 +715,30 @@ function resumeThinkWindow() {
     renderThinkWindow();
   }
 }
-// Run `fn`, then snap the page scroll back to where it was — Safari scrolls a
-// <details> into view when you open it programmatically, which we never want.
+// Run `fn`, then hold the page scroll where it was — browsers scroll a <details>
+// into view when you open it programmatically (desktop Safari immediately, iOS
+// Safari after a delay). We snapshot the scroll, then restore it across several
+// frames + a short timeout so iOS's late scroll can't jerk the board around.
+let userScrollAt = 0; // timestamp of the last real user scroll (see main())
+function nowMs() { return (window.performance && performance.now) ? performance.now() : 0; }
 function keepScroll(fn) {
-  const x = window.scrollX, y = window.scrollY;
+  const se = document.scrollingElement || document.documentElement;
+  const y = window.scrollY || se.scrollTop || 0;
+  const x = window.scrollX || se.scrollLeft || 0;
+  const t0 = nowMs();
+  const restore = () => {
+    if (userScrollAt > t0) return; // you scrolled on purpose since — don't fight it
+    if (Math.abs((window.scrollY || se.scrollTop || 0) - y) > 1 || Math.abs((window.scrollX || se.scrollLeft || 0) - x) > 1) {
+      window.scrollTo(x, y);
+      if (se) { se.scrollTop = y; se.scrollLeft = x; }
+    }
+  };
   fn();
-  if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
-  requestAnimationFrame(() => { if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y); });
+  restore();
+  requestAnimationFrame(restore);
+  requestAnimationFrame(() => requestAnimationFrame(restore));
+  setTimeout(restore, 60);
+  setTimeout(restore, 160);
 }
 function revealHint(auto) {
   clearThinkWindow();
@@ -786,25 +807,24 @@ function renderEval() {
 // the scroll position before rendering and restore it (now + next frame), keeping
 // the board perfectly stationary as you and the opponent move.
 function paint() {
-  const sx = window.scrollX, sy = window.scrollY;
-  renderFirstGame();
-  renderBoard();
-  renderPlayers();
-  renderEval();
-  renderAiAssist();
-  renderCoach();
-  renderAssist();
-  renderStrategy();
-  renderPlanDock();
-  renderCaptured();
-  renderOpening();
-  renderClocks();
-  renderGlass();
-  renderStatus();
-  renderBudget();
-  showGameOverIfNeeded();
-  if (window.scrollX !== sx || window.scrollY !== sy) window.scrollTo(sx, sy);
-  requestAnimationFrame(() => { if (window.scrollX !== sx || window.scrollY !== sy) window.scrollTo(sx, sy); });
+  keepScroll(() => {
+    renderFirstGame();
+    renderBoard();
+    renderPlayers();
+    renderEval();
+    renderAiAssist();
+    renderCoach();
+    renderAssist();
+    renderStrategy();
+    renderPlanDock();
+    renderCaptured();
+    renderOpening();
+    renderClocks();
+    renderGlass();
+    renderStatus();
+    renderBudget();
+    showGameOverIfNeeded();
+  });
 }
 
 // Plan Dock: the strategy made glanceable and always-visible right under the
