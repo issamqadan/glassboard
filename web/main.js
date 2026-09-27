@@ -1072,17 +1072,22 @@ function openGlassSheet() {
 const MOMENT_MS = 7000;
 let momentTimer = null;
 function hideMoment() { const e = document.getElementById("momentToast"); if (e) e.classList.remove("show"); }
-function showMoment(html, kind) {
+// `action` (optional) = { label, fn } renders a button; the toast lingers longer so
+// there's time to act on it (used by the blunder coach's "take it back").
+function showMoment(html, kind, action) {
   let el = document.getElementById("momentToast");
   if (!el) {
     el = document.createElement("div"); el.id = "momentToast"; el.className = "moment-toast";
-    el.addEventListener("click", () => { if (momentTimer) clearTimeout(momentTimer); hideMoment(); });
     document.body.appendChild(el);
   }
+  el.onclick = (e) => { if (e.target.closest(".mo-act")) return; if (momentTimer) clearTimeout(momentTimer); hideMoment(); };
   el.className = "moment-toast show" + (kind ? " " + kind : "");
-  el.innerHTML = html + `<span class="mo-bar" style="animation-duration:${MOMENT_MS}ms"></span>`;
+  const ms = action ? MOMENT_MS + 4000 : MOMENT_MS; // give more time when there's an action
+  el.innerHTML = html + (action ? `<button class="mo-act" type="button">${action.label}</button>` : "") +
+    `<span class="mo-bar" style="animation-duration:${ms}ms"></span>`;
+  if (action) { const b = el.querySelector(".mo-act"); if (b) b.onclick = () => { hideMoment(); action.fn(); }; }
   if (momentTimer) clearTimeout(momentTimer);
-  momentTimer = setTimeout(hideMoment, MOMENT_MS);
+  momentTimer = setTimeout(hideMoment, ms);
 }
 // The kinds of assistance the AI can spend — the same glass-box capabilities a
 // human gets, named so its use reads as a game event, not an engine internal.
@@ -1100,6 +1105,29 @@ function aiLifelineMoment(kind) {
     `<span class="mo-ic">🛟</span><span class="mo-txt"><b>${levelName(engineEloEl.value)} used a lifeline · ${k.tag}</b>`
     + `<small>It was ${k.note}. ${left} lifeline${left === 1 ? "" : "s"} left.</small></span>`,
     "ai");
+}
+// Blunder coach — special assistance when you play a weak move. Chess-player framing:
+// name the severity, quantify the cost, and offer a takeback. Only when help is on
+// (No-help = pure chess, no nagging); it only NAMES the better move in Open Hand, so
+// On-Call/Gentleman aren't force-fed advice they chose to request. Capped per game.
+function maybeBlunderCoach(entry, bestSan) {
+  if (aiAssistOverride === "off") return;
+  if (!entry || entry.wasBest || entry.cp == null || entry.cp < 150) return;
+  if (moveReview[moveReview.length - 1] !== entry) return; // you've already played on
+  if ((momentSeen.blunders || 0) >= 5) return;
+  momentSeen.blunders = (momentSeen.blunders || 0) + 1;
+  const pawns = (entry.cp / 100).toFixed(1);
+  const severe = entry.cp >= 300;
+  const nameBetter = helpDelivery === "open" && bestSan; // don't reveal in ask-modes
+  const head = severe ? "Blunder" : "There was better";
+  const ic = severe ? "🚨" : "⚠️";
+  const msg = (severe ? `That hands back about ${pawns} pawns.` : `A stronger move was there (~${pawns} pawns better).`) +
+    (nameBetter ? ` <b>${escapeHtml(bestSan)}</b> was stronger.` : "");
+  showMoment(
+    `<span class="mo-ic">${ic}</span><span class="mo-txt"><b>${head}</b><small>${msg}</small></span>`,
+    severe ? "crit" : "ai",
+    history.length > 0 ? { label: "↩ Take it back", fn: undoMove } : null,
+  );
 }
 // You played the engine's top move without peeking at the help — celebrate agency.
 function foundItMoment() {
@@ -1954,8 +1982,9 @@ function doPlay(from, to, promo, viaHelp) {
     if (prov === "own" && wasBest && !revealedBest && (momentSeen.found || 0) < 3 && moveReview.length >= 3) {
       momentSeen.found = (momentSeen.found || 0) + 1; foundItMoment();
     }
+    const bestSan = (assistData.candidates[0] || {}).san || "";
     askEngine("scoreMove", { fen: preFen, from, to, depth: depth() })
-      .then((played) => { if (played > -1000000) entry.cp = Math.max(0, bestScore - played); })
+      .then((played) => { if (played > -1000000) { entry.cp = Math.max(0, bestScore - played); maybeBlunderCoach(entry, bestSan); } })
       .catch(() => {});
   }
   const ok = game.makeMove(from, to, promo);

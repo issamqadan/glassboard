@@ -495,6 +495,10 @@ button {
 .moment-toast .mo-txt b { font-size: 0.9rem; color: #eef3fb; }
 .moment-toast .mo-txt small { font-size: 0.78rem; color: #9fb0c8; line-height: 1.32; }
 .moment-toast.show { pointer-events: auto; cursor: pointer; }
+.moment-toast .mo-act { flex: none; align-self: center; font: inherit; font-weight: 800; font-size: 0.8rem; cursor: pointer;
+  color: #04222d; background: linear-gradient(140deg, #7ee0d6, #4bb3a6); border: 0; border-radius: 9px; padding: 8px 13px; white-space: nowrap; }
+.moment-toast.crit .mo-act { background: linear-gradient(140deg, #f2a0aa, #e06575); }
+.moment-toast .mo-act:hover { filter: brightness(1.07); }
 .moment-toast .mo-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%;
   transform-origin: left; background: rgba(255,255,255,0.5); border-radius: 0 0 14px 14px;
   animation-name: mo-drain; animation-timing-function: linear; }
