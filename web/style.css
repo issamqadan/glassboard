@@ -1499,18 +1499,50 @@ main.game .strat-panel { display: none; }
 /* Sheets/overlays must sit ABOVE the fixed nav bars (z-index 60). */
 .sheet-overlay, .promo-overlay { z-index: 200 !important; }
 
+/* ---- MOBILE: essentials (players + board + Lens) always visible; the move list
+   flows below (scroll for history), chess-app style. ---- */
 @media (max-width: 860px) {
   main.game { max-width: none; padding: 8px 10px; }
   main.game .layout { display: flex; flex-direction: column; gap: 6px; width: 100%; margin: 0; }
   main.game .board-col { display: block; width: 100%; margin: 0; }
-  main.game .panels { display: none; }                 /* aside folded into HUD + sheets */
-  main.game #materialBar, main.game #openingLine { display: none; }  /* retired from above the board */
-  /* THE key rule: cap the board by height so the gamebar + board + HUD fit one
-     screen without scrolling. (viewport − top/bottom nav − gamebar − HUD ≈ 340px). */
-  main.game .board-wrap { width: min(94vw, calc(100dvh - 340px)); max-width: 94vw;
+  main.game #materialBar, main.game #openingLine, main.game #planDock, main.game #status { display: none; }
+  /* Cap the board by height so gamebar + board + Lens fit above the fold. */
+  main.game .board-wrap { width: min(94vw, calc(100dvh - 330px)); max-width: 94vw;
     height: auto; aspect-ratio: 1 / 1; margin: 0 auto; }
-  main.game #glassLens { margin: 8px auto 0; width: 100%; }
+  /* The aside stacks under the board: show the ESSENTIAL Lens, then the move list;
+     hide the redundant panels (folded into HUD/sheets). */
+  main.game .panels { display: block; width: 100%; margin: 6px 0 0; }
+  main.game .panels > #pieceTip, main.game .panels > #stratPanelWrap,
+  main.game .panels > #thinkWindow, main.game .panels > #aiAssist { display: none; }
+  main.game #glassLens { margin: 0 auto 8px; width: 100%; }
   main.game .players { margin: 0 0 6px; padding: 7px 10px; gap: 8px; }
   main.game .gb-actions { gap: 8px; }
-  main.game #status { display: none; }
 }
+
+/* ---- DESKTOP: board centered (fits viewport height) + a right "Glass" panel that
+   holds the Lens and the move list, scrolling internally so the page never does. ---- */
+@media (min-width: 861px) {
+  main.game { height: calc(100vh - 76px); overflow: hidden; display: flex; flex-direction: column; }
+  main.game .layout { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+  main.game .panels { flex: 0 0 340px; max-width: 340px; display: flex; flex-direction: column; gap: 10px;
+    min-height: 0; overflow-y: auto; padding-right: 4px; }
+  main.game .panels > #pieceTip, main.game .panels > #stratPanelWrap,
+  main.game .panels > #thinkWindow, main.game .panels > #aiAssist { display: none; }
+  main.game #glassLens { margin: 0; }
+}
+
+/* Move list — the glass-box in the record: your moves tagged own vs helped. */
+.move-list { border: 1px solid var(--line, #1d2740); border-radius: 12px; background: rgba(255,255,255,0.02);
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.move-list .mv-head { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px;
+  border-bottom: 1px solid var(--line, #1d2740); font-weight: 700; font-size: 0.85rem; color: #cfe0f0; }
+.move-list .mv-legend { font-size: 0.66rem; font-weight: 600; color: #8494ad; }
+.move-list .mv-scroll { overflow-y: auto; max-height: 40vh; }
+@media (min-width: 861px) { .move-list .mv-scroll { max-height: none; } .move-list { flex: 1 1 auto; } }
+.move-list .mv-row { display: grid; grid-template-columns: 34px 1fr 1fr; align-items: center; padding: 5px 10px;
+  font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.move-list .mv-row:nth-child(odd) { background: rgba(255,255,255,0.02); }
+.move-list .mv-num { color: #7d8ba6; font-size: 0.78rem; }
+.move-list .mv-cell { display: inline-flex; align-items: center; gap: 5px; color: #dbe4f0; padding: 2px 4px; border-radius: 6px; }
+.move-list .mv-cell.you { color: #eef4fb; font-weight: 600; }
+.move-list .mv-prov { font-size: 0.78rem; }

@@ -841,6 +841,7 @@ function paint() {
     renderStrategy();
     renderPlanDock();
     renderGlassLens();
+    renderMoveList();
     renderCaptured();
     renderOpening();
     renderClocks();
@@ -909,9 +910,57 @@ function currentOpening() {
 }
 function renderOpening() {
   // Retired from above the board (it flashed on every move and wasn't actionable).
-  // The opening name now rides quietly inside the Glass Lens instead.
   const el = document.getElementById("openingLine");
   if (el) { el.hidden = true; el.innerHTML = ""; }
+}
+
+// The MOVE LIST — Glassboard's signature: every move shown, and each of YOUR moves
+// tagged with its provenance (💪 found alone · 🤝 took help), so the glass-box lives
+// in the record itself. Replays UCI from the start for readable SAN.
+const START_FEN_STR = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+function startBoardArr() {
+  const rows = START_FEN_STR.split("/"), arr = new Array(64).fill(".");
+  for (let i = 0; i < 8; i++) { const rank = 7 - i; let f = 0; for (const ch of rows[i]) { if (/\d/.test(ch)) f += +ch; else { arr[rank * 8 + f] = ch; f++; } } }
+  return arr;
+}
+function sanFromArr(arr, uci) {
+  const from = (uci.charCodeAt(0) - 97) + (uci.charCodeAt(1) - 49) * 8;
+  const to = (uci.charCodeAt(2) - 97) + (uci.charCodeAt(3) - 49) * 8;
+  const p = (arr[from] || "p").toLowerCase(), cap = arr[to] && arr[to] !== ".";
+  const dst = uci.slice(2, 4);
+  if (p === "p") return (cap ? uci[0] + "x" : "") + dst + (uci.length > 4 ? "=" + uci[4].toUpperCase() : "");
+  return p.toUpperCase() + (cap ? "x" : "") + dst;
+}
+function applyUciArr(arr, uci) {
+  const from = (uci.charCodeAt(0) - 97) + (uci.charCodeAt(1) - 49) * 8;
+  const to = (uci.charCodeAt(2) - 97) + (uci.charCodeAt(3) - 49) * 8;
+  const p = arr[from]; arr[from] = ".";
+  arr[to] = uci.length > 4 ? (p === p.toUpperCase() ? uci[4].toUpperCase() : uci[4].toLowerCase()) : p;
+}
+function renderMoveList() {
+  const el = document.getElementById("moveList");
+  if (!el) return;
+  if (firstGame || uciHistory.length === 0) { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  const arr = startBoardArr();
+  const sans = uciHistory.map((u) => { const s = sanFromArr(arr, u); applyUciArr(arr, u); return s; });
+  // Human plies: even if you're White (ply 0,2,…), odd if Black. Map to moveReview order.
+  const humanEven = humanColor === "white";
+  const provIcon = { own: `<span class="mv-prov own" title="you found this on your own">💪</span>`, followed: `<span class="mv-prov foll" title="you took help for this move">🤝</span>` };
+  let hi = 0; // index into moveReview (your moves, in order)
+  const cell = (ply) => {
+    if (ply >= sans.length) return `<span class="mv-cell empty"></span>`;
+    const isHuman = (ply % 2 === 0) === humanEven;
+    let icon = "";
+    if (isHuman) { const r = moveReview[hi]; if (r && provIcon[r.prov]) icon = provIcon[r.prov]; hi++; }
+    return `<span class="mv-cell${isHuman ? " you" : ""}">${escapeHtml(sans[ply])}${icon}</span>`;
+  };
+  let rows = "";
+  for (let i = 0; i < sans.length; i += 2) {
+    rows += `<div class="mv-row"><span class="mv-num">${i / 2 + 1}.</span>${cell(i)}${cell(i + 1)}</div>`;
+  }
+  el.innerHTML = `<div class="mv-head">Moves <span class="mv-legend">💪 you · 🤝 helped</span></div><div class="mv-scroll">${rows}</div>`;
+  const sc = el.querySelector(".mv-scroll"); if (sc) sc.scrollTop = sc.scrollHeight;
 }
 
 // Captured material as one tug-bar above the board (you are White → left side).

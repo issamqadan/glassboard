@@ -131,15 +131,17 @@
             <div id="board" class="board" aria-label="chess board"></div>
             <svg id="planOverlay" class="plan-overlay" viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg>
           </div>
-          <!-- Glass Lens: the thumb-first "what matters now" control. Shows the one
-               most-relevant recommendation; hold to explore alternatives, tap to preview. -->
-          <div id="glassLens" class="glass-lens" hidden></div>
-          <!-- Plan Dock: the always-visible strategy summary (plan · progress). -->
           <div id="planDock" class="plan-dock" hidden></div>
         </div>
         <aside class="panels">
+          <!-- Glass Lens: the "what matters now" recommendation (assistance-first). On
+               desktop it heads the right panel; on mobile it sits right under the board. -->
+          <div id="glassLens" class="glass-lens" hidden></div>
           <!-- Coach: transient safety net — speaks only for real danger/opportunity. -->
           <div id="coach" class="coach" aria-live="polite" hidden></div>
+          <!-- Move list with PROVENANCE — each of your moves is tagged own vs assisted,
+               so the glass-box is visible in the record itself. -->
+          <div id="moveList" class="move-list" hidden></div>
           <!-- Piece tip: teaches the piece the first time you touch it; tap for a full tour. -->
           <div id="pieceTip" class="piece-tip" hidden></div>
           <!-- Strategy is the headline: pick a plan, follow it step-by-step, see progress. -->
