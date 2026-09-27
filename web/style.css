@@ -942,45 +942,42 @@ main.game .board-wrap.glow-draw { box-shadow: 0 0 0 2px rgba(147,162,192,.5), 0 
 .alt-sheet-body .alt-body b { color: #eaf0fb; font-size: 0.9rem; }
 .alt-sheet-body .alt-body small { color: #93a2c0; font-size: 0.78rem; line-height: 1.35; }
 
-/* ---- Glass Lens: the thumb-first "what matters now" control ---- */
-.glass-lens { position: relative; display: flex; align-items: stretch; gap: 10px; margin: 10px 0 0;
+/* ---- Glass Lens: always-visible "what matters now" HUD (tap ▶ to play) ---- */
+.glass-lens { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 0;
   padding: 11px 13px; border-radius: 14px; background: linear-gradient(150deg, rgba(92,201,236,0.12), rgba(126,224,214,0.05));
-  border: 1px solid rgba(92,201,236,0.34); box-shadow: 0 10px 30px -18px rgba(92,201,236,0.6); }
+  border: 1px solid rgba(92,201,236,0.34); box-shadow: 0 10px 30px -18px rgba(92,201,236,0.6);
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; } /* kill iOS long-press magnifier */
 .glass-lens.kind-urgent { background: linear-gradient(150deg, rgba(242,109,122,0.16), rgba(242,109,122,0.05)); border-color: rgba(242,109,122,0.5); }
 .glass-lens.kind-strategy { background: linear-gradient(150deg, rgba(126,224,214,0.14), rgba(92,201,236,0.05)); border-color: rgba(126,224,214,0.45); }
-.glass-lens.previewing { box-shadow: 0 0 0 1px rgba(126,224,214,0.7), 0 12px 32px -16px rgba(126,224,214,0.7); }
-.glass-lens .gl-main { flex: 1; min-width: 0; cursor: pointer; display: block; text-align: left;
-  background: none; border: 0; color: inherit; font: inherit; padding: 0; -webkit-user-select: none; user-select: none; }
 .glass-lens .gl-r1 { display: flex; align-items: center; gap: 8px; }
-.glass-lens .gl-label { font-weight: 800; font-size: 1rem; color: #eef4fb; letter-spacing: -0.01em; }
-.glass-lens .gl-tag { font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+.glass-lens .gl-label { font-weight: 800; font-size: 1rem; color: #eef4fb; letter-spacing: -0.01em; flex: 1; }
+.glass-lens .gl-tag { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
   padding: 2px 7px; border-radius: 999px; background: rgba(147,162,192,0.2); color: #b9c6da; white-space: nowrap; }
 .glass-lens .gl-tag.t-urgent { background: rgba(242,109,122,0.22); color: #f4a2ab; }
 .glass-lens .gl-tag.t-strategy { background: rgba(126,224,214,0.2); color: #8fe0d6; }
-.glass-lens .gl-r2 { display: flex; align-items: baseline; gap: 9px; margin-top: 3px; flex-wrap: wrap; }
-.glass-lens .gl-move { font-weight: 800; font-size: 1.05rem; color: #7ee0d6; font-variant-numeric: tabular-nums; }
-.glass-lens .gl-why { font-size: 0.82rem; color: #b9c6da; line-height: 1.35; flex: 1; min-width: 120px; }
-.glass-lens .gl-hint { margin-top: 5px; font-size: 0.68rem; color: #7d8ba6; }
-.glass-lens .gl-side { display: flex; flex-direction: column; gap: 6px; justify-content: center; flex: none; }
-.glass-lens .gl-play { font: inherit; font-weight: 800; font-size: 0.9rem; cursor: pointer; color: #04222d;
-  background: linear-gradient(140deg, #7ee0d6, #4bb3a6); border: 0; border-radius: 10px; padding: 9px 14px; white-space: nowrap; }
-.glass-lens.kind-urgent .gl-play { background: linear-gradient(140deg, #f2707e, #c94b5a); color: #fff; }
-.glass-lens .gl-more { font: inherit; font-weight: 800; cursor: pointer; color: #cfe0f0;
-  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); border-radius: 10px; padding: 6px 12px; }
-.glass-lens .gl-askbtn { display: block; width: 100%; font: inherit; font-weight: 800; font-size: 0.95rem; cursor: pointer;
-  color: #04222d; background: linear-gradient(140deg, #8fe0d6, #5cc9ec); border: 0; border-radius: 11px; padding: 13px; text-align: center; }
+.glass-lens .gl-why { font-size: 0.82rem; color: #c3d0e6; line-height: 1.4; }
+.glass-lens .gl-actions { display: flex; gap: 8px; align-items: center; }
+.glass-lens .gl-playmove { flex: 1; font: inherit; font-weight: 800; font-size: 1.05rem; cursor: pointer; color: #04222d;
+  background: linear-gradient(140deg, #7ee0d6, #4bb3a6); border: 0; border-radius: 11px; padding: 12px; white-space: nowrap;
+  font-variant-numeric: tabular-nums; touch-action: manipulation; }
+.glass-lens.kind-urgent .gl-playmove { background: linear-gradient(140deg, #f2707e, #c94b5a); color: #fff; }
+.glass-lens .gl-show, .glass-lens .gl-more { font: inherit; font-weight: 700; font-size: 0.82rem; cursor: pointer; color: #cfe0f0;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); border-radius: 11px; padding: 11px 12px; white-space: nowrap; touch-action: manipulation; }
+.glass-lens .gl-plan { align-self: flex-start; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+  color: #cfe6f2; background: rgba(126,224,214,0.1); border: 1px solid rgba(126,224,214,0.28); border-radius: 999px; padding: 5px 11px; }
+.glass-lens .gl-askbtn { display: block; width: 100%; font: inherit; font-weight: 800; font-size: 0.98rem; cursor: pointer;
+  color: #04222d; background: linear-gradient(140deg, #8fe0d6, #5cc9ec); border: 0; border-radius: 11px; padding: 14px; text-align: center; touch-action: manipulation; }
 .glass-lens .gl-askbtn small { display: block; font-weight: 600; font-size: 0.72rem; opacity: 0.85; margin-top: 2px; }
 .glass-lens .gl-askbtn.waiting { background: rgba(126,224,214,0.12); color: #9fd8d0; border: 1px dashed rgba(126,224,214,0.5); }
 
-/* Hold-to-explore chip strip (floats above the lens during a press-drag). */
-.lens-strip { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 8px); z-index: 30;
-  display: flex; gap: 6px; overflow-x: auto; padding: 8px; border-radius: 12px;
-  background: rgba(12,17,27,0.98); border: 1px solid var(--line-2, #2b3856); box-shadow: 0 16px 40px -16px rgba(0,0,0,0.7); }
-.lens-chip { flex: 0 0 auto; min-width: 64px; text-align: center; padding: 8px 10px; border-radius: 9px;
-  background: rgba(255,255,255,0.05); border: 1px solid transparent; }
-.lens-chip b { display: block; font-size: 0.95rem; color: #eaf0fb; font-variant-numeric: tabular-nums; }
-.lens-chip small { font-size: 0.66rem; color: #93a2c0; }
-.lens-chip.on { background: rgba(126,224,214,0.18); border-color: #7ee0d6; }
+/* Alternatives sheet: ▶ plays, 👁 shows on board. */
+.alt-sheet-body .alt-row { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 11px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--line, #1d2740); }
+.alt-sheet-body .alt-btns { margin-left: auto; display: flex; gap: 6px; }
+.alt-sheet-body .alt-show, .alt-sheet-body .alt-play { font: inherit; font-weight: 800; font-size: 0.82rem; cursor: pointer;
+  border-radius: 9px; padding: 8px 11px; }
+.alt-sheet-body .alt-show { background: rgba(255,255,255,0.07); color: #cfe0f0; border: 1px solid rgba(255,255,255,0.16); }
+.alt-sheet-body .alt-play { background: linear-gradient(140deg, #7ee0d6, #4bb3a6); color: #04222d; border: 0; }
 
 /* Lens preview on the board — dashed teal, deliberately DIFFERENT from a real move. */
 .sq.preview-to::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;

@@ -1724,23 +1724,26 @@ function renderGlassLens() {
   }
   const p = pickPriority();
   if (!p) { el.hidden = true; el.innerHTML = ""; return; }
-  const isPrev = previewedMove && previewedMove.uci === p.move.uci;
-  el.className = "glass-lens kind-" + p.kind + (isPrev ? " previewing" : "");
+  // Always-visible HUD: the advice is SHOWN (label + why), and the move is a single
+  // clear button — tap ▶ to play it. A plan shortcut + alternatives sit alongside.
+  const sr = assistData.strategy, picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  el.className = "glass-lens kind-" + p.kind;
   el.innerHTML =
-    `<button class="gl-main" id="lensMain" type="button">` +
-      `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span></div>` +
-      `<div class="gl-r2"><span class="gl-move">${escapeHtml(p.move.san || "")}</span>` +
-        `<span class="gl-why">${escapeHtml(p.why || "")}</span></div>` +
-      `<div class="gl-hint">${isPrev ? "shown on the board ↑ — tap Play, or a highlighted square" : "tap to show it on the board"}</div>` +
-    `</button>` +
-    `<div class="gl-side"><button class="gl-play" id="lensPlay" type="button">Play ▸</button>` +
-      `<button class="gl-more" id="lensMore" type="button" title="Other moves">⋯ moves</button></div>`;
-  const main = document.getElementById("lensMain"); if (main) main.onclick = () => previewMove(p.move);
-  const play = document.getElementById("lensPlay"); if (play) play.onclick = () => playMove(p.move.from, p.move.to, true);
-  const more = document.getElementById("lensMore"); if (more) more.onclick = () => openAltSheet(p);
+    `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span></div>` +
+    (p.why ? `<div class="gl-why">${escapeHtml(p.why)}</div>` : "") +
+    `<div class="gl-actions">` +
+      `<button class="gl-playmove" id="lensPlay" type="button">▶ ${escapeHtml(p.move.san || "Play")}</button>` +
+      `<button class="gl-show" id="lensShow" type="button" title="Show on the board">👁 Show</button>` +
+      `<button class="gl-more" id="lensMore" type="button">⋯ moves</button>` +
+    `</div>` +
+    (picked ? `<button class="gl-plan" id="lensPlan" type="button">🧭 ${escapeHtml(picked.name)} · steps</button>` : "");
+  document.getElementById("lensPlay").onclick = () => playMove(p.move.from, p.move.to, true);
+  document.getElementById("lensShow").onclick = () => previewMove(p.move);
+  document.getElementById("lensMore").onclick = () => openAltSheet(p);
+  const pl = document.getElementById("lensPlan"); if (pl) pl.onclick = () => openStepsSheet(picked);
 }
 
-// Alternatives — a proper, dismissable bottom sheet (tap a move to preview it).
+// Alternatives — a dismissable bottom sheet. ▶ plays a move; 👁 shows it on the board.
 function openAltSheet(p) {
   const body = document.getElementById("altSheetBody");
   const sh = document.getElementById("altSheet");
@@ -1751,9 +1754,12 @@ function openAltSheet(p) {
   if (p.altBest) add(asMove(p.altBest), "Best move", p.altBest.note || "");
   (assistData.candidates || []).slice(0, 6).forEach((c) => add(asMove(c), moveFlavor(c).name, c.note || ""));
   body.innerHTML = rows.map((r, i) =>
-    `<button class="alt-row" data-i="${i}" type="button"><span class="alt-move">${escapeHtml(r.mv.san || "")}</span>` +
-    `<span class="alt-body"><b>${escapeHtml(r.lab)}</b>${r.note ? `<small>${escapeHtml(r.note)}</small>` : ""}</span></button>`).join("");
-  body.querySelectorAll(".alt-row").forEach((b) => b.onclick = () => { sh.style.display = "none"; previewMove(rows[+b.dataset.i].mv); });
+    `<div class="alt-row"><span class="alt-move">${escapeHtml(r.mv.san || "")}</span>` +
+    `<span class="alt-body"><b>${escapeHtml(r.lab)}</b>${r.note ? `<small>${escapeHtml(r.note)}</small>` : ""}</span>` +
+    `<span class="alt-btns"><button class="alt-show" data-i="${i}" type="button" title="Show on board">👁</button>` +
+    `<button class="alt-play" data-i="${i}" type="button">▶ Play</button></span></div>`).join("");
+  body.querySelectorAll(".alt-play").forEach((b) => b.onclick = () => { sh.style.display = "none"; const m = rows[+b.dataset.i].mv; playMove(m.from, m.to, true); });
+  body.querySelectorAll(".alt-show").forEach((b) => b.onclick = () => { sh.style.display = "none"; previewMove(rows[+b.dataset.i].mv); });
   sh.style.display = "grid";
 }
 
