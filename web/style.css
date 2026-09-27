@@ -924,6 +924,24 @@ main.game .board-wrap.glow-draw { box-shadow: 0 0 0 2px rgba(147,162,192,.5), 0 
 .ai-assist .al-empty { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08);
   font-size: 0.76rem; color: #8a9ab2; font-style: italic; line-height: 1.4; }
 
+/* Setup screen — back/cancel + lobby, so you're never trapped in match setup. */
+.setup-head { position: relative; }
+.setup-cancel { position: absolute; top: -4px; right: -4px; width: 34px; height: 34px; border-radius: 10px;
+  font-size: 17px; cursor: pointer; color: #b9c6da; background: rgba(255,255,255,0.06); border: 1px solid var(--line, #1d2740); }
+.setup-cancel:hover { color: #eaf0fb; border-color: #3a5980; }
+.setup-lobby { position: absolute; top: 1px; left: -2px; font-size: 0.8rem; font-weight: 600; color: #8ea0b8; }
+.setup-lobby:hover { color: var(--accent, #5cc9ec); }
+
+/* Alternatives sheet rows */
+.alt-sheet-body { display: flex; flex-direction: column; gap: 7px; max-height: 62vh; overflow: auto; }
+.alt-sheet-body .alt-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  font: inherit; color: inherit; padding: 11px 13px; border-radius: 11px; background: rgba(255,255,255,0.04); border: 1px solid var(--line, #1d2740); }
+.alt-sheet-body .alt-row:hover { border-color: #7ee0d6; }
+.alt-sheet-body .alt-move { font-weight: 800; font-size: 1.05rem; color: #7ee0d6; font-variant-numeric: tabular-nums; min-width: 62px; }
+.alt-sheet-body .alt-body { display: flex; flex-direction: column; gap: 1px; }
+.alt-sheet-body .alt-body b { color: #eaf0fb; font-size: 0.9rem; }
+.alt-sheet-body .alt-body small { color: #93a2c0; font-size: 0.78rem; line-height: 1.35; }
+
 /* ---- Glass Lens: the thumb-first "what matters now" control ---- */
 .glass-lens { position: relative; display: flex; align-items: stretch; gap: 10px; margin: 10px 0 0;
   padding: 11px 13px; border-radius: 14px; background: linear-gradient(150deg, rgba(92,201,236,0.12), rgba(126,224,214,0.05));
@@ -931,7 +949,8 @@ main.game .board-wrap.glow-draw { box-shadow: 0 0 0 2px rgba(147,162,192,.5), 0 
 .glass-lens.kind-urgent { background: linear-gradient(150deg, rgba(242,109,122,0.16), rgba(242,109,122,0.05)); border-color: rgba(242,109,122,0.5); }
 .glass-lens.kind-strategy { background: linear-gradient(150deg, rgba(126,224,214,0.14), rgba(92,201,236,0.05)); border-color: rgba(126,224,214,0.45); }
 .glass-lens.previewing { box-shadow: 0 0 0 1px rgba(126,224,214,0.7), 0 12px 32px -16px rgba(126,224,214,0.7); }
-.glass-lens .gl-main { flex: 1; min-width: 0; cursor: pointer; touch-action: none; -webkit-user-select: none; user-select: none; }
+.glass-lens .gl-main { flex: 1; min-width: 0; cursor: pointer; display: block; text-align: left;
+  background: none; border: 0; color: inherit; font: inherit; padding: 0; -webkit-user-select: none; user-select: none; }
 .glass-lens .gl-r1 { display: flex; align-items: center; gap: 8px; }
 .glass-lens .gl-label { font-weight: 800; font-size: 1rem; color: #eef4fb; letter-spacing: -0.01em; }
 .glass-lens .gl-tag { font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;

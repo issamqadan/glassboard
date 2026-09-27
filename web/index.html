@@ -12,6 +12,8 @@
     <div id="setupScreen" class="setup-screen" hidden>
       <div class="setup-card">
         <div class="setup-head">
+          <button class="setup-cancel" id="setupCancel" type="button" title="Back" aria-label="Back">✕</button>
+          <a class="setup-lobby" href="./portal.html" title="Lobby">🏠 Lobby</a>
           <span class="setup-eyebrow">Play the AI</span>
           <h2 class="setup-title">Set up your match</h2>
           <p class="setup-sub">Choose who you're up against — and how much help you want in your corner.</p>
@@ -155,6 +157,12 @@
         <div class="sheet">
           <div class="sheet-head"><span id="glassSheetTitle">Assistance log</span><span class="sheet-sub">every help either side took — in the open</span><button class="sheet-close" id="glassSheetClose">✕</button></div>
           <div id="glassSheetBody" class="glass-sheet-body"></div>
+        </div>
+      </div>
+      <div id="altSheet" class="sheet-overlay" style="display:none">
+        <div class="sheet">
+          <div class="sheet-head"><span>Other moves</span><span class="sheet-sub">tap one to see it on the board</span><button class="sheet-close" id="altSheetClose">✕</button></div>
+          <div id="altSheetBody" class="alt-sheet-body"></div>
         </div>
       </div>
       <div id="promoOverlay" class="promo-overlay" style="display:none">

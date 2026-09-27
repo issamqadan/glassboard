@@ -401,6 +401,12 @@ function showSetup() {
   renderRungPicker();
   const start = document.getElementById("setupStart");
   if (start) start.onclick = startFromSetup;
+  // Cancel/back: return to the game in progress, or the lobby if there's none.
+  const cancel = document.getElementById("setupCancel");
+  if (cancel) cancel.onclick = () => {
+    if (game) { sc.hidden = true; startClock(); }
+    else location.href = "./portal.html";
+  };
   sc.hidden = false;
 }
 // The delivery picker only applies when help is enabled ("No help" → hide it).
@@ -524,6 +530,10 @@ async function main() {
   const closeGlass = () => { if (gsheet) gsheet.style.display = "none"; };
   if (gsclose) gsclose.addEventListener("click", closeGlass);
   if (gsheet) gsheet.addEventListener("click", (e) => { if (e.target === gsheet) closeGlass(); });
+  const asheet = document.getElementById("altSheet"), asclose = document.getElementById("altSheetClose");
+  const closeAlt = () => { if (asheet) asheet.style.display = "none"; };
+  if (asclose) asclose.addEventListener("click", closeAlt);
+  if (asheet) asheet.addEventListener("click", (e) => { if (e.target === asheet) closeAlt(); });
   const rb = document.getElementById("resignBtn");
   if (rb) rb.addEventListener("click", () => { closeMenu(); resign(); });
   const ub = document.getElementById("undoBtn");
@@ -1714,71 +1724,37 @@ function renderGlassLens() {
   }
   const p = pickPriority();
   if (!p) { el.hidden = true; el.innerHTML = ""; return; }
-  el.className = "glass-lens kind-" + p.kind + (previewedMove && previewedMove.uci === p.move.uci ? " previewing" : "");
+  const isPrev = previewedMove && previewedMove.uci === p.move.uci;
+  el.className = "glass-lens kind-" + p.kind + (isPrev ? " previewing" : "");
   el.innerHTML =
-    `<div class="gl-main" id="lensMain">` +
+    `<button class="gl-main" id="lensMain" type="button">` +
       `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span></div>` +
       `<div class="gl-r2"><span class="gl-move">${escapeHtml(p.move.san || "")}</span>` +
         `<span class="gl-why">${escapeHtml(p.why || "")}</span></div>` +
-      `<div class="gl-hint">Hold to explore ▸ · tap to preview</div>` +
-    `</div>` +
+      `<div class="gl-hint">${isPrev ? "shown on the board ↑ — tap Play, or a highlighted square" : "tap to show it on the board"}</div>` +
+    `</button>` +
     `<div class="gl-side"><button class="gl-play" id="lensPlay" type="button">Play ▸</button>` +
-      `<button class="gl-more" id="lensMore" type="button" title="Other moves">⋯</button></div>`;
+      `<button class="gl-more" id="lensMore" type="button" title="Other moves">⋯ moves</button></div>`;
   const main = document.getElementById("lensMain"); if (main) main.onclick = () => previewMove(p.move);
   const play = document.getElementById("lensPlay"); if (play) play.onclick = () => playMove(p.move.from, p.move.to, true);
-  const more = document.getElementById("lensMore"); if (more) more.onclick = openAlternatives;
-  attachLensGesture(el, p);
+  const more = document.getElementById("lensMore"); if (more) more.onclick = () => openAltSheet(p);
 }
 
-// Alternatives: open the (existing) suggestions panel — reachable, but not equal weight.
-function openAlternatives() {
-  const fold = document.getElementById("movesFold");
-  if (fold) { keepScroll(() => { fold.open = true; }); fold.scrollIntoView({ block: "nearest" }); }
-}
-
-// Hold-to-explore: press the lens to reveal a chip strip of the top moves; slide a
-// thumb across to preview each on the board; release keeps the last one selected.
-// Plain tap (no hold) just previews the primary. Pointer events → works for touch+mouse.
-function attachLensGesture(el, primary) {
-  const main = el.querySelector(".gl-main");
-  if (!main) return;
-  let held = false, timer = null, strip = null, opts = [];
-  const buildOpts = () => {
-    const a = assistData, seen = new Set(), list = [];
-    const add = (mv, lab) => { if (mv && !seen.has(mv.uci)) { seen.add(mv.uci); list.push({ mv, lab }); } };
-    add(primary.move, primary.label);
-    if (primary.altBest) add(asMove(primary.altBest), "Best move");
-    (a.candidates || []).slice(0, 5).forEach((c) => add(asMove(c), moveFlavor(c).name));
-    return list.slice(0, 5);
-  };
-  const openStrip = () => {
-    opts = buildOpts();
-    strip = document.createElement("div");
-    strip.className = "lens-strip";
-    strip.innerHTML = opts.map((o, i) => `<div class="lens-chip${i === 0 ? " on" : ""}" data-i="${i}"><b>${escapeHtml(o.mv.san || "")}</b><small>${escapeHtml(o.lab)}</small></div>`).join("");
-    el.appendChild(strip);
-    el.classList.add("exploring");
-  };
-  const closeStrip = () => { if (strip) { strip.remove(); strip = null; } el.classList.remove("exploring"); };
-  const previewAt = (x, y) => {
-    const t = document.elementFromPoint(x, y);
-    const chip = t && t.closest && t.closest(".lens-chip");
-    if (chip && strip) { const o = opts[+chip.dataset.i]; if (o) { strip.querySelectorAll(".lens-chip").forEach((c) => c.classList.toggle("on", c === chip)); previewMove(o.mv, true); } }
-  };
-  main.onpointerdown = (e) => {
-    held = false;
-    timer = setTimeout(() => { held = true; openStrip(); previewMove(primary.move, true); try { main.setPointerCapture(e.pointerId); } catch {} }, 180);
-  };
-  main.onpointermove = (e) => { if (held && strip) { e.preventDefault(); previewAt(e.clientX, e.clientY); } };
-  const end = () => {
-    if (timer) { clearTimeout(timer); timer = null; }
-    if (held) { main._suppressClick = true; closeStrip(); paint(); } // sync the lens to the kept preview
-    held = false;
-  };
-  main.onpointerup = end;
-  main.onpointercancel = end;
-  // Tap (no hold) previews the primary; suppress the click that trails a hold.
-  main.onclick = () => { if (main._suppressClick) { main._suppressClick = false; return; } previewMove(primary.move); };
+// Alternatives — a proper, dismissable bottom sheet (tap a move to preview it).
+function openAltSheet(p) {
+  const body = document.getElementById("altSheetBody");
+  const sh = document.getElementById("altSheet");
+  if (!body || !sh) return;
+  const seen = new Set(), rows = [];
+  const add = (mv, lab, note) => { if (mv && !seen.has(mv.uci)) { seen.add(mv.uci); rows.push({ mv, lab, note }); } };
+  add(p.move, p.label, p.why);
+  if (p.altBest) add(asMove(p.altBest), "Best move", p.altBest.note || "");
+  (assistData.candidates || []).slice(0, 6).forEach((c) => add(asMove(c), moveFlavor(c).name, c.note || ""));
+  body.innerHTML = rows.map((r, i) =>
+    `<button class="alt-row" data-i="${i}" type="button"><span class="alt-move">${escapeHtml(r.mv.san || "")}</span>` +
+    `<span class="alt-body"><b>${escapeHtml(r.lab)}</b>${r.note ? `<small>${escapeHtml(r.note)}</small>` : ""}</span></button>`).join("");
+  body.querySelectorAll(".alt-row").forEach((b) => b.onclick = () => { sh.style.display = "none"; previewMove(rows[+b.dataset.i].mv); });
+  sh.style.display = "grid";
 }
 
 function moveFlavor(c) {
