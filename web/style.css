@@ -620,6 +620,13 @@ button {
 .board-wrap .board { width: 100%; }
 .plan-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
 .plan-overlay .arrow, .plan-overlay .ring { opacity: 0; animation: plan-pop 0.4s cubic-bezier(0.2,0.8,0.2,1) forwards; }
+/* The board thinks out loud: a breathing recommendation arrow + ring you can tap. */
+.plan-overlay .adv-arrow { filter: drop-shadow(0 2px 5px rgba(0,0,0,0.4)); animation: adv-breathe 1.9s ease-in-out infinite; transform-origin: center; }
+.plan-overlay .adv-arrow line, .plan-overlay .adv-arrow polygon { opacity: 0.92; }
+.plan-overlay .adv-ring { animation: adv-ring 1.9s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes adv-breathe { 0%,100% { opacity: 0.82; } 50% { opacity: 1; } }
+@keyframes adv-ring { 0%,100% { opacity: 0.35; transform: scale(0.9); } 50% { opacity: 0.9; transform: scale(1.02); } }
+@media (prefers-reduced-motion: reduce) { .plan-overlay .adv-arrow, .plan-overlay .adv-ring { animation: none; opacity: 0.95; } }
 @keyframes plan-pop { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .plan-overlay .arrow, .plan-overlay .ring { animation: none; opacity: 1; } }
 
