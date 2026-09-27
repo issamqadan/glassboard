@@ -520,6 +520,10 @@ async function main() {
   const closeSteps = () => { if (ssheet) ssheet.style.display = "none"; };
   if (ssclose) ssclose.addEventListener("click", closeSteps);
   if (ssheet) ssheet.addEventListener("click", (e) => { if (e.target === ssheet) closeSteps(); });
+  const gsheet = document.getElementById("glassSheet"), gsclose = document.getElementById("glassSheetClose");
+  const closeGlass = () => { if (gsheet) gsheet.style.display = "none"; };
+  if (gsclose) gsclose.addEventListener("click", closeGlass);
+  if (gsheet) gsheet.addEventListener("click", (e) => { if (e.target === gsheet) closeGlass(); });
   const rb = document.getElementById("resignBtn");
   if (rb) rb.addEventListener("click", () => { closeMenu(); resign(); });
   const ub = document.getElementById("undoBtn");
@@ -1015,41 +1019,61 @@ function pipRow(left, max) {
   for (let i = 0; i < max; i++) s += `<span class="ll${i < left ? "" : " spent"}">🛟</span>`;
   return s;
 }
+// How many moves in a row you've played WITHOUT taking help — a playful reward for
+// growing independent (the whole point). Derived from move provenance (undo-safe).
+function soloStreak() {
+  let n = 0;
+  for (let i = moveReview.length - 1; i >= 0; i--) { if (moveReview[i].prov === "own") n++; else break; }
+  return n;
+}
+// The merged, chronological glass record (yours + the AI's help) — for the log sheet.
+function glassEvents() {
+  return playerHelpLog.map((e) => ({ mv: e.move, side: "you", txt: e.note }))
+    .concat(aiLifelineLog.map((e) => ({ mv: e.move, side: "ai", tag: e.tag, txt: e.note })))
+    .sort((a, b) => a.mv - b.mv);
+}
+// The GLASS CARD: a slim, fixed-height "in the open" tally — two lifeline gauges,
+// a solo-streak flame, the opening, and a tap-to-open full log. It never grows, so
+// the board + suggested moves stay put on mobile; the history lives in a sheet.
 function renderAiAssist() {
   const el = document.getElementById("aiAssist");
   if (!el) return;
   if (firstGame) { el.hidden = true; el.innerHTML = ""; return; }
   el.hidden = false;
-  const isMaster = parseInt(engineEloEl.value, 10) >= 3000; // Master plays at full depth, no lifelines
+  const isMaster = parseInt(engineEloEl.value, 10) >= 3000;
   const noHelp = aiAssistOverride === "off";
-  // Your row: lifelines you cash in by following the suggested move. No-help mode
-  // = pure chess (no pips). Otherwise show how many "follows" you have in hand.
-  const youPips = noHelp
-    ? `<span class="al-nohelp">pure chess</span>`
-    : pipRow(playerTokens, PLAYER_TOKENS_MAX);
-  const youNote = noHelp ? "you chose no assistance"
-    : playerFollows === 0 ? "playing on your own so far"
-    : `you've followed the help ${playerFollows}×`;
+  const youPips = noHelp ? `<span class="gp-none">pure chess</span>` : pipRow(playerTokens, PLAYER_TOKENS_MAX);
+  const streak = soloStreak();
+  const flame = streak >= 2 ? `<span class="gp-streak" title="moves in a row without help">🔥 ${streak}</span>` : "";
   const aiUsed = AI_TOKENS_MAX - aiTokens;
-  const aiPips = isMaster ? `<span class="al-nohelp">no lifelines</span>` : pipRow(aiTokens, AI_TOKENS_MAX);
-  const aiNote = isMaster ? "full strength — plays unaided"
-    : aiUsed === 0 ? "hasn't needed help yet" : `dug deep ${aiUsed}×`;
-  // The opponent's strategy — the opening/plan it's playing (glass, both sides see it).
+  const aiPips = isMaster ? `<span class="gp-none">no lifelines</span>` : pipRow(aiTokens, AI_TOKENS_MAX);
+  const aiTag = isMaster ? "" : (aiUsed ? `<span class="gp-tag">deep ${aiUsed}×</span>` : "");
   const op = currentOpening();
-  const openLine = op ? `<div class="al-open">📖 <b>${escapeHtml(op.name)}</b> — the line you're both in.</div>` : "";
-  // Full glass: itemise EVERY help event — yours and the AI's — not just a count.
-  const events = playerHelpLog.map((e) => ({ mv: e.move, who: "🧑 You", txt: e.note }))
-    .concat(aiLifelineLog.map((e) => ({ mv: e.move, who: "🤖 " + levelName(engineEloEl.value), txt: `<b>${e.tag}</b> — ${e.note}` })))
-    .sort((a, b) => a.mv - b.mv);
-  const log = events.length
-    ? `<ul class="al-log">` + events.map((e) => `<li><span class="al-mv">move ${e.mv}</span> <span class="al-who-sm">${e.who}</span> ${e.txt}</li>`).join("") + `</ul>`
-    : `<div class="al-empty">No help taken yet — every time either side takes help, it lands here, in the open.</div>`;
+  const n = glassEvents().length;
   el.innerHTML =
-    `<div class="al-title">🔎 Assistance — in the open</div>` +
-    openLine +
-    `<div class="al-side"><span class="al-who">🧑 You</span><span class="al-pips">${youPips}</span><span class="al-side-note">${youNote}</span></div>` +
-    `<div class="al-side"><span class="al-who">🤖 ${levelName(engineEloEl.value)}</span><span class="al-pips" title="Lifelines left">${aiPips}</span><span class="al-side-note">${aiNote}</span></div>` +
-    log;
+    `<div class="ga-head"><span class="ga-title">🔎 In the open</span>` +
+      `<button class="ga-log" id="glassLogBtn" title="Every help either side took">📜 Log${n ? ` <span class="ga-n">${n}</span>` : ""}</button></div>` +
+    `<div class="ga-gauges">` +
+      `<div class="gp you"><span class="gp-who">🧑 You</span><span class="gp-pips">${youPips}</span>${flame}</div>` +
+      `<div class="gp ai"><span class="gp-who">🤖 ${levelName(engineEloEl.value)}</span><span class="gp-pips">${aiPips}</span>${aiTag}</div>` +
+    `</div>` +
+    (op ? `<button class="ga-open" id="glassOpenBtn">📖 <b>${escapeHtml(op.name)}</b><span class="ga-open-hint">tap for the plan</span></button>` : "");
+  const lb = document.getElementById("glassLogBtn"); if (lb) lb.onclick = openGlassSheet;
+  const ob = document.getElementById("glassOpenBtn"); if (ob) ob.onclick = () => {
+    if (op) showMoment(`<span class="mo-ic">📖</span><span class="mo-txt"><b>${escapeHtml(op.name)}</b><small>${escapeHtml(op.idea)}</small></span>`, "you");
+  };
+}
+// The full glass log — opened on demand so it never crowds the board.
+function openGlassSheet() {
+  const body = document.getElementById("glassSheetBody");
+  if (!body) return;
+  const ev = glassEvents();
+  body.innerHTML = ev.length
+    ? ev.map((e) => `<div class="gl-row ${e.side}"><span class="gl-mv">move ${e.mv}</span>` +
+        `<span class="gl-who">${e.side === "you" ? "🧑 You" : "🤖 " + levelName(engineEloEl.value)}</span>` +
+        `<span class="gl-txt">${e.tag ? `<b>${e.tag}</b> — ` : ""}${e.txt}</span></div>`).join("")
+    : `<div class="gl-empty">No help taken yet — every time either side takes help, it lands here, in the open.</div>`;
+  const sh = document.getElementById("glassSheet"); if (sh) sh.style.display = "grid";
 }
 
 // A "moment" — personality without touching the board. It lingers (~7s), shows a

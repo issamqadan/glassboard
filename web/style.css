@@ -501,23 +501,49 @@ button {
 @keyframes mo-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { .moment-toast { transition: opacity 0.2s; } .moment-toast .mo-bar { display: none; } }
 
-/* Symmetric assistance panel — help remaining for BOTH sides, in the open. */
+/* Glass card — a slim, fixed-height "in the open" tally: two lifeline gauges, a
+   solo-streak flame, the opening, and a tap-to-open log. Never grows (the full
+   history lives in a bottom sheet), so the board + suggested moves stay put. */
 .ai-assist { background: rgba(126,224,214,0.06); border: 1px solid rgba(126,224,214,0.22);
-  border-radius: 12px; padding: 11px 13px; margin-bottom: 10px; }
-.ai-assist .al-title { font-weight: 700; font-size: 0.9rem; color: #cfe6f2; margin-bottom: 8px; }
-.ai-assist .al-side { display: flex; align-items: center; gap: 9px; padding: 4px 0; }
-.ai-assist .al-who { font-weight: 700; font-size: 0.82rem; color: #e7eef8; min-width: 84px; }
-.ai-assist .al-pips { display: inline-flex; gap: 2px; font-size: 0.95rem; }
-.ai-assist .al-pips .ll { transition: opacity 0.4s, filter 0.4s; }
-.ai-assist .al-pips .ll.spent { opacity: 0.2; filter: grayscale(1); }
-.ai-assist .al-nohelp { font-size: 0.74rem; color: #8a9ab2; font-style: italic; }
-.ai-assist .al-side-note { font-size: 0.74rem; color: #93a3bc; margin-left: auto; text-align: right; }
-.ai-assist .al-log { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px solid rgba(255,255,255,0.08);
-  display: flex; flex-direction: column; gap: 5px; }
-.ai-assist .al-log li { font-size: 0.78rem; color: #d8c6ac; line-height: 1.4;
-  padding: 5px 8px; background: rgba(242,180,109,0.09); border-radius: 7px; border-left: 2px solid rgba(242,180,109,0.55); }
-.ai-assist .al-log b { color: #f2c98a; }
-.ai-assist .al-log .al-mv { color: #9a8c76; font-variant-numeric: tabular-nums; }
+  border-radius: 12px; padding: 9px 11px; margin-bottom: 10px; }
+.ai-assist .ga-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.ai-assist .ga-title { font-weight: 700; font-size: 0.86rem; color: #cfe6f2; }
+.ai-assist .ga-log { font: inherit; font-size: 0.74rem; font-weight: 700; cursor: pointer; color: #cfe6f2;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; padding: 4px 10px; }
+.ai-assist .ga-log:hover { border-color: #7ee0d6; color: #eaf0fb; }
+.ai-assist .ga-log .ga-n { display: inline-block; min-width: 16px; text-align: center; margin-left: 3px; padding: 0 5px;
+  border-radius: 999px; background: #5cc9ec; color: #06202b; font-variant-numeric: tabular-nums; }
+/* Two side-by-side gauges */
+.ai-assist .ga-gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ai-assist .gp { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 7px 9px; border-radius: 10px;
+  background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.06); }
+.ai-assist .gp.you { border-left: 2px solid #6fd0e6; } .ai-assist .gp.ai { border-left: 2px solid #f2b46d; }
+.ai-assist .gp-who { font-weight: 700; font-size: 0.78rem; color: #e7eef8; }
+.ai-assist .gp-pips { display: inline-flex; gap: 1px; font-size: 0.9rem; line-height: 1; }
+.ai-assist .gp-pips .ll { transition: opacity 0.4s, filter 0.4s; }
+.ai-assist .gp-pips .ll.spent { opacity: 0.18; filter: grayscale(1); }
+.ai-assist .gp-none { font-size: 0.72rem; color: #8a9ab2; font-style: italic; }
+.ai-assist .gp-streak { font-size: 0.72rem; font-weight: 800; color: #ffb454; margin-left: auto;
+  background: rgba(255,140,60,0.14); padding: 1px 7px; border-radius: 999px; animation: streak-pop 0.4s ease; }
+@keyframes streak-pop { from { transform: scale(0.6); } to { transform: scale(1); } }
+.ai-assist .gp-tag { font-size: 0.7rem; font-weight: 700; color: #f2c98a; margin-left: auto; }
+.ai-assist .ga-open { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 8px; cursor: pointer;
+  font: inherit; text-align: left; color: #c9d4e6; background: rgba(147,162,192,0.08);
+  border: 1px solid rgba(147,162,192,0.2); border-radius: 9px; padding: 7px 10px; }
+.ai-assist .ga-open:hover { border-color: #9fb0c8; }
+.ai-assist .ga-open b { color: #e7eef8; }
+.ai-assist .ga-open .ga-open-hint { margin-left: auto; font-size: 0.68rem; color: #7d8ba6; }
+
+/* Glass log sheet (bottom sheet) rows */
+.glass-sheet-body { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; }
+.glass-sheet-body .gl-row { display: flex; align-items: baseline; gap: 8px; font-size: 0.85rem; line-height: 1.4;
+  padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.03); border-left: 2px solid rgba(147,162,192,0.4); }
+.glass-sheet-body .gl-row.you { border-left-color: #6fd0e6; }
+.glass-sheet-body .gl-row.ai { border-left-color: #f2b46d; background: rgba(242,180,109,0.07); }
+.glass-sheet-body .gl-mv { color: #8a9ab2; font-size: 0.72rem; font-variant-numeric: tabular-nums; min-width: 54px; }
+.glass-sheet-body .gl-who { font-weight: 700; font-size: 0.76rem; color: #cfe0f0; min-width: 68px; }
+.glass-sheet-body .gl-txt { color: #d3dcea; } .glass-sheet-body .gl-txt b { color: #f2c98a; }
+.glass-sheet-body .gl-empty { color: #8a9ab2; font-style: italic; padding: 16px; text-align: center; }
 
 /* Suggestion flavors — a playful character on each candidate move. */
 .cand-flavor { font-size: 0.68rem; font-weight: 700; padding: 1px 7px; border-radius: 999px;

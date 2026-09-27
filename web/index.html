@@ -109,9 +109,6 @@
           <div id="planDock" class="plan-dock" hidden></div>
         </div>
         <aside class="panels">
-          <!-- Opponent's assistance: the symmetric glass-box — the AI plays glass too.
-               Its lifelines and every one it spends are shown here, in the open. -->
-          <div id="aiAssist" class="ai-assist" hidden></div>
           <!-- Coach: transient safety net — speaks only for real danger/opportunity. -->
           <div id="coach" class="coach" aria-live="polite" hidden></div>
           <!-- Piece tip: teaches the piece the first time you touch it; tap for a full tour. -->
@@ -128,6 +125,9 @@
             <summary>Suggested moves <span class="moves-plan" id="movesPlan"></span></summary>
             <div id="assist" class="assist"></div>
           </details>
+          <!-- Glass-box: the symmetric "in the open" record — a slim always-on tally
+               (both sides' help), with the full move-by-move log a tap away in a sheet. -->
+          <div id="aiAssist" class="ai-assist" hidden></div>
         </aside>
       </div>
 
@@ -146,6 +146,12 @@
         <div class="sheet">
           <div class="sheet-head"><span id="stepsSheetTitle">Plan</span><span class="sheet-sub">follow it step by step</span><button class="sheet-close" id="stepsSheetClose">✕</button></div>
           <div id="stepsSheetBody" class="steps-sheet-body"></div>
+        </div>
+      </div>
+      <div id="glassSheet" class="sheet-overlay" style="display:none">
+        <div class="sheet">
+          <div class="sheet-head"><span id="glassSheetTitle">Assistance log</span><span class="sheet-sub">every help either side took — in the open</span><button class="sheet-close" id="glassSheetClose">✕</button></div>
+          <div id="glassSheetBody" class="glass-sheet-body"></div>
         </div>
       </div>
       <div id="promoOverlay" class="promo-overlay" style="display:none">
