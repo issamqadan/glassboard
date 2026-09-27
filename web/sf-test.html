@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Glassboard — Stockfish load test</title>
+  <style>
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #080b12; color: #eaf0fb; line-height: 1.5; padding: 22px; max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 1.3rem; }
+    p { color: #93a2c0; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 14px 0; }
+    button, input, select { font: inherit; }
+    button { background: linear-gradient(140deg, #5cc9ec, #3a97bd); color: #04222d; border: 0; border-radius: 10px;
+      padding: 10px 16px; font-weight: 700; cursor: pointer; }
+    button.ghost { background: #131b2b; color: #eaf0fb; box-shadow: inset 0 0 0 1px #2b3856; }
+    input, select { background: #0c111b; color: #eaf0fb; border: 1px solid #2b3856; border-radius: 8px; padding: 8px 10px; }
+    .status { font-weight: 700; padding: 10px 12px; border-radius: 10px; margin: 12px 0; }
+    .status.wait { background: rgba(224,190,121,0.14); color: #e0be79; }
+    .status.ok { background: rgba(69,200,110,0.16); color: #6fe0a0; }
+    .status.err { background: rgba(242,109,122,0.16); color: #f4a2ab; }
+    #log { background: #0c111b; border: 1px solid #1d2740; border-radius: 10px; padding: 12px; height: 320px; overflow: auto;
+      font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; white-space: pre-wrap; color: #b9c6da; }
+    .big { font-size: 1.4rem; font-weight: 800; color: #7ee0d6; }
+    a { color: #5cc9ec; }
+  </style>
+</head>
+<body>
+  <h1>🐟 Stockfish load test</h1>
+  <p>This page checks whether a single-threaded Stockfish loads and plays on this host, at a chosen strength. It's a throwaway diagnostic — if it works here, we wire it into the game as the accurate-level opponent.</p>
+
+  <div class="row">
+    <button id="init">1 · Load Stockfish</button>
+    <label>UCI_Elo <input id="elo" type="number" value="1500" min="1320" max="3190" style="width:90px" /></label>
+    <button id="go" class="ghost" disabled>2 · Ask for a move (startpos)</button>
+    <button id="bench" class="ghost" disabled>3 · Move at this Elo</button>
+  </div>
+
+  <div class="status wait" id="status">Not loaded yet — tap "Load Stockfish".</div>
+  <div class="big" id="best"></div>
+  <div id="log"></div>
+
+  <p style="margin-top:16px"><a href="./index.html">← back to the game</a></p>
+
+  <script>
+    const CDN = "https://cdn.jsdelivr.net/npm/stockfish@16.0.0/src/";
+    const SF = CDN + "stockfish-nnue-16-single.js";
+    const logEl = document.getElementById("log");
+    const statusEl = document.getElementById("status");
+    const bestEl = document.getElementById("best");
+    let worker = null, ready = false;
+
+    function log(s, dir) { logEl.textContent += (dir || "") + s + "\n"; logEl.scrollTop = logEl.scrollHeight; }
+    function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = "status " + cls; }
+    function send(cmd) { log(cmd, "» "); worker.postMessage(cmd); }
+
+    document.getElementById("init").onclick = () => {
+      if (worker) { setStatus("Already loading/loaded.", "wait"); return; }
+      setStatus("Loading Stockfish (first time downloads ~7MB)…", "wait");
+      try {
+        // A tiny blob worker that points Emscripten at the CDN for its .wasm, then
+        // loads the single-threaded Stockfish build. Cross-origin is allowed for
+        // importScripts (CDN sends CORS *), and locateFile fixes the wasm path.
+        const boot =
+          'self.Module = { locateFile: function(p){ return ' + JSON.stringify(CDN) + ' + p; } };\n' +
+          'try { importScripts(' + JSON.stringify(SF) + '); } catch(e){ self.postMessage("BOOT_ERROR: " + e.message); }';
+        const url = URL.createObjectURL(new Blob([boot], { type: "text/javascript" }));
+        worker = new Worker(url);
+        worker.onmessage = (e) => {
+          const line = typeof e.data === "string" ? e.data : (e.data && e.data.data) || JSON.stringify(e.data);
+          log(line, "« ");
+          if (line.indexOf("BOOT_ERROR") === 0) { setStatus("Failed to load: " + line, "err"); return; }
+          if (line === "uciok") { setStatus("Stockfish loaded ✓ — UCI ready.", "ok"); ready = true; document.getElementById("go").disabled = false; document.getElementById("bench").disabled = false; }
+          if (line.indexOf("bestmove") === 0) { const mv = line.split(" ")[1]; bestEl.textContent = "bestmove: " + mv; setStatus("Stockfish returned a move ✓ — it works here!", "ok"); }
+        };
+        worker.onerror = (e) => setStatus("Worker error: " + (e.message || e.filename || "unknown") + " (line " + e.lineno + ")", "err");
+        send("uci");
+      } catch (err) { setStatus("Couldn't start the worker: " + err.message, "err"); }
+    };
+
+    function elo() { return Math.max(1320, Math.min(3190, parseInt(document.getElementById("elo").value, 10) || 1500)); }
+    document.getElementById("go").onclick = () => {
+      if (!ready) return;
+      bestEl.textContent = "";
+      send("setoption name UCI_LimitStrength value true");
+      send("setoption name UCI_Elo value " + elo());
+      send("ucinewgame");
+      send("position startpos");
+      send("go movetime 1000");
+    };
+    document.getElementById("bench").onclick = () => {
+      if (!ready) return;
+      bestEl.textContent = "";
+      send("setoption name UCI_LimitStrength value true");
+      send("setoption name UCI_Elo value " + elo());
+      send("position startpos moves e2e4 e7e5 g1f3 b8c6");
+      send("go movetime 1500");
+    };
+  </script>
+</body>
+</html>
