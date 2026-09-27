@@ -44,7 +44,10 @@
       pendingResolve = resolve;
       const skill = Math.max(0, Math.min(20, opts.skill == null ? 20 : opts.skill | 0));
       worker.postMessage("setoption name Skill Level value " + skill);
-      worker.postMessage("position fen " + fen);
+      // Send the FULL move history when we have it, so Stockfish sees (and avoids /
+      // claims) repetitions and the 50-move count — not just a bare position.
+      if (opts.moves && opts.moves.length) worker.postMessage("position startpos moves " + opts.moves.join(" "));
+      else worker.postMessage("position fen " + fen);
       if (opts.depth) worker.postMessage("go depth " + (opts.depth | 0));
       else worker.postMessage("go movetime " + (opts.movetime ? opts.movetime | 0 : 400));
     }));

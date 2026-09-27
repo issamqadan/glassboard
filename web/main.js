@@ -140,7 +140,7 @@ async function resumeAiGame(id) {
   aiTokens = typeof rec.aiTokens === "number" ? rec.aiTokens : AI_TOKENS_MAX;
   aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {};
   lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX; playerHelpLog = [];
-  history = []; uciHistory = []; // resumed from a FEN — opening history can't be reconstructed
+  history = []; uciHistory = []; posCounts = Object.create(null); repetitionDraw = false; recordPosition(); // resumed from a FEN — opening history can't be reconstructed
   helpDelivery = rec.helpDelivery || "open";
   helpReceived = typeof rec.helpReceived === "number" ? rec.helpReceived : 0;
   helpRevealed = helpDelivery === "open"; helpRequestPending = false;
@@ -180,6 +180,7 @@ function opponentMove(fen, usedLifeline, baseElo) {
   if (firstGame || !window.GBEngine) return rustFallback();
   const lvl = sfLevelFor(baseElo);
   const opts = usedLifeline ? { skill: 20, movetime: 900 } : { skill: lvl.skill, movetime: lvl.movetime, depth: lvl.depth };
+  if (uciHistory.length) opts.moves = uciHistory.slice(); // full history → repetition-aware play
   return GBEngine.bestMove(fen, opts).then((u) => u || rustFallback()).catch(rustFallback);
 }
 const RUNGS = [
@@ -258,6 +259,16 @@ let history = [];
 // UCI move list (both sides), from the start of the game — used to name the opening
 // via the strategy catalog. Only meaningful for games played from move 1 this session.
 let uciHistory = [];
+// Threefold-repetition detection (the Rust engine doesn't track it): count how many
+// times each position (pieces·side·castling·ep) has occurred; 3 → draw.
+let posCounts = Object.create(null);
+let repetitionDraw = false;
+function positionSig() { return game.fen().split(" ").slice(0, 4).join(" "); }
+function recordPosition() {
+  const s = positionSig();
+  posCounts[s] = (posCounts[s] || 0) + 1;
+  if (posCounts[s] >= 3) repetitionDraw = true;
+}
 // Chess clock (optional). Each side's remaining ms ticks down on its turn; the
 // engine's think-time counts against its own clock. Running out = loss on time.
 let timedGame = false, humanMs = 0, engineMs = 0;
@@ -554,13 +565,14 @@ const hideOver = () => { const ov = document.getElementById("overOverlay"); if (
 
 function newGame() {
   game = new Game();
+  posCounts = Object.create(null); repetitionDraw = false; recordPosition();
   game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
   game.setAssistOverride(firstGame ? "guided" : aiAssistOverride); // the help you chose at setup
   aiGameId = newAiId(); // a fresh slot; only saved once a move is played
   aiSaved = false;
   aiTokens = AI_TOKENS_MAX; aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {}; // fresh
   lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX; playerHelpLog = [];
-  history = []; uciHistory = [];
+  history = []; uciHistory = []; // posCounts/repetition already reset + initial recorded above
   if (firstGame) helpDelivery = "open"; // the guided game always shows help
   helpReceived = 0; helpRevealed = helpDelivery === "open"; helpRequestPending = false;
   // Clock: from the chosen time control (kept across rematches). Untimed if 0.
@@ -637,7 +649,9 @@ function onPositionChanged() {
     // Strong advice: the recommended move comes from Stockfish at FULL strength, so
     // following it genuinely holds up against the (skill-limited) Stockfish opponent.
     if (!firstGame && window.GBEngine && ov !== "off") {
-      GBEngine.bestMove(fen, { skill: 20, movetime: 900 }).then((uci) => {
+      const sfOpts = { skill: 20, movetime: 900 };
+      if (uciHistory.length) sfOpts.moves = uciHistory.slice(); // repetition-aware advice
+      GBEngine.bestMove(fen, sfOpts).then((uci) => {
         if (token !== positionToken || !uci || uci.length < 4) return;
         const q = uciToSquares(uci), cand = candByUci(uci);
         sfBest = { uci, from: q.from, to: q.to, san: (cand && cand.san) || approxSan(uci), note: (cand && cand.note) || "" };
@@ -1360,7 +1374,7 @@ function showGameOverIfNeeded() {
   const ov = document.getElementById("overOverlay");
   if (!ov) return;
   const st = game.status();
-  const over = resigned || flagged || st !== "ongoing";
+  const over = resigned || flagged || repetitionDraw || st !== "ongoing";
   const rb = document.getElementById("resignBtn");
   if (rb) rb.hidden = over;
   if (!over) { ov.style.display = "none"; mateKingSq = -1; return; }
@@ -1369,6 +1383,7 @@ function showGameOverIfNeeded() {
   else if (resigned) { winner = engineColor(); reason = "resignation"; } // you resigned → the engine wins
   else if (st === "checkmate") { winner = game.sideToMove() === "white" ? "black" : "white"; reason = "checkmate"; }
   else if (st === "stalemate") { reason = "stalemate"; }
+  else if (repetitionDraw) { reason = "repetition"; }
   else if (st === "fifty-move") { reason = "fifty-move rule"; }
   const draw = winner === "", won = winner === humanColor;
   const res = document.getElementById("overResult"), rea = document.getElementById("overReason");
@@ -1389,6 +1404,8 @@ function showGameOverIfNeeded() {
     how = "You resigned this one.";
   } else if (reason === "time") {
     how = won ? "The engine ran out of time — you win on the clock. ⏱" : "Your clock hit zero — a loss on time. ⏱";
+  } else if (reason === "repetition") {
+    how = "The same position came up three times — a draw by repetition. ♻";
   } else {
     how = "Fifty moves without a capture or pawn move — an automatic draw.";
   }
@@ -1973,7 +1990,7 @@ function renderGlass() {
 }
 
 function onSquareClick(i) {
-  if (busy || flagged || game.status() !== "ongoing" || game.sideToMove() !== humanColor) return;
+  if (busy || flagged || repetitionDraw || game.status() !== "ongoing" || game.sideToMove() !== humanColor) return;
   const c = game.boardString()[i];
 
   if (selected === null) {
@@ -2071,7 +2088,7 @@ function provenanceOf(viaHelp) {
   return viaHelp ? "followed" : "own";
 }
 function doPlay(from, to, promo, viaHelp) {
-  if (flagged || busy) return; // clock's out, or it's the engine's turn
+  if (flagged || busy || repetitionDraw) return; // clock's out, mid-think, or a draw
   const preFen = game.fen(); // position before the human's move (for the Player Model)
   // Takeback snapshot: this position + the pre-move counters. Undo restores here.
   history.push({ fen: preFen, indepOwn, indepFollowed, reviewLen: moveReview.length, playerFollows, uciLen: uciHistory.length, helpLogLen: playerHelpLog.length });
@@ -2107,6 +2124,7 @@ function doPlay(from, to, promo, viaHelp) {
   if (!ok) { history.pop(); paint(); return; } // illegal → undo the snapshot we pushed
   lastMove = { from, to };
   uciHistory.push(sqName(from) + sqName(to) + (promo || "")); // for opening identification
+  recordPosition(); // threefold check
   recordHumanMove(preFen, from, to, promo); // learn from this move too
   fgOn("move");
   // White-relative eval right after your move (black to move → negate). Compared
@@ -2131,8 +2149,8 @@ function showPromotion(from, to, viaHelp) {
 }
 
 function engineReply() {
-  if (game.status() !== "ongoing") {
-    onPositionChanged();
+  if (game.status() !== "ongoing" || repetitionDraw) {
+    busy = false; paint(); // draw reached (e.g. threefold) — show it, don't move
     return;
   }
   busy = true; // the board already shows "Engine…" from the prior repaint
@@ -2161,6 +2179,7 @@ function engineReply() {
         game.makeMove(sq.from, sq.to, uci.length > 4 ? uci[4] : undefined);
         lastMove = sq;
         uciHistory.push(uci); // for opening identification
+        recordPosition(); // threefold check
         lastMoveLifeline = usedLifeline; // mark the assisted move on the board
       }
       busy = false;
