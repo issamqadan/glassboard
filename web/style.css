@@ -1001,6 +1001,14 @@ main.game .board-wrap.glow-draw { box-shadow: 0 0 0 2px rgba(147,162,192,.5), 0 
 @keyframes preview-pulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sq.preview-to::after { animation: none; } }
 
+/* Captured pieces + material lead beside each player's name (retires the slider). */
+#materialBar { display: none !important; }
+.caps { display: inline-flex; align-items: center; margin-left: 6px; font-size: 0.82rem; line-height: 1; vertical-align: middle; letter-spacing: -1px; }
+.caps .capg { opacity: 0.92; }
+.caps-white .capg { color: #eef3fb; text-shadow: 0 0 1px rgba(0,0,0,0.5); }
+.caps-black .capg { color: #7f8ea8; }
+.mat-lead { margin-left: 3px; font-size: 0.72rem; font-weight: 800; color: #6fe0a0; font-variant-numeric: tabular-nums; vertical-align: middle; }
+
 /* Tiny assistance indicators beside player names. */
 .name-pips { display: inline-flex; gap: 1px; margin-left: 5px; font-size: 0.66rem; line-height: 1; vertical-align: middle; }
 .name-pips .ll { transition: opacity 0.4s, filter 0.4s; }

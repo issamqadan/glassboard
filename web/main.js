@@ -921,9 +921,31 @@ function renderOpening() {
 }
 
 // Captured material as one tug-bar above the board (you are White → left side).
+// Captured pieces + material lead now live beside each player's name (renderPlayers),
+// so nothing sits above the board. This just retires the old material slider.
 function renderCaptured() {
   const el = document.getElementById("materialBar");
-  if (el && window.renderMaterialBar) window.renderMaterialBar(el, game.boardString(), humanColor === "white");
+  if (el) { el.hidden = true; el.innerHTML = ""; }
+}
+// What each side has captured (from the board vs the starting set) and the material
+// lead in pawns (White-relative). Used for the tasteful in-name trophies.
+const START_COUNT = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+const CAP_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+function capturedSummary() {
+  const bs = game.boardString();
+  const wOn = { p: 0, n: 0, b: 0, r: 0, q: 0 }, bOn = { p: 0, n: 0, b: 0, r: 0, q: 0 };
+  for (const ch of bs) { if (ch === ".") continue; const k = ch.toLowerCase(); if (k in wOn) { if (ch === ch.toUpperCase()) wOn[k]++; else bOn[k]++; } }
+  const whiteCap = {}, blackCap = {}; let wv = 0, bv = 0; // white captured black pieces & vice versa
+  for (const k of ["q", "r", "b", "n", "p"]) {
+    const wc = Math.max(0, START_COUNT[k] - bOn[k]); if (wc) { whiteCap[k] = wc; wv += wc * CAP_VAL[k]; }
+    const bc = Math.max(0, START_COUNT[k] - wOn[k]); if (bc) { blackCap[k] = bc; bv += bc * CAP_VAL[k]; }
+  }
+  return { whiteCap, blackCap, lead: wv - bv }; // lead > 0 → White is up material
+}
+function capGlyphs(cap) {
+  let s = "";
+  for (const k of ["q", "r", "b", "n", "p"]) for (let i = 0; i < (cap[k] || 0); i++) s += `<span class="capg">${GLYPH[k]}</span>`;
+  return s;
 }
 
 // The coach: one prominent, concrete piece of advice under the board. This is
@@ -1007,14 +1029,23 @@ function renderPlayers() {
   el.hidden = false;
   const over = resigned || game.status() !== "ongoing";
   const turn = over ? null : game.sideToMove();
+  // Captured pieces + material lead sit right beside each name (top chess-app style),
+  // so nothing clutters the space above the board.
+  const cap = capturedSummary();
+  const youCap = humanColor === "white" ? cap.whiteCap : cap.blackCap;
+  const aiCap = humanColor === "white" ? cap.blackCap : cap.whiteCap;
+  const youLead = humanColor === "white" ? cap.lead : -cap.lead; // >0 → you're up material
+  const lead = (n) => n > 0 ? `<span class="mat-lead">+${n}</span>` : "";
   // Compact: whose-move stays on one row. The 🤖 chip shows the AI LEVEL and is
   // tappable to change it — that's where you look for "who am I playing".
   el.innerHTML =
     `<span class="pl"><span class="dot ${humanColor}"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span>` +
-      (firstGame || aiAssistOverride === "off" ? "" : `<span class="name-pips" title="your help remaining">${pipRow(playerTokens, PLAYER_TOKENS_MAX)}</span>`) + `</span>` +
+      (firstGame || aiAssistOverride === "off" ? "" : `<span class="name-pips" title="your help remaining">${pipRow(playerTokens, PLAYER_TOKENS_MAX)}</span>`) +
+      `<span class="caps caps-${engineColor()}">${capGlyphs(youCap)}</span>${lead(youLead)}</span>` +
     `<span class="vs">·</span>` +
     `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot ${engineColor()}"></span> <b>🤖 ${levelName(engineEloEl.value)}</b> <span class="ai-rating">${ratingFor(engineEloEl.value)}</span>` +
-      (firstGame || parseInt(engineEloEl.value, 10) >= 3000 ? "" : `<span class="name-pips" title="opponent lifelines">${pipRow(aiTokens, AI_TOKENS_MAX)}</span>`) + ` <span class="ai-caret">▾</span></button>` +
+      (firstGame || parseInt(engineEloEl.value, 10) >= 3000 ? "" : `<span class="name-pips" title="opponent lifelines">${pipRow(aiTokens, AI_TOKENS_MAX)}</span>`) +
+      `<span class="caps caps-${humanColor}">${capGlyphs(aiCap)}</span>${lead(-youLead)} <span class="ai-caret">▾</span></button>` +
     (turn ? (turn === humanColor
       ? `<span class="turn you">💡 Your move</span>`
       : `<span class="turn wait">Engine…</span>`) : "");
