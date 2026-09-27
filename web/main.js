@@ -269,6 +269,19 @@ function recordPosition() {
   posCounts[s] = (posCounts[s] || 0) + 1;
   if (posCounts[s] >= 3) repetitionDraw = true;
 }
+// Would playing `m` reach a position we've already seen? (i.e. this move is a
+// step toward a threefold-repetition draw). Used to name the draw strategy
+// concretely — "repeat the position" vs the general "play for a draw".
+function leadsToRepetition(m) {
+  if (!m) return false;
+  try {
+    const g = Game.fromFen(game.fen());
+    const promo = m.uci && m.uci.length > 4 ? m.uci[4] : undefined;
+    if (!g.makeMove(m.from, m.to, promo)) return false;
+    const sig = g.fen().split(" ").slice(0, 4).join(" ");
+    return (posCounts[sig] || 0) >= 1; // seen before → this move repeats it
+  } catch { return false; }
+}
 // Chess clock (optional). Each side's remaining ms ticks down on its turn; the
 // engine's think-time counts against its own clock. Running out = loss on time.
 let timedGame = false, humanMs = 0, engineMs = 0;
@@ -1773,6 +1786,19 @@ function pickPriority() {
   if (picked && picked.moveUci && picked.moveUci.slice(0, 4) === recUci.slice(0, 4)) {
     return { move: rec, label: `Continue your ${STRAT_VERB[picked.id] || "plan"}`, why: picked.moveNote || rec.note || "Both your plan and the engine agree here.", tag: "Fits plan · best", kind: "strategy" };
   }
+  // 3.5 — When you're clearly worse, a DRAW is the good result — so surface it as
+  // an explicit, player-facing strategy (not a silent top move). The engine's best
+  // try in a worse position IS the holding / drawing attempt; we name it and explain
+  // the goal so the player CHOOSES it, and flag when it literally repeats the position.
+  if (lastEval != null && lastEval <= -180 && lastEval > -800) {
+    const repeats = leadsToRepetition(rec);
+    return { move: rec, kind: "draw",
+      tag: repeats ? "Draw · repeat" : "Draw try",
+      label: repeats ? "Repeat for a draw" : "Play for a draw",
+      why: repeats
+        ? "You're worse here, so a draw is a great result. This repeats an earlier position — do it three times and it's a draw by repetition. ♻"
+        : "You're worse here, so aim for a draw, not a win. Keep it solid, trade into a drawish endgame, and look for a repetition or perpetual check. This is the soundest way to hold." };
+  }
   // 4 — Best available.
   const fl = moveFlavor(rec);
   const byFlavor = { aggr: "Press the attack", simp: "Simplify the position", sneak: "A sneaky move", safe: "Build your position" };
@@ -1858,7 +1884,7 @@ function renderBoardAdvice() {
   const active = !firstGame && game.status() === "ongoing" && game.sideToMove() === humanColor && assistData && mateKingSq < 0;
   const p = active && showAnswer() ? pickPriority() : null;
   if (!p || p.analyzing || !p.move) { if (ov.innerHTML) ov.innerHTML = ""; ov.style.pointerEvents = "none"; ov.onclick = null; return; }
-  const color = p.kind === "urgent" ? "#f2707e" : "#7ee0d6";
+  const color = p.kind === "urgent" ? "#f2707e" : p.kind === "draw" ? "#8aa0ff" : "#7ee0d6";
   const C = planCxy(p.move.to);
   ov.innerHTML = `<circle class="adv-ring" cx="${C.x}" cy="${C.y}" r="46" fill="none" stroke="${color}" stroke-width="7"/>` +
     advArrow(p.move.from, p.move.to, color);

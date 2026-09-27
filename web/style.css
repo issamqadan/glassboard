@@ -983,18 +983,21 @@ main.game #coach { display: none; }
   -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; } /* kill iOS long-press magnifier */
 .glass-lens.kind-urgent { background: linear-gradient(150deg, rgba(242,109,122,0.16), rgba(242,109,122,0.05)); border-color: rgba(242,109,122,0.5); }
 .glass-lens.kind-strategy { background: linear-gradient(150deg, rgba(126,224,214,0.14), rgba(92,201,236,0.05)); border-color: rgba(126,224,214,0.45); }
+.glass-lens.kind-draw { background: linear-gradient(150deg, rgba(138,160,255,0.16), rgba(138,160,255,0.05)); border-color: rgba(138,160,255,0.5); }
 .glass-lens .gl-r1 { display: flex; align-items: center; gap: 8px; }
 .glass-lens .gl-label { font-weight: 800; font-size: 1rem; color: #eef4fb; letter-spacing: -0.01em; flex: 1; }
 .glass-lens .gl-tag { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
   padding: 2px 7px; border-radius: 999px; background: rgba(147,162,192,0.2); color: #b9c6da; white-space: nowrap; }
 .glass-lens .gl-tag.t-urgent { background: rgba(242,109,122,0.22); color: #f4a2ab; }
 .glass-lens .gl-tag.t-strategy { background: rgba(126,224,214,0.2); color: #8fe0d6; }
+.glass-lens .gl-tag.t-draw { background: rgba(138,160,255,0.22); color: #b4c0ff; }
 .glass-lens .gl-why { font-size: 0.82rem; color: #c3d0e6; line-height: 1.4; }
 .glass-lens .gl-actions { display: flex; gap: 8px; align-items: center; }
 .glass-lens .gl-playmove { flex: 1; font: inherit; font-weight: 800; font-size: 1.05rem; cursor: pointer; color: #04222d;
   background: linear-gradient(140deg, #7ee0d6, #4bb3a6); border: 0; border-radius: 11px; padding: 12px; white-space: nowrap;
   font-variant-numeric: tabular-nums; touch-action: manipulation; }
 .glass-lens.kind-urgent .gl-playmove { background: linear-gradient(140deg, #f2707e, #c94b5a); color: #fff; }
+.glass-lens.kind-draw .gl-playmove { background: linear-gradient(140deg, #8aa0ff, #5b6fe0); color: #fff; }
 .glass-lens .gl-show, .glass-lens .gl-more { font: inherit; font-weight: 700; font-size: 0.82rem; cursor: pointer; color: #cfe0f0;
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); border-radius: 11px; padding: 11px 12px; white-space: nowrap; touch-action: manipulation; }
 .glass-lens .gl-plan { align-self: flex-start; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
