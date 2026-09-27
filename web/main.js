@@ -99,6 +99,10 @@ function persistAiGame(over) {
     assist: aiAssistOverride,
     aiTokens: aiTokens,
     humanColor: humanColor,
+    minutes: setupMinutes,
+    timedGame: timedGame,
+    humanMs: humanMs,
+    engineMs: engineMs,
     created: prev ? prev.created : Date.now(),
     updated: Date.now(),
   };
@@ -126,6 +130,11 @@ async function resumeAiGame(id) {
   aiAssistOverride = rec.assist || "guided";
   game.setAssistOverride(aiAssistOverride); // restore the chosen assistance
   humanColor = rec.humanColor === "black" ? "black" : "white"; // restore your side + orientation
+  setupMinutes = typeof rec.minutes === "number" ? rec.minutes : 0;
+  timedGame = !!rec.timedGame;
+  humanMs = typeof rec.humanMs === "number" ? rec.humanMs : setupMinutes * 60000;
+  engineMs = typeof rec.engineMs === "number" ? rec.engineMs : setupMinutes * 60000;
+  flagged = false; flagLoser = "";
   aiTokens = typeof rec.aiTokens === "number" ? rec.aiTokens : AI_TOKENS_MAX;
   aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {};
   lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX;
@@ -139,6 +148,7 @@ async function resumeAiGame(id) {
   if (window.GBTheme) GBTheme.setContext(id); // restore this game's board
   setLevelPill(game.assistLevel());
   onPositionChanged();
+  startClock();
   // Resumed mid-cycle on the engine's move → let it reply.
   if (game.status() === "ongoing" && game.sideToMove() === engineColor()) setTimeout(engineReply, 300);
   return true;
@@ -163,6 +173,7 @@ let setupElo = 1500;            // chosen opponent rating
 let setupMode = "full";        // "off" | "full" | "custom"
 let setupRung = "suggestion";  // chosen rung when custom
 let setupColor = "white";      // "white" | "black" | "random" — the side YOU play
+let setupMinutes = 0;          // 0 = untimed; else per-side minutes for the clock
 let aiAssistOverride = "guided"; // the override applied to the live game
 const assistOverrideFor = () => setupMode === "off" ? "off" : setupMode === "full" ? "guided" : setupRung;
 
@@ -222,6 +233,10 @@ let helpWasAvailable = false; // was move-level help on the table at all this ga
 // Takeback history: a snapshot captured just before each of YOUR moves, so Undo
 // rolls back your move AND the engine's reply, restoring the counters too.
 let history = [];
+// Chess clock (optional). Each side's remaining ms ticks down on its turn; the
+// engine's think-time counts against its own clock. Running out = loss on time.
+let timedGame = false, humanMs = 0, engineMs = 0;
+let clockTimer = null, clockLast = 0, flagged = false, flagLoser = "";
 const COST_SUGG = 2, COST_BEST = 4;
 // First Game Mode: a learn-by-playing layer for a total beginner. Guides the
 // first couple of moves (pulse a piece → show its squares → tap), then fades.
@@ -304,6 +319,7 @@ function renderFirstGame() {
 function showSetup() {
   const sc = document.getElementById("setupScreen");
   if (!sc) { newGame(); return; }
+  stopClock(); // pause any running game's clock while you set up a new match
   const grid = document.getElementById("lvlGrid");
   if (grid) {
     grid.innerHTML = AI_LEVELS.map((l) =>
@@ -319,6 +335,14 @@ function showSetup() {
     c.onclick = () => {
       setupColor = c.dataset.color;
       colors.querySelectorAll(".cchoice").forEach((x) => x.classList.toggle("on", x === c));
+    };
+  });
+  const times = document.getElementById("timeChoice");
+  if (times) times.querySelectorAll(".cchoice").forEach((t) => {
+    t.classList.toggle("on", parseInt(t.dataset.min, 10) === setupMinutes);
+    t.onclick = () => {
+      setupMinutes = parseInt(t.dataset.min, 10);
+      times.querySelectorAll(".cchoice").forEach((x) => x.classList.toggle("on", x === t));
     };
   });
   const modes = document.getElementById("assistModes");
@@ -466,6 +490,10 @@ function newGame() {
   aiTokens = AI_TOKENS_MAX; aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {}; // fresh
   lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX;
   history = [];
+  // Clock: from the chosen time control (kept across rematches). Untimed if 0.
+  timedGame = !firstGame && setupMinutes > 0;
+  humanMs = engineMs = setupMinutes * 60000;
+  flagged = false; flagLoser = "";
   mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
   selected = null;
@@ -481,6 +509,7 @@ function newGame() {
   if (window.GBTheme) GBTheme.setContext(aiGameId); // this game's own board
   setLevelPill(game.assistLevel());
   onPositionChanged();
+  startClock();
   // You chose Black → the engine (White) makes the opening move.
   if (game.sideToMove() === engineColor()) setTimeout(engineReply, 300);
 }
@@ -521,6 +550,7 @@ function onPositionChanged() {
   revealedSugg = false; // deeper help must be re-revealed (and re-paid) each position
   revealedBest = false;
   const token = ++positionToken;
+  clockLast = Date.now(); // the side to move just changed — don't charge them the gap
   paint(); // instant: board, players, captured, material — before any deep search
 
   if (game.status() === "ongoing" && game.sideToMove() === humanColor) {
@@ -692,6 +722,7 @@ function paint() {
   renderStrategy();
   renderPlanDock();
   renderCaptured();
+  renderClocks();
   renderGlass();
   renderStatus();
   renderBudget();
@@ -931,6 +962,55 @@ function criticalMoment() {
     + `<small>Sharp spot — the next few moves matter. Slow down and check for threats.</small></span>`, "crit");
 }
 
+// ---- Chess clock ----------------------------------------------------------
+function fmtClock(ms) {
+  const t = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(t / 60), s = t % 60;
+  return `${m}:${s < 10 ? "0" : ""}${s}`;
+}
+function stopClock() { if (clockTimer) { clearInterval(clockTimer); clockTimer = null; } }
+function startClock() {
+  stopClock();
+  if (!timedGame) return;
+  clockLast = Date.now();
+  clockTimer = setInterval(tickClock, 200);
+}
+function tickClock() {
+  if (!timedGame || flagged) { stopClock(); return; }
+  if (resigned || game.status() !== "ongoing") { stopClock(); return; }
+  const now = Date.now();
+  const dt = now - clockLast;
+  clockLast = now;
+  const side = game.sideToMove();
+  if (side === humanColor) humanMs = Math.max(0, humanMs - dt);
+  else engineMs = Math.max(0, engineMs - dt);
+  if ((side === humanColor ? humanMs : engineMs) <= 0) {
+    flagged = true; flagLoser = side; stopClock();
+    renderClocks();
+    if (!firstGame) persistAiGame(true); // game's over → drop the saved slot
+    paint(); // showGameOverIfNeeded picks up the flag
+    return;
+  }
+  renderClocks();
+}
+function renderClocks() {
+  const box = document.getElementById("clocks");
+  if (!box) return;
+  if (!timedGame) { box.hidden = true; return; }
+  box.hidden = false;
+  const you = document.getElementById("clkYou"), ai = document.getElementById("clkAi");
+  const over = flagged || resigned || game.status() !== "ongoing";
+  const active = over ? null : game.sideToMove();
+  if (you) {
+    you.textContent = "🧑 " + fmtClock(humanMs);
+    you.className = "clk" + (active === humanColor ? " active" : "") + (humanMs <= 10000 ? " low" : "");
+  }
+  if (ai) {
+    ai.textContent = "🤖 " + fmtClock(engineMs);
+    ai.className = "clk" + (active === engineColor() ? " active" : "") + (engineMs <= 10000 ? " low" : "");
+  }
+}
+
 // Takeback: roll back your last move (and the engine's reply) to before you moved.
 // Only when it's your turn and the engine isn't mid-search. Board-only + counters;
 // the AI's lifelines aren't refunded (they're a spent game event, not a mistake).
@@ -948,12 +1028,14 @@ function undoMove() {
   hideOver();
   if (!firstGame) persistAiGame(false);
   onPositionChanged();
+  startClock(); // keep the clock alive after a takeback
 }
 
 function resign() {
   if (resigned || game.status() !== "ongoing") return;
   if (!confirm("Resign to the engine? It'll count as a loss.")) return;
   resigned = true;
+  stopClock();
   if (!firstGame && aiSaved) persistAiGame(true);
   paint();
 }
@@ -981,12 +1063,13 @@ function showGameOverIfNeeded() {
   const ov = document.getElementById("overOverlay");
   if (!ov) return;
   const st = game.status();
-  const over = resigned || st !== "ongoing";
+  const over = resigned || flagged || st !== "ongoing";
   const rb = document.getElementById("resignBtn");
   if (rb) rb.hidden = over;
   if (!over) { ov.style.display = "none"; mateKingSq = -1; return; }
   let winner = "", reason = "";
-  if (resigned) { winner = engineColor(); reason = "resignation"; } // you resigned → the engine wins
+  if (flagged) { winner = flagLoser === humanColor ? engineColor() : humanColor; reason = "time"; } // ran out of time
+  else if (resigned) { winner = engineColor(); reason = "resignation"; } // you resigned → the engine wins
   else if (st === "checkmate") { winner = game.sideToMove() === "white" ? "black" : "white"; reason = "checkmate"; }
   else if (st === "stalemate") { reason = "stalemate"; }
   else if (st === "fifty-move") { reason = "fifty-move rule"; }
@@ -1007,6 +1090,8 @@ function showGameOverIfNeeded() {
     how = "No legal moves, but the king isn't in check — it's a draw.";
   } else if (reason === "resignation") {
     how = "You resigned this one.";
+  } else if (reason === "time") {
+    how = won ? "The engine ran out of time — you win on the clock. ⏱" : "Your clock hit zero — a loss on time. ⏱";
   } else {
     how = "Fifty moves without a capture or pawn move — an automatic draw.";
   }
@@ -1296,7 +1381,7 @@ function renderStatus() {
   // Undo is offered only when it's your turn (the engine has replied), you have a
   // move to take back, and it's a real game.
   const ub = document.getElementById("undoBtn");
-  if (ub) ub.hidden = firstGame || st !== "ongoing" || side !== humanColor || history.length === 0;
+  if (ub) ub.hidden = firstGame || flagged || st !== "ongoing" || side !== humanColor || history.length === 0;
 }
 
 // A playful character for a suggested move — derived from the board, not vibes:
@@ -1390,7 +1475,7 @@ function renderGlass() {
 }
 
 function onSquareClick(i) {
-  if (busy || game.status() !== "ongoing" || game.sideToMove() !== humanColor) return;
+  if (busy || flagged || game.status() !== "ongoing" || game.sideToMove() !== humanColor) return;
   const c = game.boardString()[i];
 
   if (selected === null) {
@@ -1487,6 +1572,7 @@ function provenanceOf(from, to) {
   return "own";
 }
 function doPlay(from, to, promo) {
+  if (flagged || busy) return; // clock's out, or it's the engine's turn
   const preFen = game.fen(); // position before the human's move (for the Player Model)
   // Takeback snapshot: this position + the pre-move counters. Undo restores here.
   history.push({ fen: preFen, indepOwn, indepFollowed, reviewLen: moveReview.length, playerFollows });
@@ -1564,7 +1650,7 @@ function engineReply() {
   askEngine("bestMove", { fen: fenBefore, elo: usedLifeline ? 3000 : baseElo, rand: usedLifeline ? 0 : Math.random() })
     .then((uci) => {
       // Stale/aborted (new game, resume, resign) — the position isn't the one we sent.
-      if (game.fen() !== fenBefore || game.status() !== "ongoing" || game.sideToMove() !== engineColor()) { busy = false; return; }
+      if (flagged || game.fen() !== fenBefore || game.status() !== "ongoing" || game.sideToMove() !== engineColor()) { busy = false; return; }
       if (uci && uci.length >= 4) {
         const sq = uciToSquares(uci);
         game.makeMove(sq.from, sq.to, uci.length > 4 ? uci[4] : undefined);

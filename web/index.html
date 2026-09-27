@@ -29,6 +29,14 @@
           </div>
         </div>
         <div class="setup-section">
+          <div class="setup-label">Time</div>
+          <div class="color-choice" id="timeChoice">
+            <button class="cchoice" data-min="0" type="button"><span class="cc-ic">∞</span><b>Untimed</b><small>no clock</small></button>
+            <button class="cchoice" data-min="5" type="button"><span class="cc-ic">⚡</span><b>5 min</b><small>blitz</small></button>
+            <button class="cchoice" data-min="10" type="button"><span class="cc-ic">🕐</span><b>10 min</b><small>rapid</small></button>
+          </div>
+        </div>
+        <div class="setup-section">
           <div class="setup-label">Your assistance</div>
           <div class="assist-modes" id="assistModes">
             <button class="amode" data-mode="off" type="button"><span class="am-ic">🚫</span><span class="am-txt"><b>No help</b><small>Pure chess — just you and the board.</small></span></button>
@@ -45,6 +53,7 @@
       <!-- Game Mode: one slim glanceable bar. Board owns the rest of the space. -->
       <div class="gamebar">
         <div id="players" class="players" hidden></div>
+        <div id="clocks" class="clocks" hidden><span id="clkYou" class="clk"></span><span id="clkAi" class="clk"></span></div>
         <div class="gb-actions">
           <span id="evalPill" class="pill eval-pill" title="Engine's read of your position (live)" hidden></span>
           <span id="level" class="pill" title="Assistance level">—</span>
