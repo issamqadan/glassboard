@@ -637,7 +637,7 @@ function onPositionChanged() {
     // Strong advice: the recommended move comes from Stockfish at FULL strength, so
     // following it genuinely holds up against the (skill-limited) Stockfish opponent.
     if (!firstGame && window.GBEngine && ov !== "off") {
-      GBEngine.bestMove(fen, { skill: 20, movetime: 500 }).then((uci) => {
+      GBEngine.bestMove(fen, { skill: 20, movetime: 900 }).then((uci) => {
         if (token !== positionToken || !uci || uci.length < 4) return;
         const q = uciToSquares(uci), cand = candByUci(uci);
         sfBest = { uci, from: q.from, to: q.to, san: (cand && cand.san) || approxSan(uci), note: (cand && cand.note) || "" };
@@ -941,8 +941,10 @@ function applyUciArr(arr, uci) {
 function renderMoveList() {
   const el = document.getElementById("moveList");
   if (!el) return;
-  if (firstGame || uciHistory.length === 0) { el.hidden = true; el.innerHTML = ""; return; }
+  if (firstGame || uciHistory.length === 0) { el.hidden = true; el.innerHTML = ""; el._n = -1; return; }
   el.hidden = false;
+  if (el._n === uciHistory.length) return; // only rebuild when a move is actually added (no flashing)
+  el._n = uciHistory.length;
   const arr = startBoardArr();
   const sans = uciHistory.map((u) => { const s = sanFromArr(arr, u); applyUciArr(arr, u); return s; });
   // Human plies: even if you're White (ply 0,2,…), odd if Black. Map to moveReview order.
@@ -1727,28 +1729,37 @@ function approxSan(uci) {
 function pickPriority() {
   const a = assistData;
   if (!a || a.level === "off" || !(a.candidates || []).length) return null;
-  // The recommended move is Stockfish's full-strength best when available (so it
-  // actually holds up vs the SF opponent), else our Rust engine's top move.
-  const best = a.candidates[0];
-  const rec = sfBest || candByUci(a.recommended || best.uci) || best;
+  // ROOT FIX: the recommended move ALWAYS comes from Stockfish at full strength —
+  // never the weaker Rust engine (which could suggest a move that loses material).
+  // If Stockfish's answer isn't in yet, we say "Analyzing…" rather than show a weak
+  // move. Rust still supplies threat AWARENESS + the plan, but never the move.
+  if (!sfBest) return { analyzing: true };
+  const rec = sfBest;         // {from,to,uci,san,note} — genuinely best, ~2500+ strength
   const recUci = rec.uci;
-  // 1 — Urgent: a threat that overrides the plan.
-  if (a.mateThreat) return { move: asMove(rec), label: "Stop the checkmate", why: "The opponent threatens mate next move — this addresses it first.", tag: "Urgent", kind: "urgent" };
+  // Whether SF's move already moves the threatened piece (so we can phrase it right).
+  const movesPiece = (sq) => uciToSquares(recUci).from === sq;
+  // 1 — Mate threat: SF's move is the strongest defence.
+  if (a.mateThreat) return { move: rec, label: "Stop the checkmate", why: "Mate is threatened — this is the engine's strongest defence.", tag: "Urgent", kind: "urgent" };
+  // 2 — A piece is hanging: SF's move IS the correct response (it may move the piece,
+  // capture the attacker, or find compensation — whatever's objectively best).
   const big = (a.threats || []).filter((t) => t.loss >= 200)[0];
-  if (big) { const nm = pieceNameAt(big.sq); return { move: asMove(rec), label: `Protect your ${nm}`, why: `Your ${nm} on ${sqName(big.sq)} is under attack — handle it before continuing your plan.`, tag: "Urgent", kind: "urgent" }; }
-  // 2 — Your chosen plan (distinguish "fits plan" from "best move" when they differ).
-  const sr = a.strategy, picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
-  if (picked && picked.moveUci) {
-    const q = uciToSquares(picked.moveUci);
-    const move = { from: q.from, to: q.to, uci: picked.moveUci, san: picked.moveSan };
-    const fits = picked.moveUci.slice(0, 4) === recUci.slice(0, 4);
-    return { move, label: `Continue your ${STRAT_VERB[picked.id] || "plan"}`, why: picked.moveNote || `Follows your ${picked.name} plan.`,
-      tag: fits ? "Fits plan · best move" : "Fits your plan", kind: "strategy", altBest: fits ? null : rec };
+  if (big) {
+    const nm = pieceNameAt(big.sq);
+    const saves = movesPiece(big.sq);
+    return { move: rec, tag: "Urgent", kind: "urgent",
+      label: saves ? `Move your ${nm} to safety` : `Your ${nm} is attacked`,
+      why: `Your ${nm} on ${sqName(big.sq)} is under attack — ${saves ? "this gets it out of danger" : "the engine's strongest response"}.` };
   }
-  // 3 — Best available.
+  // 3 — Your chosen plan, but ONLY when it coincides with the engine's best move
+  // (so we never recommend a plan move that's objectively worse / losing).
+  const sr = a.strategy, picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  if (picked && picked.moveUci && picked.moveUci.slice(0, 4) === recUci.slice(0, 4)) {
+    return { move: rec, label: `Continue your ${STRAT_VERB[picked.id] || "plan"}`, why: picked.moveNote || rec.note || "Both your plan and the engine agree here.", tag: "Fits plan · best", kind: "strategy" };
+  }
+  // 4 — Best available.
   const fl = moveFlavor(rec);
   const byFlavor = { aggr: "Press the attack", simp: "Simplify the position", sneak: "A sneaky move", safe: "Build your position" };
-  return { move: asMove(rec), label: byFlavor[fl.key] || "Best move", why: rec.note || "The engine's strongest move here.", tag: "Best move", kind: "best" };
+  return { move: rec, label: byFlavor[fl.key] || "Best move", why: rec.note || "The engine's strongest move here.", tag: "Best move", kind: "best" };
 }
 
 // Preview a move on the board (distinct from a real move): select its piece so the
@@ -1780,6 +1791,12 @@ function renderGlassLens() {
   }
   const p = pickPriority();
   if (!p) { el.hidden = true; el.innerHTML = ""; return; }
+  // The strong engine is still calculating — show that honestly rather than a weak move.
+  if (p.analyzing) {
+    el.className = "glass-lens analyzing";
+    el.innerHTML = `<div class="gl-analyzing"><span class="gl-spin"></span> Analyzing the position…</div>`;
+    return;
+  }
   // Always-visible HUD: the advice is SHOWN (label + why), and the move is a single
   // clear button — tap ▶ to play it. The plan (pick or steps) folds in here too, so
   // NOTHING else needs to sit below the board — no scrolling to find help.
@@ -1823,7 +1840,7 @@ function renderBoardAdvice() {
   if (!ov) return;
   const active = !firstGame && game.status() === "ongoing" && game.sideToMove() === humanColor && assistData && mateKingSq < 0;
   const p = active && showAnswer() ? pickPriority() : null;
-  if (!p) { if (ov.innerHTML) ov.innerHTML = ""; ov.style.pointerEvents = "none"; ov.onclick = null; return; }
+  if (!p || p.analyzing || !p.move) { if (ov.innerHTML) ov.innerHTML = ""; ov.style.pointerEvents = "none"; ov.onclick = null; return; }
   const color = p.kind === "urgent" ? "#f2707e" : "#7ee0d6";
   const C = planCxy(p.move.to);
   ov.innerHTML = `<circle class="adv-ring" cx="${C.x}" cy="${C.y}" r="46" fill="none" stroke="${color}" stroke-width="7"/>` +

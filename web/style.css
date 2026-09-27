@@ -479,20 +479,23 @@ button {
   background: rgba(126,224,214,0.08); border: 1px solid rgba(126,224,214,0.28); border-radius: 999px; padding: 3px 10px; }
 .players .ai-chip:hover { border-color: #7ee0d6; background: rgba(126,224,214,0.16); }
 .players .ai-chip .ai-caret { color: var(--accent); font-size: 0.72rem; }
-/* Moment toast — transient personality; never touches the board. */
-.moment-toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 16px);
-  display: flex; align-items: center; gap: 11px; max-width: min(92vw, 400px);
-  background: rgba(20,28,44,0.97); border: 1px solid rgba(126,224,214,0.34); border-radius: 14px;
-  padding: 11px 15px; box-shadow: 0 10px 34px rgba(0,0,0,0.44); z-index: 60;
-  opacity: 0; pointer-events: none; transition: opacity 0.32s, transform 0.32s; }
-.moment-toast.show { opacity: 1; transform: translate(-50%, 0); }
-.moment-toast.ai { border-color: rgba(242,180,109,0.5); }
-.moment-toast.you { border-color: rgba(105,200,110,0.55); }
-.moment-toast.chance { border-color: rgba(126,224,214,0.55); }
-.moment-toast.crit { border-color: rgba(242,109,122,0.55); }
-.moment-toast .mo-ic { font-size: 1.5rem; line-height: 1; flex: none; }
-.moment-toast .mo-txt { display: flex; flex-direction: column; gap: 2px; }
-.moment-toast .mo-txt b { font-size: 0.9rem; color: #eef3fb; }
+/* Moment toast — a SUBTLE corner note; never blocks the board or the Lens. Tucked
+   top-right on desktop, a slim strip up top on mobile. Small, quiet, auto-fading. */
+.moment-toast { position: fixed; right: 16px; top: 70px; left: auto; transform: translateY(-10px);
+  display: flex; align-items: center; gap: 9px; max-width: min(88vw, 320px);
+  background: rgba(16,22,34,0.94); border: 1px solid rgba(147,162,192,0.22); border-radius: 12px;
+  padding: 8px 12px; box-shadow: 0 8px 24px -8px rgba(0,0,0,0.5); z-index: 55;
+  opacity: 0; pointer-events: none; transition: opacity 0.28s, transform 0.28s; }
+.moment-toast.show { opacity: 0.97; transform: translateY(0); }
+@media (max-width: 860px) { .moment-toast { left: 50%; right: auto; top: 64px; transform: translate(-50%, -8px); max-width: 92vw; }
+  .moment-toast.show { transform: translate(-50%, 0); } }
+.moment-toast.ai { border-color: rgba(242,180,109,0.45); }
+.moment-toast.you { border-color: rgba(105,200,110,0.5); }
+.moment-toast.chance { border-color: rgba(126,224,214,0.5); }
+.moment-toast.crit { border-color: rgba(242,109,122,0.5); }
+.moment-toast .mo-ic { font-size: 1.15rem; line-height: 1; flex: none; }
+.moment-toast .mo-txt { display: flex; flex-direction: column; gap: 1px; }
+.moment-toast .mo-txt b { font-size: 0.82rem; color: #eef3fb; }
 .moment-toast .mo-txt small { font-size: 0.78rem; color: #9fb0c8; line-height: 1.32; }
 .moment-toast.show { pointer-events: auto; cursor: pointer; }
 .moment-toast .mo-act { flex: none; align-self: center; font: inherit; font-weight: 800; font-size: 0.8rem; cursor: pointer;
@@ -953,6 +956,8 @@ main.game .board-wrap.glow-draw { box-shadow: 0 0 0 2px rgba(147,162,192,.5), 0 
    board + help fit one screen (no scrolling). */
 #movesFold { display: none; }
 .game .foot { display: none; }
+/* The coach's danger card is redundant with the Lens's urgent recommendation. */
+main.game #coach { display: none; }
 
 /* Lens plan row (pick a plan, or jump to steps) + log button */
 .glass-lens .gl-log { margin-left: auto; font-size: 0.95rem; line-height: 1; cursor: pointer;
@@ -962,6 +967,14 @@ main.game .board-wrap.glow-draw { box-shadow: 0 0 0 2px rgba(147,162,192,.5), 0 
 .glass-lens .gl-planpick { font: inherit; font-size: 0.74rem; font-weight: 700; cursor: pointer; color: #cfe6f2;
   background: rgba(126,224,214,0.1); border: 1px solid rgba(126,224,214,0.28); border-radius: 999px; padding: 4px 9px; }
 .glass-lens .gl-planpick:hover { border-color: #7ee0d6; }
+
+/* Lens "analyzing" state — the strong engine is still calculating (honest, brief). */
+.glass-lens.analyzing { border-color: rgba(147,162,192,0.28); background: rgba(255,255,255,0.03); }
+.glass-lens .gl-analyzing { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: #9fb0c8; font-weight: 600; padding: 4px 2px; }
+.glass-lens .gl-spin { width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(147,162,192,0.3);
+  border-top-color: #7ee0d6; animation: gl-spin 0.7s linear infinite; }
+@keyframes gl-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .glass-lens .gl-spin { animation: none; } }
 
 /* ---- Glass Lens: always-visible "what matters now" HUD (tap ▶ to play) ---- */
 .glass-lens { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 0;
@@ -1538,18 +1551,19 @@ main.game .strat-panel { display: none; }
   main.game #glassLens { margin: 0; }
 }
 
-/* Move list — the glass-box in the record: your moves tagged own vs helped. */
-.move-list { border: 1px solid var(--line, #1d2740); border-radius: 12px; background: rgba(255,255,255,0.02);
+/* Move list — the glass-box in the record: your moves tagged own vs helped.
+   Subtle, dark, tucked; only rebuilt when a move is added (no flashing). */
+.move-list { border: 1px solid var(--line, #1d2740); border-radius: 12px; background: rgba(255,255,255,0.02) !important;
   display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.move-list .mv-head { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px;
-  border-bottom: 1px solid var(--line, #1d2740); font-weight: 700; font-size: 0.85rem; color: #cfe0f0; }
-.move-list .mv-legend { font-size: 0.66rem; font-weight: 600; color: #8494ad; }
-.move-list .mv-scroll { overflow-y: auto; max-height: 40vh; }
+.move-list .mv-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px;
+  border-bottom: 1px solid var(--line, #1d2740); font-weight: 700; font-size: 0.8rem; color: #9fb0c8; }
+.move-list .mv-legend { font-size: 0.64rem; font-weight: 600; color: #6d7c95; }
+.move-list .mv-scroll { overflow-y: auto; max-height: 132px; }  /* ~4 rows tucked; scroll for more */
 @media (min-width: 861px) { .move-list .mv-scroll { max-height: none; } .move-list { flex: 1 1 auto; } }
-.move-list .mv-row { display: grid; grid-template-columns: 34px 1fr 1fr; align-items: center; padding: 5px 10px;
-  font-size: 0.9rem; font-variant-numeric: tabular-nums; }
-.move-list .mv-row:nth-child(odd) { background: rgba(255,255,255,0.02); }
-.move-list .mv-num { color: #7d8ba6; font-size: 0.78rem; }
-.move-list .mv-cell { display: inline-flex; align-items: center; gap: 5px; color: #dbe4f0; padding: 2px 4px; border-radius: 6px; }
-.move-list .mv-cell.you { color: #eef4fb; font-weight: 600; }
-.move-list .mv-prov { font-size: 0.78rem; }
+.move-list .mv-row { display: grid; grid-template-columns: 30px 1fr 1fr; align-items: center; padding: 4px 10px;
+  font-size: 0.86rem; font-variant-numeric: tabular-nums; background: transparent !important; }
+.move-list .mv-num { color: #6d7c95; font-size: 0.74rem; }
+.move-list .mv-cell { display: inline-flex; align-items: center; gap: 5px; color: #aeb9cc !important;
+  background: transparent !important; padding: 1px 2px; }
+.move-list .mv-cell.you { color: #e7eef8 !important; font-weight: 600; }
+.move-list .mv-prov { font-size: 0.74rem; opacity: 0.9; }
