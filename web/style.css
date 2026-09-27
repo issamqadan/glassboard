@@ -942,6 +942,20 @@ main.game .board-wrap.glow-draw { box-shadow: 0 0 0 2px rgba(147,162,192,.5), 0 
 .alt-sheet-body .alt-body b { color: #eaf0fb; font-size: 0.9rem; }
 .alt-sheet-body .alt-body small { color: #93a2c0; font-size: 0.78rem; line-height: 1.35; }
 
+/* Below the board, only the Glass Lens shows — hide the folded-away panels so the
+   board + help fit one screen (no scrolling). */
+#movesFold { display: none; }
+.game .foot { display: none; }
+
+/* Lens plan row (pick a plan, or jump to steps) + log button */
+.glass-lens .gl-log { margin-left: auto; font-size: 0.95rem; line-height: 1; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); border-radius: 9px; padding: 4px 8px; }
+.glass-lens .gl-planrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.glass-lens .gl-planlab { font-size: 0.72rem; font-weight: 700; color: #9fb0c8; }
+.glass-lens .gl-planpick { font: inherit; font-size: 0.74rem; font-weight: 700; cursor: pointer; color: #cfe6f2;
+  background: rgba(126,224,214,0.1); border: 1px solid rgba(126,224,214,0.28); border-radius: 999px; padding: 4px 9px; }
+.glass-lens .gl-planpick:hover { border-color: #7ee0d6; }
+
 /* ---- Glass Lens: always-visible "what matters now" HUD (tap ▶ to play) ---- */
 .glass-lens { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 0;
   padding: 11px 13px; border-radius: 14px; background: linear-gradient(150deg, rgba(92,201,236,0.12), rgba(126,224,214,0.05));

@@ -857,6 +857,8 @@ function paint() {
 function renderPlanDock() {
   const dock = document.getElementById("planDock");
   if (!dock) return;
+  dock.hidden = true; dock.innerHTML = ""; return; // plan folded into the Glass Lens now
+  // eslint-disable-next-line no-unreachable
   const sr = assistData && assistData.strategy;
   if (firstGame || !sr || !sr.strategies || !sr.strategies.length) { dock.hidden = true; dock.innerHTML = ""; return; }
   dock.hidden = false;
@@ -1047,33 +1049,12 @@ function glassEvents() {
 // The GLASS CARD: a slim, fixed-height "in the open" tally — two lifeline gauges,
 // a solo-streak flame, the opening, and a tap-to-open full log. It never grows, so
 // the board + suggested moves stay put on mobile; the history lives in a sheet.
+// The old "in the open" card is folded into the HUD now (help counts sit beside the
+// player names; the full log opens from the Lens's 📜 button), so nothing extra
+// stacks below the board.
 function renderAiAssist() {
   const el = document.getElementById("aiAssist");
-  if (!el) return;
-  if (firstGame) { el.hidden = true; el.innerHTML = ""; return; }
-  el.hidden = false;
-  const isMaster = parseInt(engineEloEl.value, 10) >= 3000;
-  const noHelp = aiAssistOverride === "off";
-  const youPips = noHelp ? `<span class="gp-none">pure chess</span>` : pipRow(playerTokens, PLAYER_TOKENS_MAX);
-  const streak = soloStreak();
-  const flame = streak >= 2 ? `<span class="gp-streak" title="moves in a row without help">🔥 ${streak}</span>` : "";
-  const aiUsed = AI_TOKENS_MAX - aiTokens;
-  const aiPips = isMaster ? `<span class="gp-none">no lifelines</span>` : pipRow(aiTokens, AI_TOKENS_MAX);
-  const aiTag = isMaster ? "" : (aiUsed ? `<span class="gp-tag">deep ${aiUsed}×</span>` : "");
-  const op = currentOpening();
-  const n = glassEvents().length;
-  el.innerHTML =
-    `<div class="ga-head"><span class="ga-title">🔎 In the open</span>` +
-      `<button class="ga-log" id="glassLogBtn" title="Every help either side took">📜 Log${n ? ` <span class="ga-n">${n}</span>` : ""}</button></div>` +
-    `<div class="ga-gauges">` +
-      `<div class="gp you"><span class="gp-who">🧑 You</span><span class="gp-pips">${youPips}</span>${flame}</div>` +
-      `<div class="gp ai"><span class="gp-who">🤖 ${levelName(engineEloEl.value)}</span><span class="gp-pips">${aiPips}</span>${aiTag}</div>` +
-    `</div>` +
-    (op ? `<button class="ga-open" id="glassOpenBtn">📖 <b>${escapeHtml(op.name)}</b><span class="ga-open-hint">tap for the plan</span></button>` : "");
-  const lb = document.getElementById("glassLogBtn"); if (lb) lb.onclick = openGlassSheet;
-  const ob = document.getElementById("glassOpenBtn"); if (ob) ob.onclick = () => {
-    if (op) showMoment(`<span class="mo-ic">📖</span><span class="mo-txt"><b>${escapeHtml(op.name)}</b><small>${escapeHtml(op.idea)}</small></span>`, "you");
-  };
+  if (el) { el.hidden = true; el.innerHTML = ""; }
 }
 // The full glass log — opened on demand so it never crowds the board.
 function openGlassSheet() {
@@ -1725,22 +1706,30 @@ function renderGlassLens() {
   const p = pickPriority();
   if (!p) { el.hidden = true; el.innerHTML = ""; return; }
   // Always-visible HUD: the advice is SHOWN (label + why), and the move is a single
-  // clear button — tap ▶ to play it. A plan shortcut + alternatives sit alongside.
-  const sr = assistData.strategy, picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  // clear button — tap ▶ to play it. The plan (pick or steps) folds in here too, so
+  // NOTHING else needs to sit below the board — no scrolling to find help.
+  const sr = assistData.strategy, strategies = (sr && sr.strategies) || [];
+  const picked = strategies.find((s) => s.id === pickedStrategyId);
+  let planRow = "";
+  if (picked) planRow = `<div class="gl-planrow"><button class="gl-plan" id="lensPlan" type="button">🧭 ${escapeHtml(picked.name)} · steps</button></div>`;
+  else if (strategies.length) planRow = `<div class="gl-planrow"><span class="gl-planlab">🧭 Plan:</span>` +
+    strategies.slice(0, 3).map((s) => `<button class="gl-planpick" data-id="${s.id}" type="button">${STRAT_ICON[s.id] || "◆"} ${escapeHtml(s.name)}</button>`).join("") + `</div>`;
   el.className = "glass-lens kind-" + p.kind;
   el.innerHTML =
-    `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span></div>` +
+    `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span>` +
+      `<button class="gl-log" id="lensLog" type="button" title="Assistance log">📜</button></div>` +
     (p.why ? `<div class="gl-why">${escapeHtml(p.why)}</div>` : "") +
     `<div class="gl-actions">` +
       `<button class="gl-playmove" id="lensPlay" type="button">▶ ${escapeHtml(p.move.san || "Play")}</button>` +
-      `<button class="gl-show" id="lensShow" type="button" title="Show on the board">👁 Show</button>` +
-      `<button class="gl-more" id="lensMore" type="button">⋯ moves</button>` +
-    `</div>` +
-    (picked ? `<button class="gl-plan" id="lensPlan" type="button">🧭 ${escapeHtml(picked.name)} · steps</button>` : "");
+      `<button class="gl-show" id="lensShow" type="button" title="Show on the board">👁</button>` +
+      `<button class="gl-more" id="lensMore" type="button">⋯</button>` +
+    `</div>` + planRow;
   document.getElementById("lensPlay").onclick = () => playMove(p.move.from, p.move.to, true);
   document.getElementById("lensShow").onclick = () => previewMove(p.move);
   document.getElementById("lensMore").onclick = () => openAltSheet(p);
+  document.getElementById("lensLog").onclick = openGlassSheet;
   const pl = document.getElementById("lensPlan"); if (pl) pl.onclick = () => openStepsSheet(picked);
+  el.querySelectorAll(".gl-planpick").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; paint(); });
 }
 
 // Alternatives — a dismissable bottom sheet. ▶ plays a move; 👁 shows it on the board.
