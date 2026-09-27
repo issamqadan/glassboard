@@ -640,14 +640,16 @@ function onPositionChanged() {
         // Vs the AI there's no opponent to hide help from, so suggestions show
         // immediately — the timed "thinking window" (which exists so a HUMAN
         // opponent doesn't watch you being fed moves) is a multiplayer-only thing.
-        const fold = document.getElementById("movesFold");
-        if (fold) fold.open = false;
-        // Open Hand reveals immediately; On Call / Gentleman stay hidden until you ask.
-        if ((assistData.candidates || []).length && !firstGame && helpRevealed) revealHint();
-        else clearThinkWindow(true);
-        // In ask-mode, open the panel so the "Ask for a move" button is visible.
-        if (fold && !firstGame && !showAnswer() && (assistData.candidates || []).length) fold.open = true;
-        paint(); // repaint with the assistance overlays
+        keepScroll(() => {
+          const fold = document.getElementById("movesFold");
+          if (fold) fold.open = false;
+          // Open Hand reveals immediately; On Call / Gentleman stay hidden until you ask.
+          if ((assistData.candidates || []).length && !firstGame && helpRevealed) revealHint();
+          else clearThinkWindow(true);
+          // In ask-mode, open the panel so the "Ask for a move" button is visible.
+          if (fold && !firstGame && !showAnswer() && (assistData.candidates || []).length) fold.open = true;
+          paint(); // repaint with the assistance overlays
+        });
       })
       .catch(() => {});
   } else {
@@ -709,11 +711,18 @@ function resumeThinkWindow() {
     renderThinkWindow();
   }
 }
+// Run `fn`, then snap the page scroll back to where it was — Safari scrolls a
+// <details> into view when you open it programmatically, which we never want.
+function keepScroll(fn) {
+  const x = window.scrollX, y = window.scrollY;
+  fn();
+  if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
+  requestAnimationFrame(() => { if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y); });
+}
 function revealHint(auto) {
   clearThinkWindow();
   hintState = "revealed";
-  const fold = document.getElementById("movesFold");
-  if (fold) fold.open = true;
+  keepScroll(() => { const fold = document.getElementById("movesFold"); if (fold) fold.open = true; });
   renderThinkWindow();
   if (auto === true) ideaCue(); // the idea "arrived" on its own — a gentle cue
 }
@@ -771,8 +780,13 @@ function renderEval() {
   el.textContent = "⚖ " + txt;
 }
 
-// Repaints board + panels from current state (no assistance recompute).
+// Repaints board + panels from current state (no assistance recompute). Every
+// repaint re-renders panels and toggles the <details> help panel — which Safari
+// "helpfully" scrolls into view, jerking the page on every move. So we snapshot
+// the scroll position before rendering and restore it (now + next frame), keeping
+// the board perfectly stationary as you and the opponent move.
 function paint() {
+  const sx = window.scrollX, sy = window.scrollY;
   renderFirstGame();
   renderBoard();
   renderPlayers();
@@ -789,6 +803,8 @@ function paint() {
   renderStatus();
   renderBudget();
   showGameOverIfNeeded();
+  if (window.scrollX !== sx || window.scrollY !== sy) window.scrollTo(sx, sy);
+  requestAnimationFrame(() => { if (window.scrollX !== sx || window.scrollY !== sy) window.scrollTo(sx, sy); });
 }
 
 // Plan Dock: the strategy made glanceable and always-visible right under the
