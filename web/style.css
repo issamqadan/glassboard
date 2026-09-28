@@ -993,6 +993,32 @@ main.game #coach { display: none; }
 .glass-lens .gl-id.you { background: rgba(126,224,214,0.14); color: #a7e6dd; }
 .glass-lens .gl-id.opp { background: rgba(242,112,126,0.14); color: #f2a6ae; max-width: 62%; }
 .glass-lens .gl-id.boost { background: rgba(242,176,58,0.18); color: #f0c06a; font-weight: 800; }
+.glass-lens .gl-plansbtn { font: inherit; font-weight: 800; font-size: 0.74rem; cursor: pointer; color: #cfe0f0;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); border-radius: 9px; padding: 5px 9px;
+  white-space: nowrap; touch-action: manipulation; margin-left: auto; }
+.glass-lens .gl-planlab.book { color: #b4c0ff; font-weight: 800; }
+/* Strategy picker sheet */
+.plan-sheet-body { display: flex; flex-direction: column; gap: 6px; padding: 4px 2px 8px; }
+.plan-sheet-body .ps-phase { font-size: 0.78rem; color: #aab8cf; text-transform: capitalize; margin: 2px 2px 4px; }
+.plan-sheet-body .ps-sec { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #8ba0bd; margin: 10px 2px 2px; }
+.plan-sheet-body .ps-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; cursor: pointer;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); border-left: 3px solid var(--sc, #5cc9ec);
+  border-radius: 11px; padding: 10px 12px; color: #e7eefb; text-decoration: none; touch-action: manipulation; }
+.plan-sheet-body .ps-item.on { background: rgba(126,224,214,0.14); border-color: rgba(126,224,214,0.5); }
+.plan-sheet-body .ps-item.book { border-left-color: #8aa0ff; }
+.plan-sheet-body .ps-ic { font-size: 1.1rem; width: 22px; text-align: center; flex: 0 0 auto; }
+.plan-sheet-body .ps-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.plan-sheet-body .ps-t b { font-size: 0.92rem; font-weight: 800; }
+.plan-sheet-body .ps-t small { font-size: 0.76rem; color: #b3c1d8; line-height: 1.35; }
+.plan-sheet-body .ps-item.learn { opacity: 0.92; }
+.plan-sheet-body .ps-cx { font-size: 0.56rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px; flex: 0 0 auto; }
+.plan-sheet-body .cx-Beginner { background: rgba(126,224,214,0.16); color: #8fe0d6; }
+.plan-sheet-body .cx-Intermediate { background: rgba(242,176,58,0.16); color: #f0c06a; }
+.plan-sheet-body .cx-Advanced { background: rgba(242,112,126,0.16); color: #f2a6ae; }
+.plan-sheet-body .ps-clear { margin-top: 10px; font: inherit; font-weight: 700; font-size: 0.82rem; cursor: pointer;
+  color: #f2a6ae; background: rgba(242,112,126,0.1); border: 1px solid rgba(242,112,126,0.3); border-radius: 11px; padding: 10px; }
 .glass-lens .gl-r1 { display: flex; align-items: center; gap: 8px; }
 .glass-lens .gl-label { font-weight: 800; font-size: 1rem; color: #eef4fb; letter-spacing: -0.01em; flex: 1; }
 .glass-lens .gl-tag { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;

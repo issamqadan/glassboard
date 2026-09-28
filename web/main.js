@@ -147,7 +147,7 @@ async function resumeAiGame(id) {
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
-  pickedStrategyId = null; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
+  pickedStrategyId = null; followBook = false; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
   firstGame = false;
   hideOver();
   if (window.GBTheme) GBTheme.setContext(id); // restore this game's board
@@ -576,6 +576,10 @@ async function main() {
   const closeAlt = () => { if (asheet) asheet.style.display = "none"; };
   if (asclose) asclose.addEventListener("click", closeAlt);
   if (asheet) asheet.addEventListener("click", (e) => { if (e.target === asheet) closeAlt(); });
+  const plsheet = document.getElementById("planSheet"), plclose = document.getElementById("planSheetClose");
+  const closePlan = () => { if (plsheet) plsheet.style.display = "none"; };
+  if (plclose) plclose.addEventListener("click", closePlan);
+  if (plsheet) plsheet.addEventListener("click", (e) => { if (e.target === plsheet) closePlan(); });
   const rb = document.getElementById("resignBtn");
   if (rb) rb.addEventListener("click", () => { closeMenu(); resign(); });
   const ub = document.getElementById("undoBtn");
@@ -618,6 +622,7 @@ function newGame() {
   busy = false;
   resigned = false;
   pickedStrategyId = null;
+  followBook = false;
   budgetSpent = 0;
   helpWasAvailable = false;
   animMoveKey = null;
@@ -982,6 +987,17 @@ function strategyIdentity() {
   }
   if (sr && sr.opponent && !opp.name) opp.read = sr.opponent;
   return { you, opp, phase: sr ? sr.phase : null };
+}
+// The NEXT move in your chosen opening's book line, if you're still following it.
+// Returns {uci,from,to} for the side to move (the human, when the Lens is up), or
+// null once the line diverges or the book runs out.
+function bookNextMove() {
+  const op = currentOpening();
+  if (!op || !op.uci || op.uci.length <= uciHistory.length) return null;
+  for (let i = 0; i < uciHistory.length; i++) if (op.uci[i] !== uciHistory[i]) return null; // history must match the line
+  const u = op.uci[uciHistory.length];
+  const q = uciToSquares(u);
+  return q ? { uci: u, from: q.from, to: q.to } : null;
 }
 // The identity strip as HTML — names each side's opening/plan + a phase pill. Pure
 // awareness (a label, not a move answer), so it's rendered in EVERY Lens state
@@ -1588,6 +1604,7 @@ const STRAT_ICON = { save_piece: "🛡", win_material: "⚔", develop: "♞", ce
 const STRAT_COLOR = { save_piece: "#f2b03a", win_material: "#f2707e", develop: "#5cc9ec", center: "#7ee0d6", attack_king: "#f2707e", simplify: "#e0be79", passer: "#5cc9ec", iso_attack: "#f2707e", open_file: "#7ee0d6", pawn_storm: "#f2707e", fianchetto: "#e0be79", outpost: "#7ee0d6", rook_seventh: "#f2707e", improve: "#9fc0ff", pawn_break: "#e0be79" };
 const PLAN_COLOR = { dev: "#5cc9ec", attack: "#f2707e", support: "#7ee0d6", castle: "#e0be79" };
 let pickedStrategyId = null;
+let followBook = false; // "follow the book" — surface the chosen opening's line while in book
 const planCxy = (sq) => { const p = rc(sq); return { x: (p.col + 0.5) * 100, y: (p.row + 0.5) * 100 }; }; // orientation-aware
 function uciSquares(u) {
   if (!u || u.length < 4) return null;
@@ -1848,6 +1865,15 @@ function pickPriority() {
   if (picked && picked.moveUci && picked.moveUci.slice(0, 4) === recUci.slice(0, 4)) {
     return { move: rec, label: `Continue your ${STRAT_VERB[picked.id] || "plan"}`, why: picked.moveNote || rec.note || "Both your plan and the engine agree here.", tag: "Fits plan · best", kind: "strategy" };
   }
+  // 3b — Follow the book: while you're still in your chosen opening's line, surface
+  // the book move — but ONLY when it's also the engine's best (sound), never a blunder.
+  if (followBook) {
+    const bn = bookNextMove();
+    const op = currentOpening();
+    if (bn && op && bn.uci.slice(0, 4) === recUci.slice(0, 4)) {
+      return { move: rec, label: `Book: ${op.name}`, why: op.idea || "Following your opening's main line.", tag: "Book · best", kind: "strategy" };
+    }
+  }
   // 3.5 — When you're clearly worse, a DRAW is the good result — so surface it as
   // an explicit, player-facing strategy (not a silent top move). The engine's best
   // try in a worse position IS the holding / drawing attempt; we name it and explain
@@ -1907,10 +1933,14 @@ function renderGlassLens() {
   // NOTHING else needs to sit below the board — no scrolling to find help.
   const sr = assistData.strategy, strategies = (sr && sr.strategies) || [];
   const picked = strategies.find((s) => s.id === pickedStrategyId);
+  const bookOp = (followBook && bookNextMove()) ? currentOpening() : null;
+  const plansBtn = `<button class="gl-plansbtn" id="lensPlans" type="button" title="Pick a strategy">🧭 Plans</button>`;
   let planRow = "";
-  if (picked) planRow = `<div class="gl-planrow"><button class="gl-plan" id="lensPlan" type="button">🧭 ${escapeHtml(picked.name)} · steps</button></div>`;
+  if (picked) planRow = `<div class="gl-planrow"><button class="gl-plan" id="lensPlan" type="button">🧭 ${escapeHtml(picked.name)} · steps</button>${plansBtn}</div>`;
+  else if (bookOp) planRow = `<div class="gl-planrow"><span class="gl-planlab book">📖 ${escapeHtml(bookOp.name)}</span>${plansBtn}</div>`;
   else if (strategies.length) planRow = `<div class="gl-planrow"><span class="gl-planlab">🧭 Plan:</span>` +
-    strategies.slice(0, 3).map((s) => `<button class="gl-planpick" data-id="${s.id}" type="button">${STRAT_ICON[s.id] || "◆"} ${escapeHtml(s.name)}</button>`).join("") + `</div>`;
+    strategies.slice(0, 2).map((s) => `<button class="gl-planpick" data-id="${s.id}" type="button">${STRAT_ICON[s.id] || "◆"} ${escapeHtml(s.name)}</button>`).join("") + plansBtn + `</div>`;
+  else planRow = `<div class="gl-planrow">${plansBtn}</div>`;
   el.className = "glass-lens kind-" + p.kind;
   el.innerHTML = glIdentityRow() +
     `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span>` +
@@ -1926,7 +1956,57 @@ function renderGlassLens() {
   document.getElementById("lensMore").onclick = () => openAltSheet(p);
   document.getElementById("lensLog").onclick = openGlassSheet;
   const pl = document.getElementById("lensPlan"); if (pl) pl.onclick = () => openStepsSheet(picked);
-  el.querySelectorAll(".gl-planpick").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; paint(); });
+  const pls = document.getElementById("lensPlans"); if (pls) pls.onclick = openPlanSheet;
+  el.querySelectorAll(".gl-planpick").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; followBook = false; paint(); });
+}
+
+// The Strategy picker — a bottom sheet of plans that FIT this position, filtered by
+// phase: follow-the-book in the opening, the engine's live plans grouped by category,
+// and links to the matching catalog write-ups. Adopting one drives the plan surface
+// (and is visible to your opponent — assistance stays in the open).
+function openPlanSheet() {
+  const body = document.getElementById("planSheetBody"), sh = document.getElementById("planSheet");
+  if (!body || !sh) return;
+  const sr = assistData && assistData.strategy;
+  const phase = (sr && sr.phase) || "opening";
+  const S = window.GBStrategies;
+  const strategies = (sr && sr.strategies) || [];
+  let html = `<div class="ps-phase">Phase — <b>${escapeHtml(phase)}</b></div>`;
+  // Follow the book (opening phase, still in a known line)
+  const op = currentOpening(), bn = bookNextMove();
+  if (op && bn) {
+    html += `<div class="ps-sec">Opening</div>` +
+      `<button class="ps-item book${followBook ? " on" : ""}" data-act="book"><span class="ps-ic">📖</span>` +
+      `<span class="ps-t"><b>${followBook ? "Following the book" : "Follow the book"} — ${escapeHtml(op.name)}</b>` +
+      `<small>${escapeHtml(op.idea || "Play the opening's main line while it stays sound.")}</small></span></button>`;
+  }
+  // Live plans the engine detects here, grouped by category
+  if (strategies.length) {
+    const byCat = {};
+    strategies.forEach((s) => { const cat = (S ? S.themeMeta(s.id).cat : "Plan"); (byCat[cat] || (byCat[cat] = [])).push(s); });
+    (S ? S.categories : Object.keys(byCat)).forEach((cat) => {
+      const items = byCat[cat]; if (!items || !items.length) return;
+      html += `<div class="ps-sec">${escapeHtml(cat)}</div>` + items.map((s) =>
+        `<button class="ps-item${s.id === pickedStrategyId ? " on" : ""}" data-id="${s.id}" style="--sc:${STRAT_COLOR[s.id] || "#5cc9ec"}">` +
+        `<span class="ps-ic">${STRAT_ICON[s.id] || "◆"}</span><span class="ps-t"><b>${escapeHtml(s.name)}</b><small>${escapeHtml(s.idea || "")}</small></span></button>`).join("");
+    });
+  }
+  // Learn — the catalog write-ups for this phase (opens the library)
+  const cplans = (S && S.plansByPhase) ? S.plansByPhase(phase) : [];
+  if (cplans.length) {
+    html += `<div class="ps-sec">Learn — ${escapeHtml(phase)} strategies</div>` + cplans.map((p) => {
+      const cx = p.cx || (S.complexity ? S.complexity(p) : "");
+      return `<a class="ps-item learn" href="./strategy.html" target="_blank" rel="noopener"><span class="ps-ic">${STRAT_ICON[p.id] || "◆"}</span>` +
+        `<span class="ps-t"><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.idea || "")}</small></span>` +
+        (cx ? `<span class="ps-cx cx-${cx}">${cx}</span>` : "") + `</a>`;
+    }).join("");
+  }
+  if (pickedStrategyId || followBook) html += `<button class="ps-clear" data-act="clear" type="button">✕ Clear active plan</button>`;
+  body.innerHTML = html;
+  body.querySelectorAll(".ps-item[data-id]").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; followBook = false; sh.style.display = "none"; paint(); });
+  const bk = body.querySelector('.ps-item[data-act="book"]'); if (bk) bk.onclick = () => { followBook = !followBook; if (followBook) pickedStrategyId = null; sh.style.display = "none"; paint(); };
+  const clr = body.querySelector('.ps-clear'); if (clr) clr.onclick = () => { pickedStrategyId = null; followBook = false; sh.style.display = "none"; paint(); };
+  sh.style.display = "grid";
 }
 
 // ---- The board thinks out loud: assistance rendered AS living board intelligence.
