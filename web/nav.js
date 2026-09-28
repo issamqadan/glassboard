@@ -35,10 +35,28 @@ function gbnav() {
     `<a class="gbnav-me" href="./portal.html" title="${name}"><span class="gbnav-av">${init}</span><span class="gbnav-name">${name}</span></a>`;
   document.body.insertBefore(top, document.body.firstChild);
 
+  // Mobile bottom tabs: the primary destinations + a "More" overflow that holds the
+  // secondary ones (Help, Forum, Two players, profile) — so nothing is desktop-only.
+  const moreOn = ["help.html", "forum.html", "twoplayer.html"].includes(cur);
   const tabs = document.createElement("nav");
   tabs.className = "gbtabs";
-  tabs.innerHTML = tabLinks + `<a class="gbtab" href="./portal.html"><span class="gbtab-ic">👤</span><span>You</span></a>`;
+  tabs.innerHTML = tabLinks + `<a class="gbtab${moreOn ? " on" : ""}" href="#" id="gbMore"><span class="gbtab-ic">⋯</span><span>More</span></a>`;
   document.body.appendChild(tabs);
+
+  const moreMenu = document.createElement("div");
+  moreMenu.className = "gbmore-menu"; moreMenu.hidden = true;
+  moreMenu.innerHTML =
+    `<a href="./help.html"${cur === "help.html" ? ' class="on"' : ""}>❓ How Glassboard works</a>` +
+    `<a href="./forum.html"${cur === "forum.html" ? ' class="on"' : ""}>💬 Forum &amp; feedback</a>` +
+    `<a href="./twoplayer.html"${cur === "twoplayer.html" ? ' class="on"' : ""}>👥 Two players (same screen)</a>` +
+    `<a href="#" id="gbMoreProfile"><span class="gbmore-av">${init}</span> ${name}</a>`;
+  document.body.appendChild(moreMenu);
+  const moreBtn = tabs.querySelector("#gbMore");
+  const closeMore = () => { moreMenu.hidden = true; };
+  if (moreBtn) moreBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); moreMenu.hidden = !moreMenu.hidden; });
+  document.addEventListener("click", (e) => { if (!moreMenu.hidden && !moreMenu.contains(e.target)) closeMore(); });
+  const moreProf = moreMenu.querySelector("#gbMoreProfile");
+  if (moreProf) moreProf.addEventListener("click", (e) => { e.preventDefault(); closeMore(); if (typeof window.gbNavProfile === "function") window.gbNavProfile(); else location.href = "./portal.html"; });
 
   // Profile chip opens the identity modal in-place when a page provides one
   // (the portal); otherwise it navigates to the portal.
@@ -92,7 +110,19 @@ function gbnav() {
     .gbtab-ic { font-size: 1.2rem; line-height: 1; }
     .gbtab.on { color: #5cc9ec; }
     body { padding-bottom: 64px; }
-  }`;
+  }
+  /* "More" overflow menu (mobile) — sits above the tab bar */
+  .gbmore-menu { position: fixed; right: 8px; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); z-index: 61;
+    background: linear-gradient(165deg, #16243a, #0d1320); border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
+    padding: 6px; display: flex; flex-direction: column; gap: 2px; min-width: 210px;
+    box-shadow: 0 20px 44px -18px rgba(0,0,0,0.85); }
+  .gbmore-menu[hidden] { display: none; }
+  .gbmore-menu a { display: flex; align-items: center; gap: 10px; padding: 12px 13px; border-radius: 10px;
+    color: #cdd8e8; text-decoration: none; font-size: 0.92rem; font-weight: 600; }
+  .gbmore-menu a:hover, .gbmore-menu a:active { background: rgba(255,255,255,0.06); }
+  .gbmore-menu a.on { color: #eaf0fb; background: rgba(92,201,236,0.16); }
+  .gbmore-av { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 0.74rem;
+    color: #06121a; background: linear-gradient(140deg, #7ee0d6, #5cc9ec); }`;
   const st = document.createElement("style");
   st.textContent = css;
   document.head.appendChild(st);
