@@ -10,6 +10,36 @@ use assist::*;
 use engine::*;
 use wasm_bindgen::prelude::*;
 
+/// True when neither side has the material to force checkmate — an immediate draw
+/// (K vs K, K + a single minor vs K, or only same-coloured bishops). Any pawn, rook,
+/// or queen means mate is still possible, so it's not insufficient.
+fn insufficient_material(b: &Board) -> bool {
+    let mut minors = 0i32;
+    let (mut bishops_light, mut bishops_dark) = (0i32, 0i32);
+    for s in 0..64u8 {
+        if let Some(p) = b.squares[s as usize] {
+            match p.kind {
+                PieceKind::King => {}
+                PieceKind::Knight => minors += 1,
+                PieceKind::Bishop => {
+                    minors += 1;
+                    if (file_of(s) + rank_of(s)) % 2 == 0 {
+                        bishops_dark += 1;
+                    } else {
+                        bishops_light += 1;
+                    }
+                }
+                _ => return false, // a pawn, rook, or queen → mate is possible
+            }
+        }
+    }
+    if minors <= 1 {
+        return true; // K vs K, or K + one minor vs K
+    }
+    let knights = minors - (bishops_light + bishops_dark);
+    knights == 0 && (bishops_light == 0 || bishops_dark == 0) // only same-coloured bishops
+}
+
 #[wasm_bindgen]
 pub struct Game {
     board: Board,
@@ -232,6 +262,8 @@ impl Game {
             } else {
                 "stalemate"
             }
+        } else if insufficient_material(&self.board) {
+            "insufficient"
         } else if self.board.halfmove >= 100 {
             "fifty-move"
         } else {

@@ -1475,6 +1475,7 @@ function showGameOverIfNeeded() {
   else if (st === "checkmate") { winner = game.sideToMove() === "white" ? "black" : "white"; reason = "checkmate"; }
   else if (st === "stalemate") { reason = "stalemate"; }
   else if (repetitionDraw) { reason = "repetition"; }
+  else if (st === "insufficient") { reason = "insufficient material"; }
   else if (st === "fifty-move") { reason = "fifty-move rule"; }
   const draw = winner === "", won = winner === humanColor;
   const res = document.getElementById("overResult"), rea = document.getElementById("overReason");
@@ -1497,6 +1498,8 @@ function showGameOverIfNeeded() {
     how = won ? "The engine ran out of time — you win on the clock. ⏱" : "Your clock hit zero — a loss on time. ⏱";
   } else if (reason === "repetition") {
     how = "The same position came up three times — a draw by repetition. ♻";
+  } else if (reason === "insufficient material") {
+    how = "Neither side has enough pieces left to checkmate — an automatic draw. 🤝";
   } else {
     how = "Fifty moves without a capture or pawn move — an automatic draw.";
   }
