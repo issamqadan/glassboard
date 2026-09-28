@@ -3,7 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="gb-version" content="__GBVER__" />
+  <meta http-equiv="Cache-Control" content="no-cache" />
   <title>Glassboard</title>
+  <script>
+    (function () { try {
+      var m = document.querySelector('meta[name="gb-version"]');
+      var cur = m && m.content !== "__GB" + "VER__" ? m.content : "";
+      fetch("./version.txt?_=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : ""; })
+        .then(function (latest) { latest = (latest || "").trim(); var key = "gb-reloaded-" + latest;
+          if (latest && cur && latest !== cur && !sessionStorage.getItem(key)) { sessionStorage.setItem(key, "1"); location.replace(location.pathname + "?v=" + latest); } }).catch(function () {});
+    } catch (e) {} })();
+  </script>
   <style>
     /* Glassboard portal — committed dark "glass-box" world */
     :root {
