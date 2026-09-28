@@ -942,6 +942,42 @@ function renderOpening() {
   if (el) { el.hidden = true; el.innerHTML = ""; }
 }
 
+// "Who's playing what" — fuse the NAMED opening (attributed to whichever side it
+// characterises) with the engine's live phase + top plan + opponent read into a
+// two-sided read. This is pure AWARENESS (a label, never a move answer), so it is
+// NOT help-gated — it shows in every mode, symmetric glass for both sides.
+function strategyIdentity() {
+  const sr = assistData && assistData.strategy;
+  const op = currentOpening();
+  const meta = window.GBStrategies;
+  const you = {}, opp = {};
+  if (op) {
+    const fam = meta ? meta.familyOf(op.eco) : "";
+    if (op.side === humanColor || op.side === "both") { you.name = op.name; you.family = fam; you.idea = op.idea; you.book = true; }
+    if (op.side === engineColor() || op.side === "both") { opp.name = op.name; opp.family = fam; opp.idea = op.idea; }
+  }
+  if (sr && sr.strategies && sr.strategies.length) {
+    const top = sr.strategies[0];
+    const tm = meta ? meta.themeMeta(top.id) : { cat: "Plan" };
+    if (!you.name) { you.name = top.name; you.cat = tm.cat; you.idea = top.idea; }
+    else if (!you.book || (sr.phase && sr.phase !== "opening")) you.planHint = top.name; // named opening + a live plan underneath
+  }
+  if (sr && sr.opponent && !opp.name) opp.read = sr.opponent;
+  return { you, opp, phase: sr ? sr.phase : null };
+}
+// The identity strip as HTML — names each side's opening/plan + a phase pill. Pure
+// awareness (a label, not a move answer), so it's rendered in EVERY Lens state
+// (analyzing, awaiting-your-ask, and the full recommendation).
+function glIdentityRow() {
+  const idn = strategyIdentity();
+  const bits = [];
+  if (idn.you.name) bits.push(`<span class="gl-id you" title="${escapeHtml(idn.you.idea || "")}">📖 You · ${escapeHtml(idn.you.name)}${idn.you.planHint ? ` → ${escapeHtml(idn.you.planHint)}` : ""}</span>`);
+  if (idn.opp.name) bits.push(`<span class="gl-id opp" title="${escapeHtml(idn.opp.idea || "")}">🎯 Opp · ${escapeHtml(idn.opp.name)}</span>`);
+  else if (idn.opp.read) bits.push(`<span class="gl-id opp" title="${escapeHtml(idn.opp.read)}">🎯 ${escapeHtml(idn.opp.read)}</span>`);
+  if (!bits.length && !idn.phase) return "";
+  return `<div class="gl-identity">${idn.phase ? `<span class="gl-phase">${escapeHtml(idn.phase)}</span>` : ""}${bits.join("")}</div>`;
+}
+
 // The MOVE LIST — Glassboard's signature: every move shown, and each of YOUR moves
 // tagged with its provenance (💪 found alone · 🤝 took help), so the glass-box lives
 // in the record itself. Replays UCI from the start for readable SAN.
@@ -1826,9 +1862,9 @@ function renderGlassLens() {
   // Modes: don't reveal the move until it's been requested (accounting preserved).
   if (!showAnswer()) {
     el.className = "glass-lens ask";
-    el.innerHTML = helpDelivery === "gentleman"
+    el.innerHTML = glIdentityRow() + (helpDelivery === "gentleman"
       ? (helpRequestPending ? `<div class="gl-askbtn waiting">🤝 Waiting for your opponent…</div>` : `<button class="gl-askbtn" id="lensAsk" type="button">🤝 Ask for the key move <small>opponent must allow</small></button>`)
-      : `<button class="gl-askbtn" id="lensAsk" type="button">🔔 Show the key move${helpReceived ? ` <small>${helpReceived} used</small>` : ""}</button>`;
+      : `<button class="gl-askbtn" id="lensAsk" type="button">🔔 Show the key move${helpReceived ? ` <small>${helpReceived} used</small>` : ""}</button>`);
     const b = document.getElementById("lensAsk"); if (b) b.onclick = askForHelp;
     return;
   }
@@ -1837,7 +1873,7 @@ function renderGlassLens() {
   // The strong engine is still calculating — show that honestly rather than a weak move.
   if (p.analyzing) {
     el.className = "glass-lens analyzing";
-    el.innerHTML = `<div class="gl-analyzing"><span class="gl-spin"></span> Analyzing the position…</div>`;
+    el.innerHTML = glIdentityRow() + `<div class="gl-analyzing"><span class="gl-spin"></span> Analyzing the position…</div>`;
     return;
   }
   // Always-visible HUD: the advice is SHOWN (label + why), and the move is a single
@@ -1850,7 +1886,7 @@ function renderGlassLens() {
   else if (strategies.length) planRow = `<div class="gl-planrow"><span class="gl-planlab">🧭 Plan:</span>` +
     strategies.slice(0, 3).map((s) => `<button class="gl-planpick" data-id="${s.id}" type="button">${STRAT_ICON[s.id] || "◆"} ${escapeHtml(s.name)}</button>`).join("") + `</div>`;
   el.className = "glass-lens kind-" + p.kind;
-  el.innerHTML =
+  el.innerHTML = glIdentityRow() +
     `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span>` +
       `<button class="gl-log" id="lensLog" type="button" title="Assistance log">📜</button></div>` +
     (p.why ? `<div class="gl-why">${escapeHtml(p.why)}</div>` : "") +

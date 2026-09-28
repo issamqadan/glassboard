@@ -984,6 +984,14 @@ main.game #coach { display: none; }
 .glass-lens.kind-urgent { background: linear-gradient(150deg, rgba(242,109,122,0.16), rgba(242,109,122,0.05)); border-color: rgba(242,109,122,0.5); }
 .glass-lens.kind-strategy { background: linear-gradient(150deg, rgba(126,224,214,0.14), rgba(92,201,236,0.05)); border-color: rgba(126,224,214,0.45); }
 .glass-lens.kind-draw { background: linear-gradient(150deg, rgba(138,160,255,0.16), rgba(138,160,255,0.05)); border-color: rgba(138,160,255,0.5); }
+.glass-lens .gl-identity { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;
+  font-size: 0.7rem; letter-spacing: 0.01em; }
+.glass-lens .gl-phase { text-transform: uppercase; font-weight: 800; font-size: 0.58rem; letter-spacing: 0.08em;
+  padding: 2px 7px; border-radius: 999px; background: rgba(147,162,192,0.18); color: #aab8cf; }
+.glass-lens .gl-id { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 8px; border-radius: 999px;
+  font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.glass-lens .gl-id.you { background: rgba(126,224,214,0.14); color: #a7e6dd; }
+.glass-lens .gl-id.opp { background: rgba(242,112,126,0.14); color: #f2a6ae; max-width: 62%; }
 .glass-lens .gl-r1 { display: flex; align-items: center; gap: 8px; }
 .glass-lens .gl-label { font-weight: 800; font-size: 1rem; color: #eef4fb; letter-spacing: -0.01em; flex: 1; }
 .glass-lens .gl-tag { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
