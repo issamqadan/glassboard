@@ -165,10 +165,10 @@ async function resumeAiGame(id) {
 const AI_LEVELS = [
   { elo: 700, ic: "🌱", name: "Beginner", desc: "Learning the moves", rating: "≈900", skill: 0, depth: 1 },
   { elo: 1100, ic: "♟", name: "Casual", desc: "Plays for fun", rating: "≈1200", skill: 2, depth: 3 },
-  { elo: 1500, ic: "♞", name: "Intermediate", desc: "Knows the basics", rating: "≈1500", skill: 5, movetime: 150 },
-  { elo: 1900, ic: "⚔", name: "Club", desc: "Solid, purposeful", rating: "≈1800", skill: 9, movetime: 250 },
-  { elo: 2300, ic: "★", name: "Expert", desc: "Sharp & strong", rating: "≈2100", skill: 14, movetime: 500 },
-  { elo: 3000, ic: "👑", name: "Master", desc: "The toughest test", rating: "≈2500+", skill: 20, movetime: 800 },
+  { elo: 1500, ic: "♞", name: "Intermediate", desc: "Knows the basics", rating: "≈1500", skill: 6, movetime: 300 },
+  { elo: 1900, ic: "⚔", name: "Club", desc: "Solid, purposeful", rating: "≈1850", skill: 12, movetime: 500 },
+  { elo: 2300, ic: "★", name: "Expert", desc: "Sharp & strong", rating: "≈2200", skill: 18, movetime: 1200 },
+  { elo: 3000, ic: "👑", name: "Master", desc: "The toughest test", rating: "≈2500+", skill: 20, movetime: 1500 },
 ];
 // Stockfish parameters (and the ≈rating) for an engine rating from the ladder.
 function sfLevelFor(elo) { return AI_LEVELS.reduce((a, l) => (elo <= l.elo && !a ? l : a), null) || AI_LEVELS[AI_LEVELS.length - 1]; }
