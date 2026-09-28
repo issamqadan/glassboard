@@ -256,6 +256,8 @@
     attack_king:  { phase: "middlegame", cat: "Attack",      label: "Attack the king" },
     pawn_storm:   { phase: "middlegame", cat: "Attack",      label: "Pawn storm" },
     // Positional / structure play
+    minority_attack: { phase: "middlegame", cat: "Positional", label: "Minority attack" },
+    iqp_attack:   { phase: "middlegame", cat: "Positional",  label: "Use your isolated d-pawn" },
     iso_attack:   { phase: "middlegame", cat: "Positional",  label: "Hit the isolated pawn" },
     open_file:    { phase: "middlegame", cat: "Positional",  label: "Seize the open file" },
     rook_seventh: { phase: "middlegame", cat: "Positional",  label: "Rook to the 7th" },

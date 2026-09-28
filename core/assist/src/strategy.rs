@@ -261,6 +261,15 @@ fn home_pieces(color: Color) -> [(Square, PieceKind); 7] {
         [(56, Rook), (57, Knight), (58, Bishop), (59, Queen), (61, Bishop), (62, Knight), (63, Rook)]
     }
 }
+/// How many pawns `color` has on a given file.
+fn pawns_on_file(b: &Board, color: Color, file: i32) -> i32 {
+    (0..64u8)
+        .filter(|&s| matches!(b.squares[s as usize], Some(p) if p.color == color && p.kind == PieceKind::Pawn && file_of(s) == file))
+        .count() as i32
+}
+fn has_pawn_on_file(b: &Board, color: Color, file: i32) -> bool {
+    pawns_on_file(b, color, file) > 0
+}
 /// A protected, unassailable advanced square is a knight outpost.
 fn is_outpost(b: &Board, sq: Square, side: Color) -> bool {
     let r = rank_of(sq);
@@ -636,6 +645,57 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
         }
     }
 
+    // --- Minority attack (Carlsbad-style: you have FEWER queenside pawns — no
+    // c-pawn while they keep theirs — so advance your b-pawn to b5xc6 and leave
+    // them a weak, backward c-pawn on a half-open file). ---
+    if ph != "opening"
+        && !has_pawn_on_file(b, side, 2) // you have no c-pawn
+        && has_pawn_on_file(b, opp, 2) // they still have theirs
+        && has_pawn_on_file(b, side, 1) // and you have a b-pawn to push
+    {
+        let rec = plan_move(ranked, top_score, |m| {
+            kind_at(b, m.from) == Some(PieceKind::Pawn) && file_of(m.from) <= 1 && forward_pawn(b, m, side)
+        });
+        if kind_at(b, rec.from) == Some(PieceKind::Pawn) && file_of(rec.from) <= 1 {
+            out.push(mk(
+                "minority_attack",
+                "Minority attack",
+                "You have fewer queenside pawns — advance your b-pawn (b4–b5xc6) to saddle them with a weak, backward c-pawn on a half-open file.",
+                35,
+                rec,
+                "Rolls the b-pawn toward b5 — the break that creates a lasting queenside weakness.".to_string(),
+                vec![PlanArrow { from: rec.from, to: rec.to, kind: ArrowKind::Attack }],
+                vec![rec.to],
+                vec![
+                    step("Advance the b-pawn to b5", false),
+                    step("Trade b5xc6 to fix a weak c-pawn", false),
+                    step("Pile on the weakness down the c-file", false),
+                ],
+            ));
+        }
+    }
+
+    // --- Isolated Queen's Pawn — YOUR dynamic play (you own the d-pawn with no
+    // c/e neighbours: use the space and outposts for active piece play, not defence). ---
+    if let Some(&dp) = isolated_of(b, side).iter().find(|&&s| file_of(s) == 3) {
+        let rec = plan_move(ranked, top_score, |_| true); // your best active continuation
+        out.push(mk(
+            "iqp_attack",
+            "Use your isolated d-pawn",
+            "Your isolated d-pawn grants open lines and the e5/c5 squares — play actively for a kingside initiative before it becomes a target.",
+            32,
+            rec,
+            "Plays actively around your IQP — occupy e5/c5 and attack while the pawn is a strength.".to_string(),
+            vec![PlanArrow { from: rec.from, to: rec.to, kind: ArrowKind::Dev }],
+            vec![dp],
+            vec![
+                step("Occupy the e5/c5 outposts", false),
+                step("Keep pieces on and aim at the king", false),
+                step("Break with d4–d5 at the right moment", false),
+            ],
+        ));
+    }
+
     // --- Kingside pawn storm (enemy king castled short, in the middlegame) ---
     if ph == "middlegame" {
         let kf = file_of(opp_king);
@@ -902,6 +962,31 @@ mod tests {
         assert!(pawn_break(&b, &c4, Color::White));
         let c3 = Move { from: 10, to: 18, promo: None, flag: Flag::Normal };
         assert!(!pawn_break(&b, &c3, Color::White));
+    }
+
+    #[test]
+    fn carlsbad_offers_the_minority_attack() {
+        // White has a/b pawns but NO c-pawn; Black keeps a/b/c (c6) — the Carlsbad
+        // minority-attack structure. White to move in the middlegame.
+        let b = parse_fen("r2q1rk1/pp1nbppp/2p1pn2/3p4/3P4/2NBPN2/PP3PPP/R2Q1RK1 w - - 0 15");
+        assert_eq!(b.side, Color::White);
+        let s = strategize(&b, &ranked(&b));
+        assert_eq!(s.phase, "middlegame");
+        let mv = s.strategies.iter().find(|x| x.id == "minority_attack");
+        assert!(mv.is_some(), "expected a minority_attack plan in the Carlsbad structure");
+        assert!(!mv.unwrap().move_san.is_empty());
+    }
+
+    #[test]
+    fn own_isolated_d_pawn_offers_active_iqp_play() {
+        // White owns an isolated d4-pawn (no c- or e-pawn). Middlegame, White to move.
+        let b = parse_fen("r1bq1rk1/pp3ppp/2n1pn2/8/2BP4/2N2N2/PP3PPP/R1BQ1RK1 w - - 0 12");
+        assert!(isolated_of(&b, Color::White).iter().any(|&s| file_of(s) == 3));
+        let s = strategize(&b, &ranked(&b));
+        assert!(
+            s.strategies.iter().any(|x| x.id == "iqp_attack"),
+            "expected an iqp_attack plan when you own the isolated d-pawn"
+        );
     }
 
     #[test]

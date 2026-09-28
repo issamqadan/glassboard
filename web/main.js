@@ -1600,8 +1600,8 @@ function reviewHtml() {
 }
 
 // --- strategy layer (same UX as multiplayer; White orientation, plays vs AI) ---
-const STRAT_ICON = { save_piece: "🛡", win_material: "⚔", develop: "♞", center: "▦", attack_king: "⚔", simplify: "♟", passer: "⏫", iso_attack: "◎", open_file: "▤", pawn_storm: "⛰", fianchetto: "◹", outpost: "⚑", rook_seventh: "⇥", improve: "↗", pawn_break: "⚡" };
-const STRAT_COLOR = { save_piece: "#f2b03a", win_material: "#f2707e", develop: "#5cc9ec", center: "#7ee0d6", attack_king: "#f2707e", simplify: "#e0be79", passer: "#5cc9ec", iso_attack: "#f2707e", open_file: "#7ee0d6", pawn_storm: "#f2707e", fianchetto: "#e0be79", outpost: "#7ee0d6", rook_seventh: "#f2707e", improve: "#9fc0ff", pawn_break: "#e0be79" };
+const STRAT_ICON = { save_piece: "🛡", win_material: "⚔", develop: "♞", center: "▦", attack_king: "⚔", simplify: "♟", passer: "⏫", iso_attack: "◎", minority_attack: "⇉", iqp_attack: "◈", open_file: "▤", pawn_storm: "⛰", fianchetto: "◹", outpost: "⚑", rook_seventh: "⇥", improve: "↗", pawn_break: "⚡" };
+const STRAT_COLOR = { save_piece: "#f2b03a", win_material: "#f2707e", develop: "#5cc9ec", center: "#7ee0d6", attack_king: "#f2707e", simplify: "#e0be79", passer: "#5cc9ec", iso_attack: "#f2707e", minority_attack: "#7ee0d6", iqp_attack: "#7ee0d6", open_file: "#7ee0d6", pawn_storm: "#f2707e", fianchetto: "#e0be79", outpost: "#7ee0d6", rook_seventh: "#f2707e", improve: "#9fc0ff", pawn_break: "#e0be79" };
 const PLAN_COLOR = { dev: "#5cc9ec", attack: "#f2707e", support: "#7ee0d6", castle: "#e0be79" };
 let pickedStrategyId = null;
 let followBook = false; // "follow the book" — surface the chosen opening's line while in book
@@ -1815,7 +1815,7 @@ const PVAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 // best move), previewed on the board, with alternatives a thumb-drag away.
 const STRAT_VERB = { attack_king: "attack", pawn_storm: "attack", win_material: "material win", save_piece: "defense",
   develop: "development", center: "central control", simplify: "simplification", passer: "passed pawn",
-  iso_attack: "attack", open_file: "file pressure", fianchetto: "fianchetto plan", outpost: "outpost plan",
+  iso_attack: "attack", minority_attack: "minority attack", iqp_attack: "IQP play", open_file: "file pressure", fianchetto: "fianchetto plan", outpost: "outpost plan",
   rook_seventh: "rook lift", improve: "piece play", pawn_break: "pawn break" };
 let previewedMove = null; // {from,to,uci,san} currently previewed by the lens
 let sfBest = null;        // {from,to,uci,san,note} — Stockfish full-strength best move this turn
