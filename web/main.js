@@ -145,7 +145,7 @@ async function resumeAiGame(id) {
   helpReceived = typeof rec.helpReceived === "number" ? rec.helpReceived : 0;
   helpRevealed = helpDelivery === "open"; helpRequestPending = false;
   aiGameId = id; aiSaved = true;
-  selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; mateKingSq = -1;
+  selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; aiResigned = false; aiHopeless = 0; mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
   pickedStrategyId = null; followBook = false; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
   firstGame = false;
@@ -329,6 +329,7 @@ const FG = [
 let lastMove = null; // { from, to } of the most recent move
 let assistData = null; // parsed assist JSON for the current (White) turn
 let busy = false;
+let aiResigned = false, aiHopeless = 0; // realism: the engine resigns when it's clearly lost
 let resigned = false;
 
 // Assistance search depth — a notch deeper than the opponent's, so following the
@@ -621,6 +622,7 @@ function newGame() {
   lastMove = null;
   busy = false;
   resigned = false;
+  aiResigned = false; aiHopeless = 0;
   pickedStrategyId = null;
   followBook = false;
   budgetSpent = 0;
@@ -1426,7 +1428,7 @@ function undoMove() {
   if (typeof snap.uciLen === "number" && uciHistory.length > snap.uciLen) uciHistory.length = snap.uciLen;
   if (typeof snap.helpLogLen === "number" && playerHelpLog.length > snap.helpLogLen) playerHelpLog.length = snap.helpLogLen;
   selected = null; legalTargets = []; lastMove = null; lastMoveLifeline = false;
-  resigned = false; mateKingSq = -1; busy = false; evalBeforeEngine = null;
+  resigned = false; aiResigned = false; aiHopeless = 0; mateKingSq = -1; busy = false; evalBeforeEngine = null;
   hideOver();
   if (!firstGame) persistAiGame(false);
   onPositionChanged();
@@ -1465,12 +1467,13 @@ function showGameOverIfNeeded() {
   const ov = document.getElementById("overOverlay");
   if (!ov) return;
   const st = game.status();
-  const over = resigned || flagged || repetitionDraw || st !== "ongoing";
+  const over = resigned || aiResigned || flagged || repetitionDraw || st !== "ongoing";
   const rb = document.getElementById("resignBtn");
   if (rb) rb.hidden = over;
   if (!over) { ov.style.display = "none"; mateKingSq = -1; return; }
   let winner = "", reason = "";
   if (flagged) { winner = flagLoser === humanColor ? engineColor() : humanColor; reason = "time"; } // ran out of time
+  else if (aiResigned) { winner = humanColor; reason = "resignation"; } // the engine resigned → you win
   else if (resigned) { winner = engineColor(); reason = "resignation"; } // you resigned → the engine wins
   else if (st === "checkmate") { winner = game.sideToMove() === "white" ? "black" : "white"; reason = "checkmate"; }
   else if (st === "stalemate") { reason = "stalemate"; }
@@ -1493,7 +1496,7 @@ function showGameOverIfNeeded() {
   } else if (reason === "stalemate") {
     how = "No legal moves, but the king isn't in check — it's a draw.";
   } else if (reason === "resignation") {
-    how = "You resigned this one.";
+    how = won ? "The engine resigns — your position was winning. No need to grind it out. 🎉" : "You resigned this one.";
   } else if (reason === "time") {
     how = won ? "The engine ran out of time — you win on the clock. ⏱" : "Your clock hit zero — a loss on time. ⏱";
   } else if (reason === "repetition") {
@@ -2230,7 +2233,7 @@ function renderGlass() {
 }
 
 function onSquareClick(i) {
-  if (busy || flagged || repetitionDraw || game.status() !== "ongoing" || game.sideToMove() !== humanColor) return;
+  if (busy || flagged || repetitionDraw || aiResigned || game.status() !== "ongoing" || game.sideToMove() !== humanColor) return;
   const c = game.boardString()[i];
 
   if (selected === null) {
@@ -2328,7 +2331,7 @@ function provenanceOf(viaHelp) {
   return viaHelp ? "followed" : "own";
 }
 function doPlay(from, to, promo, viaHelp) {
-  if (flagged || busy || repetitionDraw) return; // clock's out, mid-think, or a draw
+  if (flagged || busy || repetitionDraw || aiResigned) return; // clock's out, mid-think, a draw, or the engine resigned
   const preFen = game.fen(); // position before the human's move (for the Player Model)
   // Takeback snapshot: this position + the pre-move counters. Undo restores here.
   history.push({ fen: preFen, indepOwn, indepFollowed, reviewLen: moveReview.length, playerFollows, uciLen: uciHistory.length, helpLogLen: playerHelpLog.length });
@@ -2436,12 +2439,28 @@ function engineReply() {
         lastMoveLifeline = usedLifeline; // mark the assisted move on the board
       }
       busy = false;
+      maybeEngineResign(); // a real opponent resigns when hopelessly lost
       if (usedLifeline) aiLifelineMoment(llKind);
-      if (!firstGame) persistAiGame(game.status() !== "ongoing");
+      if (!firstGame) persistAiGame(game.status() !== "ongoing" || aiResigned);
       onPositionChanged();
       fgOn("engine");
     })
     .catch(() => { busy = false; });
+}
+
+// Realism: a real opponent doesn't make you grind out a hopeless position — it
+// resigns. When you're clearly winning (up a rook+ / near mate) and it's stable
+// over a couple of moves, the engine resigns. Stronger levels resign sooner;
+// Beginner/Casual never do (weak players play on) — and never in the opening.
+function maybeEngineResign() {
+  if (firstGame || aiResigned || resigned || flagged) return;
+  if (game.status() !== "ongoing" || game.sideToMove() !== humanColor) return;
+  if (uciHistory.length < 16) { aiHopeless = 0; return; }
+  const lvl = sfLevelFor(parseInt(engineEloEl.value, 10));
+  const resignAt = lvl.skill >= 12 ? 700 : lvl.skill >= 5 ? 1000 : Infinity;
+  let ev = 0; try { ev = game.bestScore(2); } catch { ev = 0; } // side to move = you → your-relative cp
+  if (ev >= resignAt) aiHopeless++; else aiHopeless = 0;
+  if (aiHopeless >= 2) { aiResigned = true; stopClock(); paint(); }
 }
 
 // --- helpers ---------------------------------------------------------------
