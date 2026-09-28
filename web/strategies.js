@@ -367,11 +367,47 @@
       demoFen: "8/8/8/1R6/8/1P6/6k1/1r4K1 w - - 0 1" },
   ];
 
+  // ---- Complexity: how much theory / finesse a strategy demands ----------------
+  // A learning ladder (Beginner → Intermediate → Advanced). Pinned for the plans and
+  // for the sharp/theory-heavy or easy-system openings; everything else defaults from
+  // how deep/forcing the catalog line is. It's a guide, not a rating.
+  const COMPLEXITIES = ["Beginner", "Intermediate", "Advanced"];
+  const PLAN_CX = {
+    open_file: "Beginner", simplify: "Beginner", passer: "Beginner", king_activity: "Beginner",
+    iqp_attack: "Intermediate", attack_king: "Intermediate", outpost: "Intermediate",
+    opposition: "Intermediate", rook_behind_passer: "Intermediate",
+    minority_attack: "Advanced", iqp_blockade: "Advanced", space_bind: "Advanced",
+    prophylaxis: "Advanced", lucena: "Advanced", philidor: "Advanced",
+  };
+  const CX_ADV = new Set(["Sicilian — Najdorf", "Sicilian — Dragon", "Sicilian — Sveshnikov",
+    "Sicilian — Scheveningen", "Sicilian — Richter-Rauzer", "Ruy López — Marshall Attack",
+    "Ruy López — Open", "French — Winawer", "King's Gambit", "Evans Gambit", "Danish Gambit",
+    "Latvian Gambit", "Elephant Gambit", "Benko Gambit", "Grünfeld Defense", "Grünfeld — Exchange",
+    "Benoni Defense", "Benoni — Modern", "Alekhine — Four Pawns Attack", "Two Knights — Knight Attack",
+    "Scotch Gambit", "Budapest Gambit", "Albin Countergambit", "Dutch Defense",
+    "King's Indian — Classical", "King's Indian Defense", "Semi-Slav Defense", "Nimzo-Indian Defense"]);
+  const CX_BEG = new Set(["Italian Game", "London System", "Queen's Gambit", "Scandinavian Defense",
+    "Bishop's Opening", "Vienna Game", "Four Knights Game", "Colle System", "Torre Attack",
+    "King's Indian Attack", "English Opening", "Réti Opening", "Ponziani Opening", "Giuoco Piano",
+    "Scotch Game", "Caro-Kann Defense", "French Defense", "Queen's Gambit Declined", "Slav Defense",
+    "Center Game", "Nimzo-Larsen Attack", "Bird's Opening", "Queen's Gambit Accepted"]);
+  function complexityOf(o) {
+    if (!o) return "Intermediate";
+    if (o.cx) return o.cx;
+    if (o.id && PLAN_CX[o.id]) return PLAN_CX[o.id];
+    if (o.name && CX_ADV.has(o.name)) return "Advanced";
+    if (o.name && CX_BEG.has(o.name)) return "Beginner";
+    const len = (o.uci && o.uci.length) || 0;
+    return len >= 10 ? "Advanced" : len <= 3 ? "Beginner" : "Intermediate";
+  }
+
   window.GBStrategies = {
     openings: OPENINGS,
     plans: PLANS,
     themes: THEMES,
     categories: CATS,
+    complexities: COMPLEXITIES,
+    complexity: complexityOf,
     // A plan write-up by engine theme id (so an in-game detected plan links here).
     plan(id) { return PLANS.find((p) => p.id === id) || null; },
     plansByPhase(ph) { return PLANS.filter((p) => p.phase === ph); },

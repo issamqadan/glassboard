@@ -65,6 +65,13 @@
     .how li { margin: 4px 0; }
     .scard .cat { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
       color: #04222d; background: linear-gradient(140deg, var(--accent), #3a97bd); padding: 2px 7px; border-radius: 999px; }
+    .filters.cx { margin-top: -8px; }
+    .cx-badge { font-size: 0.58rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;
+      padding: 2px 7px; border-radius: 999px; border: 1px solid transparent; }
+    .cx-Beginner { background: rgba(126,224,214,0.16); color: #8fe0d6; }
+    .cx-Intermediate { background: rgba(242,176,58,0.16); color: #f0c06a; }
+    .cx-Advanced { background: rgba(242,112,126,0.16); color: #f2a6ae; }
+    .scard .row2 { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
     .phasehead { grid-column: 1 / -1; margin: 10px 2px 2px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.09em;
       text-transform: uppercase; color: var(--muted); }
     .demo-body { display: grid; grid-template-columns: minmax(0, 380px) 1fr; gap: 20px; padding: 0 20px 20px; align-items: start; }
@@ -106,6 +113,7 @@
     <div class="count" id="count"></div>
 
     <div class="filters" id="filters"></div>
+    <div class="filters cx" id="cxfilters"></div>
     <div class="grid" id="grid"></div>
   </main>
 
@@ -142,8 +150,9 @@
     const PIECE_NAME = { p:"pawn", n:"knight", b:"bishop", r:"rook", q:"queen", k:"king" };
     const S = window.GBStrategies || {};
     // One combined library: named openings + named middlegame/endgame plans.
-    const openingItems = (S.openings || []).map((o) => Object.assign({ kind: "opening", phase: "opening" }, o));
-    const planItems = (S.plans || []).map((p) => Object.assign({ kind: "plan" }, p));
+    const cxOf = (o) => (S.complexity ? S.complexity(o) : "Intermediate");
+    const openingItems = (S.openings || []).map((o) => Object.assign({ kind: "opening", phase: "opening", cx: cxOf(o) }, o));
+    const planItems = (S.plans || []).map((p) => Object.assign({ kind: "plan", cx: cxOf(p) }, p));
     const list = openingItems.concat(planItems);
     let demoStart = START; // piece-placement the current demo starts from
 
@@ -155,12 +164,17 @@
     const PHASE_LABEL = { opening: "Openings", middlegame: "Middlegame plans", endgame: "Endgame technique" };
     const PHASE_ORDER = ["opening", "middlegame", "endgame"];
     let active = "All";
-    function matches(o, f) {
+    let activeCx = "Any level";
+    const CX_FILTERS = ["Any level"].concat(S.complexities || ["Beginner", "Intermediate", "Advanced"]);
+    function matchesPhase(o, f) {
       if (f === "All") return true;
       if (f === "Openings") return o.kind === "opening";
       if (f === "Middlegame") return o.phase === "middlegame";
       if (f === "Endgame") return o.phase === "endgame";
       return o.kind === "opening" && FAMILY(o.uci[0]) === f; // an opening-family chip
+    }
+    function matches(o) {
+      return matchesPhase(o, active) && (activeCx === "Any level" || o.cx === activeCx);
     }
 
     const sqIdx = (alg) => (alg.charCodeAt(1) - 49) * 8 + (alg.charCodeAt(0) - 97);
@@ -207,17 +221,23 @@
       const chips = FILTERS.filter((f) => ["All", "Openings", "Middlegame", "Endgame"].includes(f) || present.has(f));
       document.getElementById("filters").innerHTML = chips.map((f) =>
         `<button class="filter ${f === active ? "on" : ""}" data-f="${f}">${f}${f === "All" ? ` (${list.length})` : ""}</button>`).join("");
-      document.querySelectorAll(".filter").forEach((b) => b.onclick = () => { active = b.dataset.f; renderFilters(); renderGrid(); });
+      document.querySelectorAll("#filters .filter").forEach((b) => b.onclick = () => { active = b.dataset.f; renderFilters(); renderGrid(); });
+    }
+    function renderCxFilters() {
+      document.getElementById("cxfilters").innerHTML = CX_FILTERS.map((f) =>
+        `<button class="filter ${f === activeCx ? "on" : ""}" data-cx="${f}">${f}</button>`).join("");
+      document.querySelectorAll("#cxfilters .filter").forEach((b) => b.onclick = () => { activeCx = b.dataset.cx; renderCxFilters(); renderGrid(); });
     }
     function card(o) {
       const gi = list.indexOf(o);
       const tag = o.kind === "opening" ? `<span class="eco">${o.eco || ""}</span>` : `<span class="cat">${o.cat || o.phase}</span>`;
       return `<button class="scard" data-i="${gi}">
         <div class="row1">${tag}<span class="side ${o.side}">${o.side === "both" ? "either" : o.side}</span></div>
-        <h3>${o.name}</h3><p>${o.idea}</p></button>`;
+        <h3>${o.name}</h3><p>${o.idea}</p>
+        <div class="row2"><span class="cx-badge cx-${o.cx}">${o.cx}</span></div></button>`;
     }
     function renderGrid() {
-      const items = list.filter((o) => matches(o, active));
+      const items = list.filter((o) => matches(o));
       document.getElementById("count").textContent = `${items.length} strateg${items.length === 1 ? "y" : "ies"}`;
       let html = "";
       if (active === "All") { // group under phase headers so the phases read as sections
@@ -286,7 +306,7 @@
       if (e.key === "Escape") closeDemo(); else if (e.key === "ArrowRight") step(1); else if (e.key === "ArrowLeft") step(-1);
     });
 
-    renderFilters(); renderGrid();
+    renderFilters(); renderCxFilters(); renderGrid();
   </script>
 </body>
 </html>
