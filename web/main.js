@@ -175,11 +175,29 @@ function sfLevelFor(elo) { return AI_LEVELS.reduce((a, l) => (elo <= l.elo && !a
 function ratingFor(elo) { return sfLevelFor(elo).rating; }
 // The opponent's move: Stockfish (accurate levels) with a Rust-core fallback if it
 // isn't available. A lifeline makes the AI "dig deep" → full-strength Skill 20.
+// SYMMETRIC ASSISTANCE: the AI scales UP as YOU lean on help. Your "lean" is the
+// share of your moves that took the suggestion; the more you use help, the closer
+// the opponent plays to full strength — a visible, both-sides handicap (never a
+// secret buff). Play mostly solo and it stays at the level you picked.
+function aiLean() {
+  const yours = indepOwn + indepFollowed;
+  return yours > 0 ? indepFollowed / yours : 0; // 0..1
+}
+function aiBoost(baseElo) {
+  const lvl = sfLevelFor(baseElo);
+  const lean = aiLean();
+  const skill = Math.min(20, Math.round(lvl.skill + lean * (20 - lvl.skill)));
+  const baseMt = lvl.movetime || (lvl.depth ? 300 : 500);
+  const movetime = Math.round(baseMt + lean * (1500 - baseMt));
+  // Once you're leaning on help, lift the low-rung depth cap so it can play strong.
+  const depth = lean > 0.15 ? undefined : lvl.depth;
+  return { lean, skill, movetime, depth, base: lvl.skill, boosted: skill > lvl.skill };
+}
 function opponentMove(fen, usedLifeline, baseElo) {
   const rustFallback = () => askEngine("bestMove", { fen, elo: usedLifeline ? 3000 : baseElo, rand: usedLifeline ? 0 : Math.random() });
   if (firstGame || !window.GBEngine) return rustFallback();
-  const lvl = sfLevelFor(baseElo);
-  const opts = usedLifeline ? { skill: 20, movetime: 900 } : { skill: lvl.skill, movetime: lvl.movetime, depth: lvl.depth };
+  const b = aiBoost(baseElo);
+  const opts = usedLifeline ? { skill: 20, movetime: 900 } : { skill: b.skill, movetime: b.movetime, depth: b.depth };
   if (uciHistory.length) opts.moves = uciHistory.slice(); // full history → repetition-aware play
   return GBEngine.bestMove(fen, opts).then((u) => u || rustFallback()).catch(rustFallback);
 }
@@ -974,6 +992,14 @@ function glIdentityRow() {
   if (idn.you.name) bits.push(`<span class="gl-id you" title="${escapeHtml(idn.you.idea || "")}">📖 You · ${escapeHtml(idn.you.name)}${idn.you.planHint ? ` → ${escapeHtml(idn.you.planHint)}` : ""}</span>`);
   if (idn.opp.name) bits.push(`<span class="gl-id opp" title="${escapeHtml(idn.opp.idea || "")}">🎯 Opp · ${escapeHtml(idn.opp.name)}</span>`);
   else if (idn.opp.read) bits.push(`<span class="gl-id opp" title="${escapeHtml(idn.opp.read)}">🎯 ${escapeHtml(idn.opp.read)}</span>`);
+  // Symmetric-glass badge: when your leaning on help has pushed the AI above the
+  // level you picked, show it — the same help meter drives both sides.
+  const baseElo = engineEloEl ? parseInt(engineEloEl.value, 10) : 1500;
+  const b = (!firstGame && window.GBEngine) ? aiBoost(baseElo) : null;
+  if (b && b.boosted) {
+    const pct = Math.round(b.lean * 100);
+    bits.push(`<span class="gl-id boost" title="You've taken the suggested move on ${pct}% of your turns, so the AI is digging deeper to match — assistance is symmetric and always in the open.">⛏ AI matching your help</span>`);
+  }
   if (!bits.length && !idn.phase) return "";
   return `<div class="gl-identity">${idn.phase ? `<span class="gl-phase">${escapeHtml(idn.phase)}</span>` : ""}${bits.join("")}</div>`;
 }
