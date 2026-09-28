@@ -1026,6 +1026,10 @@ main.game #coach { display: none; }
 .glass-lens .gl-tag.t-urgent { background: rgba(242,109,122,0.22); color: #f4a2ab; }
 .glass-lens .gl-tag.t-strategy { background: rgba(126,224,214,0.2); color: #8fe0d6; }
 .glass-lens .gl-tag.t-draw { background: rgba(138,160,255,0.22); color: #b4c0ff; }
+.glass-lens .gl-explain { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); color: #8ba0bd;
+  border-radius: 8px; width: 30px; height: 28px; font-size: 0.9rem; cursor: pointer; flex: 0 0 auto; touch-action: manipulation; }
+.glass-lens .gl-explain.on { background: rgba(242,176,58,0.18); border-color: rgba(242,176,58,0.5); color: #f0c06a; }
+.glass-lens .gl-mean { font-size: 0.84rem; font-weight: 600; color: #f0d190; line-height: 1.4; margin-top: 2px; }
 .glass-lens .gl-why { font-size: 0.82rem; color: #c3d0e6; line-height: 1.4; }
 .glass-lens .gl-actions { display: flex; gap: 8px; align-items: center; }
 .glass-lens .gl-playmove { flex: 1; font: inherit; font-weight: 800; font-size: 1.05rem; cursor: pointer; color: #04222d;

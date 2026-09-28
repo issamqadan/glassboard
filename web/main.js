@@ -1605,6 +1605,10 @@ const STRAT_COLOR = { save_piece: "#f2b03a", win_material: "#f2707e", develop: "
 const PLAN_COLOR = { dev: "#5cc9ec", attack: "#f2707e", support: "#7ee0d6", castle: "#e0be79" };
 let pickedStrategyId = null;
 let followBook = false; // "follow the book" — surface the chosen opening's line while in book
+// Beginner "what does this move do?" explanations. Default ON (a total beginner needs
+// them); persisted so a stronger player who turns them off stays off.
+let explainMoves = (() => { try { const v = localStorage.getItem("gb_explain"); return v === null ? true : v === "1"; } catch { return true; } })();
+function toggleExplain() { explainMoves = !explainMoves; try { localStorage.setItem("gb_explain", explainMoves ? "1" : "0"); } catch {} paint(); }
 const planCxy = (sq) => { const p = rc(sq); return { x: (p.col + 0.5) * 100, y: (p.row + 0.5) * 100 }; }; // orientation-aware
 function uciSquares(u) {
   if (!u || u.length < 4) return null;
@@ -1810,6 +1814,67 @@ function renderStatus() {
 // a capture that wins material is Aggressive, an even trade is Simplify, a pawn
 // pushing into enemy territory is Sneaky, a quiet improving move is Safe.
 const PVAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+const PIECE_WORD = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
+// Squares a piece on `sq` attacks/guards on a 64-char board string (a1=0 … h8=63),
+// with ray blockers — used to explain a move in plain terms ("protects / attacks").
+function pieceAttacks(board, sq, pc) {
+  if (!pc || pc === ".") return [];
+  const f = sq % 8, r = Math.floor(sq / 8), out = [];
+  const k = pc.toLowerCase(), white = pc === pc.toUpperCase();
+  const on = (ff, rr) => ff >= 0 && ff < 8 && rr >= 0 && rr < 8;
+  const add = (ff, rr) => { if (on(ff, rr)) out.push(rr * 8 + ff); };
+  const ray = (df, dr) => { let ff = f + df, rr = r + dr; while (on(ff, rr)) { const s = rr * 8 + ff; out.push(s); if (board[s] && board[s] !== ".") break; ff += df; rr += dr; } };
+  if (k === "p") { const dr = white ? 1 : -1; add(f - 1, r + dr); add(f + 1, r + dr); }
+  else if (k === "n") { [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]].forEach(([a, b]) => add(f + a, r + b)); }
+  else if (k === "k") { [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([a, b]) => add(f + a, r + b)); }
+  else { if (k === "b" || k === "q") { ray(1, 1); ray(1, -1); ray(-1, 1); ray(-1, -1); } if (k === "r" || k === "q") { ray(1, 0); ray(-1, 0); ray(0, 1); ray(0, -1); } }
+  return out;
+}
+// Plain-language "what does this move DO?" for a beginner — one short clause, in
+// priority order (mate → check → wins/saves material → protects → attacks → develops
+// → castles → centre). Computed from the real post-move board (clone + inCheck), so
+// it's honest. Returns "" when nothing notable stands out.
+function moveMeaning(m) {
+  if (!m || m.from == null) return "";
+  const pre = game.boardString();
+  const moverPre = pre[m.from] || "";
+  const white = humanColor === "white";
+  const isEnemy = (c) => c && c !== "." && (white ? (c >= "a" && c <= "z") : (c >= "A" && c <= "Z"));
+  const isMine = (c) => c && c !== "." && (white ? (c >= "A" && c <= "Z") : (c >= "a" && c <= "z"));
+  const nameOf = (c) => (c ? PIECE_WORD[c.toLowerCase()] || "piece" : "piece");
+  const capturedPre = pre[m.to];
+  let post = null, gives = false, mate = false;
+  try {
+    const g = Game.fromFen(game.fen());
+    const promo = m.uci && m.uci.length > 4 ? m.uci[4] : undefined;
+    if (g.makeMove(m.from, m.to, promo)) { post = g.boardString(); gives = g.inCheck(); mate = g.status() === "checkmate"; }
+  } catch { /* fall through to what we can say without the clone */ }
+  if (mate) return "Checkmate — this wins the game! 🏆";
+  const dangerSet = new Set([...(threatSquares || []), ...(hanging || [])]);
+  const isCap = isEnemy(capturedPre);
+  if (gives && isCap) return `Captures their ${nameOf(capturedPre)} — with check.`;
+  if (isCap) {
+    const gain = (PVAL[capturedPre.toLowerCase()] || 0) - (PVAL[(moverPre || "p").toLowerCase()] || 0);
+    if (gain > 0 || (freeCaptures || []).includes(m.to)) return `Wins their ${nameOf(capturedPre)} — free material.`;
+    if (gain === 0) return `Trades your ${nameOf(moverPre)} for their ${nameOf(capturedPre)}.`;
+    return `Takes their ${nameOf(capturedPre)}.`;
+  }
+  if (gives) return "Puts the king in check — they must respond.";
+  if (dangerSet.has(m.from)) return `Moves your ${nameOf(moverPre)} out of danger.`;
+  if (post) {
+    const moved = post[m.to];
+    const atk = pieceAttacks(post, m.to, moved);
+    for (const s of atk) { const c = post[s]; if (isMine(c) && dangerSet.has(s)) return `Defends your ${nameOf(c)} — now it's protected.`; }
+    let best = 0, bestSq = -1;
+    for (const s of atk) { const c = post[s]; if (isEnemy(c)) { const v = PVAL[c.toLowerCase()] || 0; if (v > best) { best = v; bestSq = s; } } }
+    if (bestSq >= 0 && best >= 3) return `Attacks their ${nameOf(post[bestSq])}.`;
+  }
+  if ((moverPre === "K" || moverPre === "k") && Math.abs((m.to % 8) - (m.from % 8)) === 2) return "Castles — tucks your king safely away.";
+  const homeRank = white ? 0 : 7;
+  if ("NBnb".includes(moverPre) && Math.floor(m.from / 8) === homeRank) return `Develops your ${nameOf(moverPre)} into the game.`;
+  if ((moverPre === "P" || moverPre === "p") && [27, 28, 35, 36].includes(m.to)) return "Grabs space in the centre.";
+  return "";
+}
 // ---- Glass Lens: the thumb-first "what matters NOW" control ----------------
 // One prioritised recommendation surfaced every turn (urgent threat → your plan →
 // best move), previewed on the board, with alternatives a thumb-drag away.
@@ -1941,10 +2006,13 @@ function renderGlassLens() {
   else if (strategies.length) planRow = `<div class="gl-planrow"><span class="gl-planlab">🧭 Plan:</span>` +
     strategies.slice(0, 2).map((s) => `<button class="gl-planpick" data-id="${s.id}" type="button">${STRAT_ICON[s.id] || "◆"} ${escapeHtml(s.name)}</button>`).join("") + plansBtn + `</div>`;
   else planRow = `<div class="gl-planrow">${plansBtn}</div>`;
+  const meaning = explainMoves ? moveMeaning(p.move) : "";
   el.className = "glass-lens kind-" + p.kind;
   el.innerHTML = glIdentityRow() +
     `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span>` +
+      `<button class="gl-explain${explainMoves ? " on" : ""}" id="lensExplain" type="button" title="${explainMoves ? "Explanations on — tap to hide" : "Explain moves in plain language"}">💡</button>` +
       `<button class="gl-log" id="lensLog" type="button" title="Assistance log">📜</button></div>` +
+    (meaning ? `<div class="gl-mean">💡 ${escapeHtml(meaning)}</div>` : "") +
     (p.why ? `<div class="gl-why">${escapeHtml(p.why)}</div>` : "") +
     `<div class="gl-actions">` +
       `<button class="gl-playmove" id="lensPlay" type="button">▶ ${escapeHtml(p.move.san || "Play")}</button>` +
@@ -1955,6 +2023,7 @@ function renderGlassLens() {
   document.getElementById("lensShow").onclick = () => previewMove(p.move);
   document.getElementById("lensMore").onclick = () => openAltSheet(p);
   document.getElementById("lensLog").onclick = openGlassSheet;
+  const ex = document.getElementById("lensExplain"); if (ex) ex.onclick = toggleExplain;
   const pl = document.getElementById("lensPlan"); if (pl) pl.onclick = () => openStepsSheet(picked);
   const pls = document.getElementById("lensPlans"); if (pls) pls.onclick = openPlanSheet;
   el.querySelectorAll(".gl-planpick").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; followBook = false; paint(); });
