@@ -293,10 +293,88 @@
     return "Other";
   }
 
+  // ---- PLANS: named middlegame & endgame strategies (not opening lines) --------
+  // The other phases of the game, made first-class like the openings: each is a
+  // named, categorized plan with the IDEA and a concrete HOW (the typical steps).
+  // `id` aligns with the engine's live theme ids where one exists, so an in-game
+  // detected plan can link to its full write-up here. `demoFen`/`demoUci` drive an
+  // illustrative board in the library (positions are teaching diagrams, not games).
+  const PLANS = [
+    // ---- Middlegame ----
+    { id: "minority_attack", phase: "middlegame", cat: "Positional", side: "white",
+      name: "Minority Attack", idea: "With fewer queenside pawns (the Carlsbad structure), advance them anyway — b4–b5xc6 — to saddle the opponent with a weak, backward c-pawn on a half-open file.",
+      how: ["Play for the b4–b5 break against Black's c6/b7/a7 majority", "Prepare it with a2–a4 and rooks to the b- and c-files", "After b5xc6, target the weak c6-pawn and the c-file", "Trade into a position where the single weakness decides"],
+      demoFen: "r2q1rk1/pp1nbppp/2p1pn2/3p4/3P4/2NBPN2/PP3PPP/R2Q1RK1 w - - 0 1",
+      demoUci: ["b2b4","a7a6","a2a4","f6e4","b4b5","a6b5","a4b5","c6b5"] },
+    { id: "iqp_attack", phase: "middlegame", cat: "Positional", side: "white",
+      name: "Isolated Queen's Pawn — Attack", idea: "The side WITH the isolated d-pawn plays for the initiative: the pawn grants open lines, the e5/c5 squares, and space for a kingside attack — use it before it becomes a target.",
+      how: ["Occupy e5/c5 outposts and aim pieces at the enemy king", "Keep pieces on — trades favour the defender", "Prepare the d4–d5 break to open lines at the right moment", "Attack while the pawn is a strength, not yet a weakness"],
+      demoFen: "r1bq1rk1/pp3ppp/2n1pn2/8/2BP4/2N2N2/PP3PPP/R1BQ1RK1 w - - 0 1" },
+    { id: "iqp_blockade", phase: "middlegame", cat: "Positional", side: "black",
+      name: "Isolated Queen's Pawn — Blockade", idea: "The side facing the IQP does the opposite: blockade the pawn on d5 (usually with a knight), trade pieces, and grind the static weakness in the endgame.",
+      how: ["Firmly blockade the d-pawn with a knight on d5", "Trade attacking pieces to defuse the initiative", "Double on the d-file and pile up on the pawn", "Convert in an endgame where the isolani simply falls"],
+      demoFen: "r1bq1rk1/pp3ppp/2n1pn2/3p4/8/2N2NP1/PP2PPBP/R1BQ1RK1 b - - 0 1" },
+    { id: "attack_king", phase: "middlegame", cat: "Attack", side: "white",
+      name: "Opposite-Side Castling Attack", idea: "When kings castle on opposite wings it's a race — throw your pawns at the enemy king without fear, because your own king is far away.",
+      how: ["Push the pawns in front of the ENEMY king (h/g or a/b)", "Open a file with a pawn break and load rooks/queen onto it", "Bring the whole army — don't attack with too few pieces", "Race: count tempi, your king is safe on the far wing"],
+      demoFen: "r1bq1rk1/ppp1bppp/2n2n2/3pp3/3PP3/2N1BN2/PPPQ1PPP/2KR1B1R w - - 0 1",
+      demoUci: ["g2g4","a7a6","g4g5","f6d7","h2h4","b7b5","h4h5","c8b7"] },
+    { id: "outpost", phase: "middlegame", cat: "Positional", side: "white",
+      name: "Knight Outpost", idea: "A square the enemy can no longer defend with a pawn is an outpost — plant a knight there (supported by a pawn) and it dominates the board from a protected home.",
+      how: ["Find a hole in the enemy camp (often d5/e5/c6)", "Support the square with a pawn so the knight can't be shoved", "Route a knight to it and trade off pieces that challenge it", "Use the dominant knight as the base for the rest of your plan"],
+      demoFen: "r1bq1rk1/pp2bppp/2n1pn2/2Pp4/3P4/2N1PN2/PP3PPP/R1BQKB1R w KQ - 0 1" },
+    { id: "open_file", phase: "middlegame", cat: "Positional", side: "white",
+      name: "Seize the Open File", idea: "The open file is a highway for rooks — occupy it, double up, and use it to invade the 7th rank and the heart of the enemy position.",
+      how: ["Put a rook on the only open file before the opponent does", "Double rooks (or rook + queen) behind it", "Fight for or create an entry square on the 7th/8th", "Invade — a rook on the 7th ties the defender down"],
+      demoFen: "3r1rk1/pp2bppp/2n1p3/8/3P4/2N1PN2/PP3PPP/3RR1K1 w - - 0 1" },
+    { id: "space_bind", phase: "middlegame", cat: "Positional", side: "white",
+      name: "Space & the Bind", idea: "A big pawn front (like the Maróczy bind, pawns on c4+e4) cramps the opponent. Gain space, deny counterplay, and slowly improve until they suffocate.",
+      how: ["Grab space with a broad pawn chain and don't rush", "Deny the freeing pawn breaks (…d5/…b5)", "Improve every piece to its best square (you have more room)", "Only then open a second front — two weaknesses win"],
+      demoFen: "r1bq1rk1/pp2ppbp/2np1np1/8/2PNP3/2N1B3/PP2BPPP/R2QK2R b KQ - 0 1" },
+    { id: "prophylaxis", phase: "middlegame", cat: "Positional", side: "both",
+      name: "Prophylaxis", idea: "Before pushing your own plan, ask 'what does my opponent want?' — then quietly prevent it. Karpov's art: the opponent's ideas die before they start.",
+      how: ["Identify the opponent's intended break or piece manoeuvre", "Make the quiet move that stops it (a square, a file, a diagonal)", "Leave them planless while you improve", "Convert your freer position once they're stuck"],
+      demoFen: "r2q1rk1/pp1nbppp/2p1pn2/3p4/2PP4/1PN1PN2/P4PPP/R1BQ1RK1 w - - 0 1" },
+    { id: "simplify", phase: "middlegame", cat: "Material", side: "both",
+      name: "Simplify When Ahead", idea: "Up material or with a clear structural edge? Trade pieces (not pawns). Every swap shrinks the opponent's chances and brings a winning endgame closer.",
+      how: ["Offer trades of pieces while you're ahead", "Keep pawns on to preserve winning chances", "Head for an endgame where your extra material tells", "Avoid needless complications — technique, not heroics"],
+      demoFen: "r4rk1/pp3ppp/2n1p3/3q4/3P4/2Q2N2/PP3PPP/R4RK1 w - - 0 1" },
+
+    // ---- Endgame ----
+    { id: "passer", phase: "endgame", cat: "Endgame", side: "both",
+      name: "The Passed Pawn", idea: "A passed pawn 'must be pushed' — it ties down enemy pieces and can promote. An OUTSIDE passer is gold: it decoys the king away from the real action.",
+      how: ["Create a passed pawn (often via a pawn majority)", "Support its advance with the king and rooks", "Use an outside passer to pull the enemy king offside", "Then win on the other wing while they chase it"],
+      demoFen: "8/5ppp/8/8/8/8/PP3PPP/6K1 w - - 0 1" },
+    { id: "opposition", phase: "endgame", cat: "Endgame", side: "both",
+      name: "King & Pawn — Opposition", idea: "In king-and-pawn endings the OPPOSITION (kings a knight's-jump apart, the other side to move) lets your king force a path forward. It's the key that unlocks pawn promotion.",
+      how: ["Get your king in FRONT of the pawn, not behind it", "Take the opposition (face the kings with the OPPONENT to move)", "Use it to shoulder the enemy king aside", "Escort the pawn to the queening square"],
+      demoFen: "8/8/4k3/8/4P3/4K3/8/8 w - - 0 1" },
+    { id: "lucena", phase: "endgame", cat: "Endgame", side: "both",
+      name: "Rook Endgame — Lucena (Winning)", idea: "The most important winning method in chess: with a rook and pawn vs rook, 'build a bridge' with your rook to shelter your king from checks and promote.",
+      how: ["Get the king in front of the pawn on the promotion file", "Play the rook to the 4th rank ('building the bridge')", "March the king out; when checked, interpose the rook", "Promote the pawn — the bridge blocks every check"],
+      demoFen: "1K6/1P6/8/8/6R1/8/6k1/5r2 w - - 0 1" },
+    { id: "philidor", phase: "endgame", cat: "Endgame", side: "both",
+      name: "Rook Endgame — Philidor (Drawing)", idea: "The essential DRAW in rook endings: keep your rook on the third rank to stop the enemy king advancing, then check from behind once the pawn commits.",
+      how: ["Hold the rook on your 3rd rank to fence out the enemy king", "Wait — don't let the king reach the 6th rank", "When the pawn advances to the 6th, drop the rook to the rear", "Check the king from behind forever — a fortress draw"],
+      demoFen: "8/8/8/3k4/3p4/8/3K1r2/6R1 b - - 0 1" },
+    { id: "king_activity", phase: "endgame", cat: "Endgame", side: "both",
+      name: "Activate the King", idea: "The endgame's golden rule: the king is a fighting piece. Centralize it and march it in — an active king is often worth a pawn.",
+      how: ["With queens off, bring the king toward the centre", "Use it to attack pawns and support your own", "Race it to the key sector before the opponent's", "Let the active king tip a level position your way"],
+      demoFen: "8/pp3ppp/8/8/8/8/PP3PPP/4K3 w - - 0 1" },
+    { id: "rook_behind_passer", phase: "endgame", cat: "Endgame", side: "both",
+      name: "Rook Behind the Passed Pawn", idea: "Tarrasch's rule: put the rook BEHIND the passed pawn — yours to escort it forward, the enemy's to restrain it. The rook gains scope as the pawn advances.",
+      how: ["Place your rook behind your own passer to push it", "Or behind the ENEMY passer to blockade and tie it down", "Keep your king active alongside", "Advance the pawn; the rook's power grows every step"],
+      demoFen: "8/8/8/1R6/8/1P6/6k1/1r4K1 w - - 0 1" },
+  ];
+
   window.GBStrategies = {
     openings: OPENINGS,
+    plans: PLANS,
     themes: THEMES,
     categories: CATS,
+    // A plan write-up by engine theme id (so an in-game detected plan links here).
+    plan(id) { return PLANS.find((p) => p.id === id) || null; },
+    plansByPhase(ph) { return PLANS.filter((p) => p.phase === ph); },
     themeMeta(id) { return THEMES[id] || { phase: "any", cat: "Plan", label: id }; },
     familyOf,
     // Openings grouped by family (for the library page), families in a stable order.

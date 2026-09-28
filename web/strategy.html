@@ -60,6 +60,13 @@
     .demo-head .x { margin-left: auto; background: var(--glass); border: 1px solid var(--line-2); color: var(--muted);
       width: 34px; height: 34px; border-radius: 10px; font-size: 18px; cursor: pointer; flex-shrink: 0; }
     .demo-idea { padding: 0 20px 14px; color: var(--muted); font-size: 0.92rem; }
+    .how { margin: 0 0 14px; padding-left: 20px; color: var(--text); font-size: 0.88rem; line-height: 1.5; }
+    .how:empty { display: none; }
+    .how li { margin: 4px 0; }
+    .scard .cat { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+      color: #04222d; background: linear-gradient(140deg, var(--accent), #3a97bd); padding: 2px 7px; border-radius: 999px; }
+    .phasehead { grid-column: 1 / -1; margin: 10px 2px 2px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--muted); }
     .demo-body { display: grid; grid-template-columns: minmax(0, 380px) 1fr; gap: 20px; padding: 0 20px 20px; align-items: start; }
     @media (max-width: 680px) { .demo-body { grid-template-columns: 1fr; } }
 
@@ -113,6 +120,7 @@
       <div class="demo-body">
         <div class="board-wrap"><div class="board" id="board"></div></div>
         <div>
+          <ol class="how" id="dHow"></ol>
           <div class="moves" id="moves"></div>
           <div class="controls">
             <button id="prev" title="Previous move">◂ Prev</button>
@@ -132,14 +140,28 @@
     const GLY = { k:"♚",q:"♛",r:"♜",b:"♝",n:"♞",p:"♟" };
     const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
     const PIECE_NAME = { p:"pawn", n:"knight", b:"bishop", r:"rook", q:"queen", k:"king" };
-    const list = (window.GBStrategies && GBStrategies.openings) ? GBStrategies.openings.slice() : [];
+    const S = window.GBStrategies || {};
+    // One combined library: named openings + named middlegame/endgame plans.
+    const openingItems = (S.openings || []).map((o) => Object.assign({ kind: "opening", phase: "opening" }, o));
+    const planItems = (S.plans || []).map((p) => Object.assign({ kind: "plan" }, p));
+    const list = openingItems.concat(planItems);
+    let demoStart = START; // piece-placement the current demo starts from
 
-    // First-move families for filtering.
     const FAMILY = (uci0) => ({
       e2e4: "1.e4", d2d4: "1.d4", c2c4: "1.c4", g1f3: "1.Nf3", f2f4: "1.f4", b2b3: "1.b3",
     }[uci0] || "Other");
-    const FAM_ORDER = ["All", "1.e4", "1.d4", "1.c4", "1.Nf3", "1.f4", "1.b3", "Other"];
-    let activeFam = "All";
+    // Filters: phase buckets first, then opening first-move families.
+    const FILTERS = ["All", "Openings", "Middlegame", "Endgame", "1.e4", "1.d4", "1.c4", "1.Nf3", "1.f4", "1.b3", "Other"];
+    const PHASE_LABEL = { opening: "Openings", middlegame: "Middlegame plans", endgame: "Endgame technique" };
+    const PHASE_ORDER = ["opening", "middlegame", "endgame"];
+    let active = "All";
+    function matches(o, f) {
+      if (f === "All") return true;
+      if (f === "Openings") return o.kind === "opening";
+      if (f === "Middlegame") return o.phase === "middlegame";
+      if (f === "Endgame") return o.phase === "endgame";
+      return o.kind === "opening" && FAMILY(o.uci[0]) === f; // an opening-family chip
+    }
 
     const sqIdx = (alg) => (alg.charCodeAt(1) - 49) * 8 + (alg.charCodeAt(0) - 97);
     function mapFromFen(fb) {
@@ -154,7 +176,7 @@
       if (uci.length > 4) map[to] = (p === p.toUpperCase() ? uci[4].toUpperCase() : uci[4].toLowerCase());
       else map[to] = p;
     }
-    function positionAfter(uciList, n) { const map = mapFromFen(START); for (let i = 0; i < n && i < uciList.length; i++) applyUci(map, uciList[i]); return map; }
+    function positionAfter(uciList, n, start) { const map = mapFromFen(start || demoStart); for (let i = 0; i < n && i < uciList.length; i++) applyUci(map, uciList[i]); return map; }
     // Approximate SAN for display (piece letter + capture + target). Good enough for a demo.
     function moveLabel(uciList, i) {
       const before = positionAfter(uciList, i), uci = uciList[i];
@@ -181,31 +203,47 @@
     // ---- catalog grid ----
     function iconFor(o) { return o.side === "black" ? "♟" : "♙"; }
     function renderFilters() {
-      const present = new Set(list.map((o) => FAMILY(o.uci[0])));
-      const fams = FAM_ORDER.filter((f) => f === "All" || present.has(f));
-      document.getElementById("filters").innerHTML = fams.map((f) =>
-        `<button class="filter ${f === activeFam ? "on" : ""}" data-fam="${f}">${f}${f === "All" ? ` (${list.length})` : ""}</button>`).join("");
-      document.querySelectorAll(".filter").forEach((b) => b.onclick = () => { activeFam = b.dataset.fam; renderFilters(); renderGrid(); });
+      const present = new Set(list.filter((o) => o.kind === "opening").map((o) => FAMILY(o.uci[0])));
+      const chips = FILTERS.filter((f) => ["All", "Openings", "Middlegame", "Endgame"].includes(f) || present.has(f));
+      document.getElementById("filters").innerHTML = chips.map((f) =>
+        `<button class="filter ${f === active ? "on" : ""}" data-f="${f}">${f}${f === "All" ? ` (${list.length})` : ""}</button>`).join("");
+      document.querySelectorAll(".filter").forEach((b) => b.onclick = () => { active = b.dataset.f; renderFilters(); renderGrid(); });
+    }
+    function card(o) {
+      const gi = list.indexOf(o);
+      const tag = o.kind === "opening" ? `<span class="eco">${o.eco || ""}</span>` : `<span class="cat">${o.cat || o.phase}</span>`;
+      return `<button class="scard" data-i="${gi}">
+        <div class="row1">${tag}<span class="side ${o.side}">${o.side === "both" ? "either" : o.side}</span></div>
+        <h3>${o.name}</h3><p>${o.idea}</p></button>`;
     }
     function renderGrid() {
-      const items = list.filter((o) => activeFam === "All" || FAMILY(o.uci[0]) === activeFam);
+      const items = list.filter((o) => matches(o, active));
       document.getElementById("count").textContent = `${items.length} strateg${items.length === 1 ? "y" : "ies"}`;
-      document.getElementById("grid").innerHTML = items.map((o, idx) => {
-        const gi = list.indexOf(o);
-        return `<button class="scard" data-i="${gi}">
-          <div class="row1"><span class="eco">${o.eco || ""}</span><span class="side ${o.side}">${o.side === "both" ? "either" : o.side}</span></div>
-          <h3>${o.name}</h3><p>${o.idea}</p></button>`;
-      }).join("");
+      let html = "";
+      if (active === "All") { // group under phase headers so the phases read as sections
+        PHASE_ORDER.forEach((ph) => {
+          const group = items.filter((o) => o.phase === ph);
+          if (group.length) html += `<div class="phasehead">${PHASE_LABEL[ph]} · ${group.length}</div>` + group.map(card).join("");
+        });
+      } else {
+        html = items.map(card).join("");
+      }
+      document.getElementById("grid").innerHTML = html;
       document.querySelectorAll(".scard").forEach((c) => c.onclick = () => openDemo(list[+c.dataset.i]));
     }
 
     // ---- demo modal ----
     let demoMoves = [], demoStep = 0, demoTimer = null;
     function openDemo(o) {
-      demoMoves = o.uci; demoStep = 0;
-      document.getElementById("dEco").textContent = o.eco || "";
+      // Openings play from the start; plans start from an illustrative position and
+      // list their concrete how-to steps (with an animated line when one is given).
+      demoStart = (o.kind === "plan" && o.demoFen) ? o.demoFen.split(" ")[0] : START;
+      demoMoves = o.uci || o.demoUci || [];
+      demoStep = 0;
+      document.getElementById("dEco").textContent = o.kind === "opening" ? (o.eco || "") : (o.cat || o.phase || "").toUpperCase();
       document.getElementById("dName").textContent = o.name;
       document.getElementById("dIdea").textContent = o.idea;
+      document.getElementById("dHow").innerHTML = (o.how || []).map((s) => `<li>${s}</li>`).join("");
       renderMoves(); renderStep();
       document.getElementById("modal").classList.add("on");
     }
