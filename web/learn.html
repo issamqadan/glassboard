@@ -57,6 +57,7 @@
     .choice { text-align: left; display: flex; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 16px;
       background: linear-gradient(160deg, var(--glass-hi), var(--glass)); cursor: pointer; transition: transform .14s, border-color .2s; color: inherit; }
     .choice:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .choice.info { cursor: default; } .choice.info:hover { transform: none; border-color: var(--line); }
     .choice .ic { font-size: 30px; line-height: 1; }
     .choice h3 { margin: 0 0 3px; font-size: 1.06rem; }
     .choice p { margin: 0; color: var(--muted); font-size: 0.86rem; }
@@ -118,7 +119,7 @@
 </head>
 <body>
   <script src="./nav.js"></script>
-  <a class="skip-link" id="skipLink" href="./portal.html" style="position:fixed;top:68px;right:16px;z-index:5;color:#93a2c0;font-size:0.86rem;text-decoration:none">Skip →</a>
+  <a class="skip-link" id="skipLink" href="./index.html" style="position:fixed;top:68px;right:16px;z-index:5;color:#93a2c0;font-size:0.86rem;text-decoration:none">Skip to playing →</a>
 
   <main>
     <div class="dots"><i class="on"></i><i></i><i></i></div>
@@ -141,6 +142,19 @@
         <button class="choice" onclick="pick('some')"><span class="ic">♟️</span><div><h3>I know the basics</h3><p>I know how the pieces move.</p></div></button>
         <button class="choice" onclick="pick('play')"><span class="ic">♞</span><div><h3>I play regularly</h3><p>Let's see what you've got.</p></div></button>
       </div>
+    </section>
+
+    <!-- THE GOAL (beginners) — what chess is, before meeting the pieces -->
+    <section class="step" id="s-goal">
+      <span class="eyebrow">The basics</span>
+      <h1>How chess works</h1>
+      <p class="lede">Two sides, light and dark. You take turns moving one piece at a time — each piece moves its own way. You'll try them all in a moment.</p>
+      <div class="cards" style="margin-top:14px">
+        <div class="choice info"><span class="ic">🎯</span><div><h3>The goal: checkmate</h3><p>Trap the other side's king so it can't escape being captured. That ends the game — and you win.</p></div></div>
+        <div class="choice info"><span class="ic">⚔️</span><div><h3>Capturing</h3><p>Move onto a square holding an enemy piece to capture it and take it off the board.</p></div></div>
+        <div class="choice info"><span class="ic">🔍</span><div><h3>You're never stuck</h3><p>Glassboard shows good moves and explains what they do — and your opponent sees the same help. You learn in the open.</p></div></div>
+      </div>
+      <div style="margin-top:20px"><button class="btn" onclick="startTutorial()">Meet the pieces →</button></div>
     </section>
 
     <!-- TUTORIAL (beginners) -->
@@ -254,7 +268,7 @@
       document.getElementById("s-" + id).classList.add("on");
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
-    function pick(p) { path = p; if (p === "new") { setDots(1); startTutorial(); } else { setDots(1); startAssess(); } }
+    function pick(p) { path = p; if (p === "new") { setDots(1); go("goal"); } else { setDots(1); startAssess(); } }
 
     // ---------- tutorial (beginners) ----------
     // Learner-paced: you keep moving each piece as much as you like, and useful
@@ -399,7 +413,11 @@
         return;
       }
       localStorage.setItem("gb_me", JSON.stringify({ name, rating: estimate }));
-      location.href = nextUrl() || "./portal.html";
+      // Learn LEADS to playing. If we came from an invite, return there; otherwise a
+      // beginner drops straight into a guided first game (full help on), and everyone
+      // else into Play-AI setup.
+      const beginner = path === "new" || estimate < 900;
+      location.href = nextUrl() || (beginner ? "./index.html?first=1" : "./index.html");
     }
     function restart() { setDots(0); go("welcome"); }
 

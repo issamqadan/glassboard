@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="gb-version" content="__GBVER__" />
+  <title>Glassboard — Help</title>
+  <style>
+    :root {
+      --bg:#080b12; --bg-2:#0c111b; --panel:#111827; --glass:rgba(255,255,255,0.045); --glass-hi:rgba(255,255,255,0.07);
+      --line:#1d2740; --line-2:#2b3856; --text:#eaf0fb; --muted:#93a2c0; --faint:#5d6c8c;
+      --accent:#5cc9ec; --accent-2:#7ee0d6; --gold:#e0be79;
+      --sans: ui-sans-serif,system-ui,-apple-system,"SF Pro Display","Segoe UI",Roboto,sans-serif;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:var(--sans); color:var(--text); line-height:1.55; min-height:100vh;
+      background: radial-gradient(1100px 640px at 85% -10%, rgba(92,201,236,0.09), transparent 60%),
+                  radial-gradient(820px 560px at -5% 110%, rgba(126,224,214,0.06), transparent 55%), var(--bg);
+      background-attachment:fixed; }
+    .wrap { max-width:900px; margin:0 auto; padding:0 20px; }
+    a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:underline; }
+    main { padding:34px 0 80px; }
+    .eyebrow { font-size:0.68rem; text-transform:uppercase; letter-spacing:0.16em; color:var(--faint); font-weight:700; }
+    h1 { font-size:clamp(1.8rem,4vw,2.5rem); letter-spacing:-0.02em; margin:10px 0 8px; text-wrap:balance; }
+    .lede { color:var(--muted); font-size:1.02rem; max-width:60ch; margin:0 0 8px; }
+    .toc { display:flex; flex-wrap:wrap; gap:8px; margin:22px 0 30px; }
+    .toc a { border:1px solid var(--line-2); background:var(--glass); color:var(--muted); border-radius:999px; padding:7px 13px; font-size:0.84rem; }
+    .toc a:hover { color:var(--text); border-color:var(--accent); text-decoration:none; }
+    section.card { border:1px solid var(--line); border-radius:16px; padding:22px 22px 6px;
+      background:linear-gradient(165deg,var(--glass-hi),var(--glass)); margin-bottom:16px; scroll-margin-top:74px; }
+    section.card > h2 { font-size:1.2rem; letter-spacing:-0.01em; margin:0 0 4px; display:flex; align-items:center; gap:10px; }
+    section.card > p { color:var(--muted); margin:6px 0 14px; }
+    .rows { display:flex; flex-direction:column; gap:12px; margin-bottom:16px; }
+    .row { display:flex; gap:13px; align-items:flex-start; }
+    .row .ic { flex:0 0 auto; width:34px; height:34px; border-radius:10px; display:grid; place-items:center; font-size:1.05rem;
+      background:var(--bg-2); border:1px solid var(--line-2); }
+    .row .bd { min-width:0; } .row .bd b { color:var(--text); } .row .bd p { margin:2px 0 0; color:var(--muted); font-size:0.92rem; }
+    .pill { display:inline-block; font-size:0.7rem; font-weight:800; letter-spacing:0.04em; text-transform:uppercase;
+      padding:2px 8px; border-radius:999px; background:rgba(92,201,236,0.14); color:var(--accent); border:1px solid rgba(92,201,236,0.3); }
+    .cta { display:flex; gap:12px; flex-wrap:wrap; margin:26px 0 0; }
+    .btn { display:inline-flex; align-items:center; gap:8px; font-weight:640; padding:13px 20px; border-radius:12px; border:1px solid transparent; }
+    .btn-primary { background:linear-gradient(140deg,var(--accent),#3a97bd); color:#04222d; }
+    .btn-ghost { background:var(--glass); color:var(--text); border-color:var(--line-2); }
+    .note { color:var(--faint); font-size:0.86rem; margin-top:20px; }
+  </style>
+</head>
+<body>
+  <script src="./nav.js"></script>
+  <main class="wrap">
+    <span class="eyebrow">Help</span>
+    <h1>How Glassboard works</h1>
+    <p class="lede">Not how to play chess — <a href="./learn.html">Learn does that</a>. This is how to use the <b>glass-box assistance</b> that makes Glassboard different: transparent, adjustable, and shared by both sides.</p>
+
+    <div class="toc">
+      <a href="#lens">The Glass Lens</a>
+      <a href="#modes">How help arrives</a>
+      <a href="#level">How much help</a>
+      <a href="#symmetric">The AI plays glass too</a>
+      <a href="#glassbox">The glass-box record</a>
+      <a href="#strategies">Strategies</a>
+      <a href="#play">Ways to play</a>
+      <a href="#improve">Getting better</a>
+    </div>
+
+    <section class="card" id="lens">
+      <h2>🔍 The Glass Lens</h2>
+      <p>Your in-game helper. It shows <b>one</b> thing that matters right now — and it lives on the board, so you never scroll to find help.</p>
+      <div class="rows">
+        <div class="row"><span class="ic">▶</span><div class="bd"><b>Play</b><p>Plays the suggested move. The same move is also a glowing arrow on the board — tap that to play it too.</p></div></div>
+        <div class="row"><span class="ic">💡</span><div class="bd"><b>Explain</b><p>Toggles plain-language explanations — "Wins their knight", "Defends your bishop", "Puts the king in check". On by default; tap to hide.</p></div></div>
+        <div class="row"><span class="ic">👁</span><div class="bd"><b>Show</b><p>Previews the move on the board without playing it.</p></div></div>
+        <div class="row"><span class="ic">⋯</span><div class="bd"><b>Other moves</b><p>A short list of alternatives, each with what it does.</p></div></div>
+        <div class="row"><span class="ic">🧭</span><div class="bd"><b>Plans</b><p>Opens the strategy picker for this position (see Strategies below).</p></div></div>
+        <div class="row"><span class="ic">📜</span><div class="bd"><b>Log</b><p>The glass-box record — every bit of help either side took.</p></div></div>
+      </div>
+    </section>
+
+    <section class="card" id="modes">
+      <h2>🔔 How help arrives</h2>
+      <p>Set when you start a game. It controls <b>when</b> the move-answer appears — safety highlights and awareness are always on.</p>
+      <div class="rows">
+        <div class="row"><span class="ic">☀️</span><div class="bd"><b>Open Hand</b><p>Help is always on screen. Play freely — the friendliest for learning.</p></div></div>
+        <div class="row"><span class="ic">🔔</span><div class="bd"><b>On Call</b><p>Help is hidden until you summon it. Every ask is counted, so you can measure how independent you're becoming.</p></div></div>
+        <div class="row"><span class="ic">🤝</span><div class="bd"><b>Gentleman's Game</b><p>Start with none. Request help mid-game — your opponent must allow it. (Great human-vs-human.)</p></div></div>
+      </div>
+    </section>
+
+    <section class="card" id="level">
+      <h2>🎚️ How much help</h2>
+      <div class="rows">
+        <div class="row"><span class="ic">🚫</span><div class="bd"><b>No help</b><p>Pure chess — just you and the board.</p></div></div>
+        <div class="row"><span class="ic">♾️</span><div class="bd"><b>Full help</b><p>Threats, plans, and the single best move, explained. Learn as you play. <span class="pill">recommended for beginners</span></p></div></div>
+        <div class="row"><span class="ic">🎚️</span><div class="bd"><b>Choose level</b><p>Pick exactly how much — from safety hints up to a co-pilot that can play the plan for you.</p></div></div>
+      </div>
+    </section>
+
+    <section class="card" id="symmetric">
+      <h2>🤖 The AI plays glass too</h2>
+      <p>Assistance isn't a one-sided crutch — it's a layer <b>both</b> sides share, in the open.</p>
+      <div class="rows">
+        <div class="row"><span class="ic">⛏</span><div class="bd"><b>AI matching your help</b><p>The more you lean on the suggestions, the more the AI digs deeper toward full strength — so the game stays a fair fight. You'll see a badge when it does, with the exact share of turns you took help.</p></div></div>
+        <div class="row"><span class="ic">🛟</span><div class="bd"><b>Lifelines</b><p>Under pressure, the AI can spend a lifeline to find a stronger move — and the move is marked on the board. "You needed help there too."</p></div></div>
+      </div>
+    </section>
+
+    <section class="card" id="glassbox">
+      <h2>📜 The glass-box record</h2>
+      <p>Nothing is hidden. Every move you play is tagged by how you found it, and both players can see it.</p>
+      <div class="rows">
+        <div class="row"><span class="ic">💪</span><div class="bd"><b>Found it on your own</b><p>You played it without taking the suggestion.</p></div></div>
+        <div class="row"><span class="ic">🤝</span><div class="bd"><b>Took help</b><p>You played the suggested move, or asked to see it. It's on the record — that's the point.</p></div></div>
+      </div>
+    </section>
+
+    <section class="card" id="strategies">
+      <h2>📖 Strategies</h2>
+      <p>Glassboard names what's being played and can guide a plan — for you <b>and</b> your opponent.</p>
+      <div class="rows">
+        <div class="row"><span class="ic">🎯</span><div class="bd"><b>Identity strip</b><p>Top of the Lens: names your opening/plan and the opponent's, plus the game phase.</p></div></div>
+        <div class="row"><span class="ic">🧭</span><div class="bd"><b>Plans picker</b><p>Adopt a plan that fits the position — the engine's live plans, grouped by type.</p></div></div>
+        <div class="row"><span class="ic">📖</span><div class="bd"><b>Follow the book</b><p>In the opening, follow your chosen line — but only when it's also the engine's best move, so it's never a bad "book" move.</p></div></div>
+        <div class="row"><span class="ic">✨</span><div class="bd"><b>Strategies library</b><p>Browse every named opening + middlegame/endgame plan, by phase, family, and complexity — with a demo. <a href="./strategy.html">Open it →</a></p></div></div>
+      </div>
+    </section>
+
+    <section class="card" id="play">
+      <h2>🏠 Ways to play</h2>
+      <div class="rows">
+        <div class="row"><span class="ic">🤖</span><div class="bd"><b>Play the AI</b><p>A solo game against an opponent you size to your level. Saved automatically — resume any time, on any device.</p></div></div>
+        <div class="row"><span class="ic">＋</span><div class="bd"><b>New game — invite a friend</b><p>Create a game and share the link. <b>Match</b> sets a fair handicap for whoever's rated lower; <b>Casual</b> gives both players unlimited help, no ratings.</p></div></div>
+        <div class="row"><span class="ic">⏱</span><div class="bd"><b>Clocks, undo, rematch</b><p>Optional clock, take back a move, and a rematch that keeps your settings.</p></div></div>
+      </div>
+    </section>
+
+    <section class="card" id="improve">
+      <h2>📈 Getting better</h2>
+      <div class="rows">
+        <div class="row"><span class="ic">💪</span><div class="bd"><b>Independence score</b><p>At game end, see how many moves you found on your own, and whether that's trending up. The goal is to need less help over time.</p></div></div>
+        <div class="row"><span class="ic">🧠</span><div class="bd"><b>Player model</b><p>Glassboard learns where you tend to slip (hung pieces, missed free material) and leans your help toward what you actually need.</p></div></div>
+      </div>
+    </section>
+
+    <div class="cta">
+      <a class="btn btn-primary" href="./learn.html">👋 New to chess? Learn to play</a>
+      <a class="btn btn-ghost" href="./index.html">🤖 Play the AI</a>
+      <a class="btn btn-ghost" href="./forum.html">💬 Ask a question / give feedback</a>
+    </div>
+    <p class="note">Questions or ideas? The <a href="./forum.html">Forum</a> is the place — and every game ends with a quick fun/fair check.</p>
+  </main>
+</body>
+</html>

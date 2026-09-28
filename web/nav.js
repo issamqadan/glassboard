@@ -11,8 +11,10 @@ function gbnav() {
   const items = [
     { href: "portal.html", label: "Lobby", icon: "🏠", match: ["portal.html"] },
     { href: "index.html", label: "Play AI", icon: "🤖", match: ["index.html", ""] },
-    { href: "strategy.html", label: "Strategies", icon: "📖", match: ["strategy.html"] },
     { href: "learn.html", label: "Learn", icon: "♟", match: ["learn.html"] },
+    { href: "strategy.html", label: "Strategies", icon: "📖", match: ["strategy.html"] },
+    { href: "help.html", label: "Help", icon: "❓", match: ["help.html"], topOnly: true },
+    { href: "forum.html", label: "Forum", icon: "💬", match: ["forum.html"], topOnly: true },
   ];
   let me = null;
   try { me = JSON.parse(localStorage.getItem("gb_me")); } catch {}
@@ -21,7 +23,7 @@ function gbnav() {
   const isOn = (it) => it.match.includes(cur);
 
   const topLinks = items.map((it) => `<a class="gbnav-link${isOn(it) ? " on" : ""}" href="./${it.href}">${it.label}</a>`).join("");
-  const tabLinks = items.map((it) =>
+  const tabLinks = items.filter((it) => !it.topOnly).map((it) =>
     `<a class="gbtab${isOn(it) ? " on" : ""}" href="./${it.href}"><span class="gbtab-ic">${it.icon}</span><span>${it.label}</span></a>`
   ).join("");
 

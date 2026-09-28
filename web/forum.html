@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="gb-version" content="__GBVER__" />
+  <title>Glassboard — Forum</title>
+  <style>
+    :root {
+      --bg:#080b12; --bg-2:#0c111b; --glass:rgba(255,255,255,0.045); --glass-hi:rgba(255,255,255,0.07);
+      --line:#1d2740; --line-2:#2b3856; --text:#eaf0fb; --muted:#93a2c0; --faint:#5d6c8c;
+      --accent:#5cc9ec; --accent-2:#7ee0d6; --gold:#e0be79; --good:#45c86e; --urgent:#f26d7a;
+      --sans: ui-sans-serif,system-ui,-apple-system,"SF Pro Display","Segoe UI",Roboto,sans-serif;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:var(--sans); color:var(--text); line-height:1.55; min-height:100vh;
+      background: radial-gradient(1100px 640px at 85% -10%, rgba(92,201,236,0.09), transparent 60%),
+                  radial-gradient(820px 560px at -5% 110%, rgba(126,224,214,0.06), transparent 55%), var(--bg);
+      background-attachment:fixed; }
+    .wrap { max-width:760px; margin:0 auto; padding:0 20px; }
+    a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:underline; }
+    main { padding:34px 0 90px; }
+    .eyebrow { font-size:0.68rem; text-transform:uppercase; letter-spacing:0.16em; color:var(--faint); font-weight:700; }
+    h1 { font-size:clamp(1.8rem,4vw,2.4rem); letter-spacing:-0.02em; margin:10px 0 8px; }
+    .lede { color:var(--muted); max-width:58ch; margin:0 0 22px; }
+    .composer { border:1px solid var(--line-2); border-radius:16px; padding:16px; background:linear-gradient(165deg,var(--glass-hi),var(--glass)); margin-bottom:26px; }
+    .composer textarea { width:100%; min-height:84px; resize:vertical; padding:12px 14px; border-radius:11px; background:var(--bg-2);
+      border:1px solid var(--line); color:var(--text); font-family:inherit; font-size:0.96rem; }
+    .composer textarea:focus { border-color:var(--accent); outline:none; }
+    .crow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px; }
+    .crow input[type=text] { flex:1; min-width:160px; padding:10px 13px; border-radius:10px; background:var(--bg-2); border:1px solid var(--line); color:var(--text); font-family:inherit; font-size:0.9rem; }
+    .kinds { display:flex; gap:6px; }
+    .kind { border:1px solid var(--line-2); background:var(--glass); color:var(--muted); border-radius:999px; padding:6px 12px; font-size:0.8rem; font-weight:600; cursor:pointer; }
+    .kind.on { color:#04222d; background:linear-gradient(140deg,var(--accent),#3a97bd); border-color:transparent; }
+    .rate { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:0.84rem; }
+    .rate .tb { border:1px solid var(--line-2); background:var(--glass); color:var(--muted); border-radius:8px; padding:5px 9px; cursor:pointer; font-size:0.9rem; }
+    .rate .tb.on { border-color:var(--accent); color:var(--text); background:rgba(92,201,236,0.14); }
+    .post-btn { margin-left:auto; font:inherit; font-weight:700; background:linear-gradient(140deg,var(--accent),#3a97bd); color:#04222d; border:0; border-radius:11px; padding:11px 20px; cursor:pointer; }
+    .post-btn:disabled { opacity:0.5; cursor:default; }
+    .thanks { color:var(--good); font-size:0.9rem; margin-top:10px; }
+    .feed { display:flex; flex-direction:column; gap:12px; }
+    .fpost { border:1px solid var(--line); border-radius:14px; padding:14px 16px; background:linear-gradient(165deg,var(--glass-hi),var(--glass)); }
+    .fp-head { display:flex; align-items:center; gap:10px; margin-bottom:7px; }
+    .fp-av { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; font-weight:700; font-size:0.8rem; color:#06121a; background:linear-gradient(140deg,var(--accent-2),var(--accent)); }
+    .fp-name { font-weight:650; } .fp-when { color:var(--faint); font-size:0.78rem; margin-left:auto; }
+    .fp-body { color:var(--text); white-space:pre-wrap; word-break:break-word; }
+    .chip { font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:2px 7px; border-radius:999px; }
+    .chip.forum { background:rgba(126,224,214,0.14); color:#7ee0d6; }
+    .chip.question { background:rgba(224,190,121,0.16); color:var(--gold); }
+    .chip.game { background:rgba(92,201,236,0.14); color:var(--accent); }
+    .fp-tags { display:flex; gap:6px; margin-top:8px; align-items:center; }
+    .tag { font-size:0.74rem; color:var(--muted); }
+    .empty { text-align:center; padding:36px 18px; border:1px dashed var(--line-2); border-radius:14px; color:var(--faint); }
+    .err { color:var(--urgent); font-size:0.86rem; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <script src="./nav.js"></script>
+  <main class="wrap">
+    <span class="eyebrow">Forum</span>
+    <h1>Feedback &amp; questions</h1>
+    <p class="lede">Tell us what worked, what didn't, and what you'd want next — or ask anything about how Glassboard works. Every game also ends with a quick <b>fun / fair</b> check; those show up here too.</p>
+
+    <div class="composer">
+      <textarea id="msg" placeholder="Share feedback, an idea, or a question…" maxlength="500"></textarea>
+      <div class="crow">
+        <div class="kinds">
+          <button class="kind on" data-kind="feedback" type="button">💬 Feedback</button>
+          <button class="kind" data-kind="question" type="button">❓ Question</button>
+          <button class="kind" data-kind="idea" type="button">💡 Idea</button>
+        </div>
+        <input type="text" id="who" placeholder="Your name (optional)" maxlength="24" />
+      </div>
+      <div class="crow">
+        <span class="rate">Overall — Fun? <button class="tb" id="funY" type="button">👍</button><button class="tb" id="funN" type="button">👎</button></span>
+        <span class="rate">Fair? <button class="tb" id="fairY" type="button">👍</button><button class="tb" id="fairN" type="button">👎</button></span>
+        <button class="post-btn" id="post" type="button" disabled>Post</button>
+      </div>
+      <div class="thanks" id="thanks" hidden>Thanks — posted 🙏</div>
+      <div class="err" id="err" hidden></div>
+    </div>
+
+    <div class="feed" id="feed"><div class="empty">Loading…</div></div>
+  </main>
+
+  <script>
+    const SERVER = location.protocol === "https:"
+      ? "https://playglassboard.onrender.com"
+      : "http://" + (location.hostname || "localhost") + ":9001";
+    const esc = (s) => String(s || "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    let me = null; try { me = JSON.parse(localStorage.getItem("gb_me")); } catch {}
+    const pid = () => { try { return me && me.id ? me.id : (localStorage.getItem("gb_pid") || ""); } catch { return ""; } };
+
+    // ---- composer state ----
+    let kind = "feedback", fun = null, fair = null;
+    const msgEl = document.getElementById("msg"), postBtn = document.getElementById("post"), whoEl = document.getElementById("who");
+    if (me && me.name) whoEl.value = me.name;
+    function refresh() { postBtn.disabled = !msgEl.value.trim(); }
+    msgEl.addEventListener("input", refresh);
+    document.querySelectorAll(".kind").forEach((b) => b.onclick = () => {
+      kind = b.dataset.kind; document.querySelectorAll(".kind").forEach((x) => x.classList.toggle("on", x === b));
+    });
+    function setRate(which, val) {
+      if (which === "fun") fun = val; else fair = val;
+      document.getElementById("funY").classList.toggle("on", fun === true);
+      document.getElementById("funN").classList.toggle("on", fun === false);
+      document.getElementById("fairY").classList.toggle("on", fair === true);
+      document.getElementById("fairN").classList.toggle("on", fair === false);
+    }
+    document.getElementById("funY").onclick = () => setRate("fun", true);
+    document.getElementById("funN").onclick = () => setRate("fun", false);
+    document.getElementById("fairY").onclick = () => setRate("fair", true);
+    document.getElementById("fairN").onclick = () => setRate("fair", false);
+
+    async function post() {
+      const note = msgEl.value.trim(); if (!note) return;
+      const who = whoEl.value.trim();
+      postBtn.disabled = true; postBtn.textContent = "Posting…";
+      const err = document.getElementById("err"); err.hidden = true;
+      // The server's feedback store requires fun/fair booleans; forum posts default
+      // to a neutral positive and are tagged mode="forum:<kind>" so they never muddy
+      // the playtest fun/fair gate (which reads game modes only).
+      const body = {
+        game_id: "", player: pid(), mode: "forum:" + kind,
+        fun: fun === null ? true : fun, fair: fair === null ? true : fair,
+        note: (who ? who + ": " : "") + note,
+      };
+      try {
+        const r = await fetch(SERVER + "/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        if (!r.ok) throw new Error();
+      } catch { err.textContent = "Couldn't post — the server may be waking up. Try again in a moment."; err.hidden = false; postBtn.disabled = false; postBtn.textContent = "Post"; return; }
+      msgEl.value = ""; fun = fair = null; setRate("fun", null); setRate("fair", null); refresh();
+      postBtn.textContent = "Post";
+      const t = document.getElementById("thanks"); t.hidden = false; setTimeout(() => t.hidden = true, 3000);
+      load();
+    }
+    postBtn.onclick = post;
+
+    const ago = (ts) => { if (!ts) return ""; const s = Math.max(0, Math.floor(Date.now() / 1000 - ts)); if (s < 60) return "just now"; const m = (s / 60) | 0; if (m < 60) return m + "m ago"; const h = (m / 60) | 0; if (h < 24) return h + "h ago"; return ((h / 24) | 0) + "d ago"; };
+    function kindOf(mode) { if ((mode || "").startsWith("forum:")) return mode.slice(6); return "game"; }
+    function nameFrom(note, mode) {
+      // Forum posts are stored as "Name: message"; a game rating has no name prefix.
+      if ((mode || "").startsWith("forum:")) { const i = note.indexOf(": "); if (i > 0 && i < 26) return { who: note.slice(0, i), text: note.slice(i + 2) }; }
+      return { who: "", text: note };
+    }
+    async function load() {
+      const feed = document.getElementById("feed");
+      let rows;
+      try { rows = (await (await fetch(SERVER + "/feedback")).json()).feedback || []; }
+      catch { feed.innerHTML = `<div class="empty">Couldn't load the forum — the server may be waking up. <a href="#" onclick="load();return false">Retry</a></div>`; return; }
+      // Show only entries with a note (skip bare fun/fair game pings).
+      const posts = rows.filter((r) => (r.note || "").trim());
+      if (!posts.length) { feed.innerHTML = `<div class="empty">No posts yet — be the first. 💬</div>`; return; }
+      feed.innerHTML = posts.map((r) => {
+        const k = kindOf(r.mode);
+        const { who, text } = nameFrom(r.note, r.mode);
+        const disp = who || (k === "game" ? "A player" : "Anon");
+        const chipCls = k === "question" ? "question" : (k === "game" ? "game" : "forum");
+        const chipTxt = k === "game" ? "Game rating" : (k === "question" ? "Question" : (k === "idea" ? "Idea" : "Feedback"));
+        const tags = [];
+        if (r.fun === true) tags.push('<span class="tag">👍 fun</span>'); else if (r.fun === false) tags.push('<span class="tag">👎 fun</span>');
+        if (r.fair === true) tags.push('<span class="tag">👍 fair</span>'); else if (r.fair === false) tags.push('<span class="tag">👎 fair</span>');
+        return `<div class="fpost">
+          <div class="fp-head"><span class="fp-av">${esc(disp.trim().charAt(0).toUpperCase() || "?")}</span>
+            <span class="fp-name">${esc(disp)}</span><span class="chip ${chipCls}">${chipTxt}</span>
+            <span class="fp-when">${ago(r.ts)}</span></div>
+          <div class="fp-body">${esc(text)}</div>
+          ${tags.length ? `<div class="fp-tags">${tags.join("")}</div>` : ""}
+        </div>`;
+      }).join("");
+    }
+    load();
+    setInterval(load, 20000);
+  </script>
+</body>
+</html>

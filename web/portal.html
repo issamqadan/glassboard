@@ -215,13 +215,12 @@
       <h1>Different levels.<br><span class="thin">One game.</span></h1>
       <p>Invite anyone — a grandmaster or a first-timer. Glassboard sizes a transparent handicap to the gap, so both of you get a real game. Create one and share the link.</p>
       <div class="cta-row">
-        <button class="btn btn-primary" onclick="openCreate()">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> New game
+        <a class="btn btn-primary" href="./learn.html">👋 New to chess? Learn to play</a>
+        <a class="btn btn-ghost" href="./index.html">🤖 Play the AI</a>
+        <button class="btn btn-ghost" onclick="openCreate()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> New game — invite a friend
         </button>
-        <a class="btn btn-ghost" href="./index.html?first=1">👋 New to chess? Play a guided first game</a>
-        <a class="link-quiet" href="./index.html">Play the AI →</a>
-        <a class="link-quiet" href="./multiplayer.html?sim=1" title="Play both sides on one screen to try the full experience">🧪 Practice both sides →</a>
-        <a class="link-quiet" href="./strategy.html">✨ Strategy preview →</a>
+        <a class="link-quiet" href="./strategy.html">✨ Strategies →</a>
       </div>
     </section>
 
@@ -242,6 +241,9 @@
     <div class="ladder" id="ladder"></div>
 
     <div class="footlinks">
+      <a href="./learn.html">👋 Learn to play</a>
+      <a href="./help.html">❓ How Glassboard works</a>
+      <a href="./forum.html">💬 Forum &amp; feedback</a>
       <a href="./index.html">🤖 Play the AI</a>
       <a href="./twoplayer.html">👥 Two players (same screen)</a>
       <a href="https://github.com/issamqadan/glassboard" target="_blank" rel="noopener">Built in the open ↗</a>
@@ -331,6 +333,9 @@
     let me = loadMe();
     if (me) me.id = playerId();
     const SERVER_HTTP = 'https://playglassboard.onrender.com';
+    // Dev/testing affordances (e.g. "Test opponent") only show with ?test or ?dev —
+    // a real player never sees the solo-testing plumbing.
+    const DEV = (() => { const q = new URLSearchParams(location.search); return q.has('test') || q.has('dev'); })();
 
     // ---- identity ----
     function openIdentity() {
@@ -594,7 +599,7 @@
           <div class="g-actions">
             ${!over ? `<button class="enter" onclick="enterGame('${g.id}')">${active ? 'Resume game →' : 'Enter game →'}</button>` : ''}
             ${(active && !g.joined) ? `<button class="invite" onclick="copyInvite('${g.id}')" title="Copy the link to send your opponent">🔗 Invite link</button>` : ''}
-            ${(!over && !g.joined) ? `<button class="invite" onclick="testAsOpponent('${g.id}')" title="Open this game as a throwaway second player to test both sides yourself">🧪 Test opponent</button>` : ''}
+            ${(DEV && !over && !g.joined) ? `<button class="invite" onclick="testAsOpponent('${g.id}')" title="Open this game as a throwaway second player to test both sides yourself">🧪 Test opponent</button>` : ''}
             ${!g.joined ? `<button class="del" onclick="deleteGame('${g.id}')">Delete</button>` : ''}
             <button class="del" onclick="hideGame('${g.id}')">Hide</button>
           </div>
