@@ -306,29 +306,24 @@
       document.getElementById("tut-count").textContent = "";
       const nextBtn = document.getElementById("tut-next"); nextBtn.style.display = "none";
       nextBtn.textContent = tutStep < TUT.length - 1 ? "Next piece →" : "Finish →";
-      const start = +Object.keys(t.place)[0];
-      const setup = () => {
-        const map = {}; Object.assign(map, t.place); // reset the piece to its start each time
-        board("tut-board", map, {
-          only: start,
-          onMove: (from, to, render) => {
-            apply(map, from, to); render(); flash("tut-board", true);
-            tutMoves++;
-            const fb = document.getElementById("tut-fb");
-            fb.className = "feedback good";
-            fb.textContent = TUT_CHEERS[Math.min(tutMoves - 1, TUT_CHEERS.length - 1)];
-            // cycle which fact is highlighted, so info surfaces as you play
-            const info2 = pinfo(t.kind);
-            const rowsN = [info2.role, info2.strong, info2.pairs].filter(Boolean).length || 1;
-            document.getElementById("tut-facts").innerHTML = facts(info2, (tutMoves - 1) % rowsN);
-            document.getElementById("tut-count").textContent = `${tutMoves} move${tutMoves > 1 ? "s" : ""} — nice`;
-            nextBtn.style.display = "";
-            // let them keep practising: reset the piece so it's ready to move again
-            setTimeout(setup, 650);
-          },
-        });
-      };
-      setup();
+      // One piece, free to roam: it stays where it lands and keeps moving from
+      // there (no snap-back), so the learner really feels how it travels the board.
+      const map = {}; Object.assign(map, t.place);
+      board("tut-board", map, {
+        onMove: (from, to, render) => {
+          apply(map, from, to); render(); flash("tut-board", true);
+          tutMoves++;
+          const fb = document.getElementById("tut-fb");
+          fb.className = "feedback good";
+          fb.textContent = TUT_CHEERS[Math.min(tutMoves - 1, TUT_CHEERS.length - 1)];
+          // cycle which fact is highlighted, so info surfaces as you play
+          const info2 = pinfo(t.kind);
+          const rowsN = [info2.role, info2.strong, info2.pairs].filter(Boolean).length || 1;
+          document.getElementById("tut-facts").innerHTML = facts(info2, (tutMoves - 1) % rowsN);
+          document.getElementById("tut-count").textContent = `${tutMoves} move${tutMoves > 1 ? "s" : ""} — nice`;
+          nextBtn.style.display = "";
+        },
+      });
     }
     function nextTut() {
       tutStep++;
