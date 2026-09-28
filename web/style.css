@@ -683,12 +683,18 @@ button {
 
 /* inline promotion picker */
 .promo-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(6,10,18,0.62); backdrop-filter: blur(3px); }
-.promo-box { background: #0c111b; border: 1px solid var(--line-2); border-radius: 16px; padding: 18px 20px; box-shadow: 0 24px 60px -20px rgba(0,0,0,0.85); text-align: center; }
-.promo-title { font-size: 0.72rem; color: #93a2c0; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 650; }
-.promo-choices { display: flex; gap: 10px; }
-.promo-pick { width: 64px; height: 64px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--dark); display: grid; place-items: center; cursor: pointer; transition: transform 0.12s, border-color 0.2s; }
+.promo-box { background: #0c111b; border: 1px solid var(--line-2); border-radius: 16px; padding: 20px 22px; box-shadow: 0 24px 60px -20px rgba(0,0,0,0.85); text-align: center; max-width: 360px; }
+.promo-title { font-size: 1.02rem; color: #eef4fb; margin-bottom: 10px; font-weight: 750; letter-spacing: -0.01em; }
+.promo-note { font-size: 0.86rem; color: #c3d0e6; line-height: 1.45; max-width: 300px; margin: 0 auto 14px; }
+.promo-note b { color: #eef4fb; }
+.promo-choices { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.promo-pick { width: 72px; min-height: 84px; padding: 9px 6px 7px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--dark);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; cursor: pointer; transition: transform 0.12s, border-color 0.2s; touch-action: manipulation; }
 .promo-pick:hover { border-color: var(--accent); transform: translateY(-2px); }
-.promo-pick .piece { width: 82%; height: 82%; }
+.promo-pick .piece { width: 46px; height: 46px; }
+.promo-name { font-size: 0.64rem; font-weight: 700; color: #93a2c0; letter-spacing: 0.02em; }
+.promo-pick.best { border-color: rgba(224,190,121,0.6); box-shadow: inset 0 0 0 1px rgba(224,190,121,0.35); }
+.promo-pick.best .promo-name { color: #e0be79; text-transform: uppercase; letter-spacing: 0.05em; }
 
 /* game-over overlay */
 .over-box { background: #0c111b; border: 1px solid var(--line-2); border-radius: 18px; padding: 28px 32px; text-align: center; box-shadow: 0 30px 70px -20px rgba(0,0,0,0.85); max-width: 90vw; }

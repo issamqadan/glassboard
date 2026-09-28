@@ -2374,14 +2374,27 @@ function doPlay(from, to, promo, viaHelp) {
 function showPromotion(from, to, viaHelp) {
   const ov = document.getElementById("promoOverlay");
   if (!ov) { doPlay(from, to, "q", viaHelp); return; }
-  const choices = ov.querySelector(".promo-choices");
+  const box = ov.querySelector(".promo-box");
   const white = humanColor === "white";
-  choices.innerHTML = ["q", "r", "b", "n"].map((p) => {
+  // First-timers don't know what this is — teach it in the moment (when explanations
+  // are on or it's a guided game). The Queen is pre-marked as the obvious choice.
+  const beginner = explainMoves || firstGame;
+  const NAMES = { q: "Queen", r: "Rook", b: "Bishop", n: "Knight" };
+  const title = beginner ? "Your pawn made it across! 🎉" : "Promote your pawn";
+  const note = beginner
+    ? "A pawn that reaches the far end <b>becomes a stronger piece</b>. Most players choose the <b>Queen</b> — it's the most powerful. Tap one:"
+    : "";
+  const btns = ["q", "r", "b", "n"].map((p) => {
     const glyphChar = white ? p.toUpperCase() : p;
     const g = typeof pieceSVG === "function" ? pieceSVG(glyphChar) : glyphChar;
-    return `<button class="promo-pick" data-p="${p}"><span class="piece ${white ? "white" : "black"}">${g}</span></button>`;
+    return `<button class="promo-pick${p === "q" ? " best" : ""}" data-p="${p}" ${p === "q" ? "autofocus" : ""}>` +
+      `<span class="piece ${white ? "white" : "black"}">${g}</span>` +
+      `<span class="promo-name">${NAMES[p]}${p === "q" ? " · best" : ""}</span></button>`;
   }).join("");
-  choices.querySelectorAll(".promo-pick").forEach((b) => { b.onclick = () => { ov.style.display = "none"; doPlay(from, to, b.dataset.p, viaHelp); }; });
+  box.innerHTML = `<div class="promo-title">${title}</div>` +
+    (note ? `<div class="promo-note">${note}</div>` : "") +
+    `<div class="promo-choices">${btns}</div>`;
+  box.querySelectorAll(".promo-pick").forEach((b) => { b.onclick = () => { ov.style.display = "none"; doPlay(from, to, b.dataset.p, viaHelp); }; });
   ov.style.display = "grid";
 }
 
