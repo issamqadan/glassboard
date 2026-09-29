@@ -1694,10 +1694,34 @@ function buildRecap() {
   const share = `I just ${verb} a ${style} ${lvl}${accuracy != null ? ` with ${accuracy}% accuracy` : ""} on Glassboard ♟️ — chess, in the open.`;
   return { R, persona, accuracy, indepPct, bestCount, fullMoves, lvl, style, op, turning, bestSan, best, worst: worst2, aiLifelines, badges, share, helpable: helpWasAvailable };
 }
+// The game's momentum as a tiny SVG sparkline — your-relative eval over your turns
+// (up = you're ahead, down = behind), teal above the line, red below.
+function recapSparkline(trail) {
+  const n = trail.length;
+  if (n < 3) return "";
+  const W = 300, H = 64, pad = 5, cap = 800;
+  const clamp = (v) => Math.max(-cap, Math.min(cap, v));
+  const x = (i) => pad + (i / (n - 1)) * (W - 2 * pad);
+  const y = (v) => H / 2 - (clamp(v) / cap) * (H / 2 - pad);
+  const pts = trail.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+  const line = "M" + pts.join(" L");
+  const area = `M${x(0).toFixed(1)},${(H / 2).toFixed(1)} L` + pts.join(" L") + ` L${x(n - 1).toFixed(1)},${(H / 2).toFixed(1)} Z`;
+  const endV = trail[n - 1];
+  const endColor = endV > 30 ? "#7ee0d6" : endV < -30 ? "#f2707e" : "#93a2c0";
+  return `<svg class="rc-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" width="100%" height="${H}" aria-hidden="true">` +
+    `<defs><linearGradient id="rcg" x1="0" y1="0" x2="0" y2="1">` +
+      `<stop offset="0" stop-color="#7ee0d6" stop-opacity="0.35"/><stop offset="0.5" stop-color="#7ee0d6" stop-opacity="0.04"/>` +
+      `<stop offset="0.5" stop-color="#f2707e" stop-opacity="0.04"/><stop offset="1" stop-color="#f2707e" stop-opacity="0.32"/></linearGradient></defs>` +
+    `<line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="rgba(255,255,255,0.18)" stroke-width="1" stroke-dasharray="4 4"/>` +
+    `<path d="${area}" fill="url(#rcg)"/>` +
+    `<path d="${line}" fill="none" stroke="#dbe6f4" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` +
+    `<circle cx="${x(n - 1).toFixed(1)}" cy="${y(endV).toFixed(1)}" r="3.5" fill="${endColor}"/></svg>`;
+}
 function openRecap() {
   const sh = document.getElementById("recapSheet"), body = document.getElementById("recapSheetBody");
   if (!sh || !body) return;
   const r = buildRecap();
+  const spark = recapSparkline(evalTrail);
   const cards = [];
   if (r.turning) cards.push(`<div class="rc-card turn"><span class="rc-ic">🔀</span><div><b>Turning point</b><p>Move ${r.turning.move}${r.turning.san ? ` — <b>${escapeHtml(r.turning.san)}</b>` : ""} swung it your way (+${(r.turning.swing / 100).toFixed(1)}).</p></div></div>`);
   if (r.bestSan) cards.push(`<div class="rc-card best"><span class="rc-ic">⭐</span><div><b>Your best move</b><p><b>${escapeHtml(r.bestSan)}</b> — the engine's top choice${r.best && r.best.prov === "own" ? ", and you found it on your own 💪" : "."}</p></div></div>`);
@@ -1708,6 +1732,7 @@ function openRecap() {
     `<div class="rc-hero"><div class="rc-emoji">${r.persona.emoji}</div><div class="rc-title">${escapeHtml(r.persona.title)}</div><div class="rc-line">${escapeHtml(r.persona.line)}</div></div>` +
     `<div class="rc-story">You played ${r.op ? `the <b>${escapeHtml(r.op.name)}</b>` : "a game"} against ${/^[AEIOU]/.test(r.style) ? "an" : "a"} <b>${escapeHtml(r.style)} ${escapeHtml(r.lvl)}</b>${r.R.reason ? ` — ${escapeHtml(r.R.won ? "won" : r.R.draw ? "drawn" : "lost")} by ${escapeHtml(r.R.reason)}` : ""} in ${r.fullMoves} moves.</div>` +
     `<div class="rc-stats">${r.accuracy != null ? stat(r.accuracy + "%", "accuracy") : ""}${r.helpable ? stat(r.indepPct + "%", "your own") : ""}${stat(r.fullMoves, "moves")}</div>` +
+    (spark ? `<div class="rc-spark-wrap"><div class="rc-spark-head">📈 Momentum</div>${spark}<div class="rc-spark-cap"><span style="color:#7ee0d6">▲ you ahead</span> · <span style="color:#f2707e">▼ behind</span></div></div>` : "") +
     (r.badges.length ? `<div class="rc-badges">${r.badges.map((b) => `<span class="rc-badge">${b.ic} ${escapeHtml(b.label)}</span>`).join("")}</div>` : "") +
     (cards.length ? `<div class="rc-cards">${cards.join("")}</div>` : "") +
     `<div class="rc-actions"><button class="rc-share" id="rcShare">🔗 Share</button><button class="rc-again" id="rcAgain">↻ Play again</button></div>`;

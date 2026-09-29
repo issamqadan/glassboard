@@ -342,6 +342,10 @@ button {
   background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); }
 .rc-num { font-size: 1.5rem; font-weight: 800; color: #7ee0d6; font-variant-numeric: tabular-nums; }
 .rc-lbl { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: #8ba0bd; margin-top: 2px; }
+.rc-spark-wrap { padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); }
+.rc-spark-head { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #8ba0bd; margin-bottom: 6px; }
+.rc-spark { display: block; }
+.rc-spark-cap { font-size: 0.72rem; color: #8ba0bd; margin-top: 5px; display: flex; gap: 8px; }
 .rc-badges { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
 .rc-badge { font-size: 0.74rem; font-weight: 700; padding: 4px 10px; border-radius: 999px;
   background: rgba(224,190,121,0.14); color: #e6c98a; border: 1px solid rgba(224,190,121,0.3); }
