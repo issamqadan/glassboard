@@ -99,6 +99,7 @@ function persistAiGame(over) {
     assist: aiAssistOverride,
     aiTokens: aiTokens,
     humanColor: humanColor,
+    aiStyle: aiStyle,
     helpDelivery: helpDelivery,
     helpReceived: helpReceived,
     minutes: setupMinutes,
@@ -132,6 +133,7 @@ async function resumeAiGame(id) {
   aiAssistOverride = rec.assist || "guided";
   game.setAssistOverride(aiAssistOverride); // restore the chosen assistance
   humanColor = rec.humanColor === "black" ? "black" : "white"; // restore your side + orientation
+  aiStyle = (rec.aiStyle && AI_STYLES[rec.aiStyle]) ? rec.aiStyle : "balanced";
   setupMinutes = typeof rec.minutes === "number" ? rec.minutes : 0;
   timedGame = !!rec.timedGame;
   humanMs = typeof rec.humanMs === "number" ? rec.humanMs : setupMinutes * 60000;
@@ -199,12 +201,81 @@ function aiBoost(baseElo) {
   const depth = lean > 0.15 ? undefined : lvl.depth;
   return { lean, skill, movetime, depth, base: lvl.skill, boosted: skill > lvl.skill };
 }
+// Opponent PERSONALITIES. Each opponent is the same engine, but plays with a style
+// by choosing among Stockfish's NEAR-BEST candidate moves (bounded so it never
+// blunders) — so games feel like different people, not one sterile brain.
+const AI_STYLES = {
+  balanced:   { ic: "⚖", name: "Balanced",   desc: "Plays the objectively best move — a classic all-rounder." },
+  aggressive: { ic: "⚔", name: "Aggressive", desc: "Attacks, captures, and chases your king. Loves sharp play." },
+  positional: { ic: "♟", name: "Positional", desc: "Slow squeeze — space, outposts, and quiet build-up." },
+  defensive:  { ic: "🛡", name: "Defensive",  desc: "Rock-solid — trades, simplifies, and keeps its king safe." },
+  wildcard:   { ic: "🎲", name: "Wildcard",   desc: "Unpredictable — mixes it up among sound moves." },
+};
+let setupStyle = "balanced";
+let aiStyle = "balanced"; // the live game's opponent personality
+
+function givesCheck(uci) {
+  try { const g = Game.fromFen(game.fen()); const q = uciToSquares(uci); if (!g.makeMove(q.from, q.to, uci.length > 4 ? uci[4] : undefined)) return false; return g.inCheck(); } catch { return false; }
+}
+// Choose among near-best candidates by the opponent's style. Candidates are
+// Stockfish's MultiPV list (best-first, with evals); we only ever pick from moves
+// within a small eval margin of the best, so personality never costs a blunder.
+function pickStyleMove(cands, style, aiWhite) {
+  if (!cands || !cands.length) return null;
+  cands = cands.filter((c) => c && c.uci);
+  if (!cands.length) return null;
+  if (style === "balanced" || cands.length === 1) return cands[0].uci;
+  const best = cands[0].cp;
+  const margin = (style === "aggressive" || style === "wildcard") ? 90 : 55; // centipawns of allowed "personality"
+  const pool = cands.filter((c) => best - c.cp <= margin).slice(0, 5);
+  if (pool.length <= 1) return cands[0].uci;
+  if (style === "wildcard") return pool[Math.floor(Math.random() * pool.length)].uci;
+  const bs = game.boardString();
+  const kingCh = aiWhite ? "k" : "K"; // the ENEMY (human) king
+  let ek = -1; for (let i = 0; i < 64; i++) if (bs[i] === kingCh) { ek = i; break; }
+  const isEnemy = (c) => c && c !== "." && (aiWhite ? (c >= "a" && c <= "z") : (c >= "A" && c <= "Z"));
+  let bestMv = pool[0].uci, bestScore = -1e9;
+  for (const c of pool) {
+    const q = uciToSquares(c.uci); if (!q) continue;
+    const mover = bs[q.from] || "", tgt = bs[q.to] || "";
+    const cap = isEnemy(tgt);
+    let s = 0;
+    if (style === "aggressive") {
+      if (cap) s += 3 + (PVAL[tgt.toLowerCase()] || 0);
+      if (ek >= 0) s += Math.max(0, 7 - (Math.abs((q.to % 8) - (ek % 8)) + Math.abs(((q.to / 8) | 0) - ((ek / 8) | 0)))); // closer to the enemy king
+      if (givesCheck(c.uci)) s += 6;
+      if (mover === "P" || mover === "p") s += aiWhite ? ((q.to / 8) | 0) : (7 - ((q.to / 8) | 0)); // pushing pawns up
+    } else if (style === "positional") {
+      if ([27, 28, 35, 36].includes(q.to)) s += 4;                        // central squares
+      const home = aiWhite ? 0 : 7;
+      if ("NBnb".includes(mover) && ((q.from / 8) | 0) === home) s += 4;   // develop a piece
+      if (cap) s -= 2;                                                     // avoid early trades
+    } else if (style === "defensive") {
+      if (cap) { const gain = (PVAL[tgt.toLowerCase()] || 0) - (PVAL[(mover || "p").toLowerCase()] || 0); if (gain === 0) s += 3; } // simplify by equal trades
+      if ((mover === "K" || mover === "k") && Math.abs((q.to % 8) - (q.from % 8)) === 2) s += 5; // castle to safety
+      s += 0.5; // gentle bias toward quiet, solid moves
+    }
+    s += (c.cp - best) * 0.02; // tie-break toward the stronger move
+    if (s > bestScore) { bestScore = s; bestMv = c.uci; }
+  }
+  return bestMv;
+}
 function opponentMove(fen, usedLifeline, baseElo) {
   const rustFallback = () => askEngine("bestMove", { fen, elo: usedLifeline ? 3000 : baseElo, rand: usedLifeline ? 0 : Math.random() });
   if (firstGame || !window.GBEngine) return rustFallback();
   const b = aiBoost(baseElo);
+  const moves = uciHistory.length ? uciHistory.slice() : null; // full history → repetition-aware play
+  // Styled opponent: pick among near-best candidates by personality. Full-strength
+  // lifelines and the Balanced style just play the single best move.
+  if (!usedLifeline && aiStyle !== "balanced" && GBEngine.bestMoves) {
+    const opts = { skill: b.skill, movetime: b.movetime, multipv: 4 };
+    if (moves) opts.moves = moves;
+    return GBEngine.bestMoves(fen, opts)
+      .then((cands) => pickStyleMove(cands, aiStyle, engineColor() === "white") || rustFallback())
+      .catch(rustFallback);
+  }
   const opts = usedLifeline ? { skill: 20, movetime: 900 } : { skill: b.skill, movetime: b.movetime, depth: b.depth };
-  if (uciHistory.length) opts.moves = uciHistory.slice(); // full history → repetition-aware play
+  if (moves) opts.moves = moves;
   return GBEngine.bestMove(fen, opts).then((u) => u || rustFallback()).catch(rustFallback);
 }
 const RUNGS = [
@@ -428,6 +499,14 @@ function showSetup() {
       times.querySelectorAll(".cchoice").forEach((x) => x.classList.toggle("on", x === t));
     };
   });
+  const styles = document.getElementById("styleChoice");
+  if (styles) styles.querySelectorAll(".cchoice").forEach((s) => {
+    s.classList.toggle("on", s.dataset.style === setupStyle);
+    s.onclick = () => {
+      setupStyle = s.dataset.style;
+      styles.querySelectorAll(".cchoice").forEach((x) => x.classList.toggle("on", x === s));
+    };
+  });
   const modes = document.getElementById("assistModes");
   if (modes) modes.querySelectorAll(".amode").forEach((m) => {
     m.classList.toggle("on", m.dataset.mode === setupMode);
@@ -485,6 +564,7 @@ function startFromSetup() {
   // Resolve the side you play (random picks one now). Randomness comes from the UI,
   // not the engine — Math.random is fine here (no reproducibility requirement).
   humanColor = setupColor === "black" ? "black" : setupColor === "white" ? "white" : (Math.random() < 0.5 ? "white" : "black");
+  aiStyle = setupStyle === "random" ? (["aggressive", "positional", "defensive", "wildcard"][Math.floor(Math.random() * 4)]) : setupStyle;
   firstGame = false;
   newGame();
 }
@@ -1016,6 +1096,10 @@ function glIdentityRow() {
   if (idn.you.name) bits.push(`<span class="gl-id you" title="${escapeHtml(idn.you.idea || "")}">📖 You · ${escapeHtml(idn.you.name)}${idn.you.planHint ? ` → ${escapeHtml(idn.you.planHint)}` : ""}</span>`);
   if (idn.opp.name) bits.push(`<span class="gl-id opp" title="${escapeHtml(idn.opp.idea || "")}">🎯 Opp · ${escapeHtml(idn.opp.name)}</span>`);
   else if (idn.opp.read) bits.push(`<span class="gl-id opp" title="${escapeHtml(idn.opp.read)}">🎯 ${escapeHtml(idn.opp.read)}</span>`);
+  if (!firstGame && aiStyle && aiStyle !== "balanced" && AI_STYLES[aiStyle]) {
+    const s = AI_STYLES[aiStyle];
+    bits.push(`<span class="gl-id style" title="${escapeHtml(s.desc)}">${s.ic} ${escapeHtml(s.name)}</span>`);
+  }
   // Symmetric-glass badge: when your leaning on help has pushed the AI above the
   // level you picked, show it — the same help meter drives both sides.
   const baseElo = engineEloEl ? parseInt(engineEloEl.value, 10) : 1500;

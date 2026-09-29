@@ -999,6 +999,7 @@ main.game #coach { display: none; }
 .glass-lens .gl-id.you { background: rgba(126,224,214,0.14); color: #a7e6dd; }
 .glass-lens .gl-id.opp { background: rgba(242,112,126,0.14); color: #f2a6ae; max-width: 62%; }
 .glass-lens .gl-id.boost { background: rgba(242,176,58,0.18); color: #f0c06a; font-weight: 800; }
+.glass-lens .gl-id.style { background: rgba(159,192,255,0.16); color: #b8ccff; }
 .glass-lens .gl-plansbtn { font: inherit; font-weight: 800; font-size: 0.74rem; cursor: pointer; color: #cfe0f0;
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); border-radius: 9px; padding: 5px 9px;
   white-space: nowrap; touch-action: manipulation; margin-left: auto; }
