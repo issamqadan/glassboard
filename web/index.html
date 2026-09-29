@@ -30,6 +30,19 @@
         } catch (e) {}
       })();
     </script>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#0c111b" />
+    <link rel="icon" href="./icon.svg" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Glassboard" />
+    <script>
+      // Offline support: cache the whole app so it plays with no signal (planes!).
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () { navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(function () {}); });
+      }
+    </script>
   </head>
   <body>
     <!-- Pre-game setup: lock in the opponent and how much help you want. -->
@@ -41,6 +54,7 @@
           <span class="setup-eyebrow">Play the AI</span>
           <h2 class="setup-title">Set up your match</h2>
           <p class="setup-sub">Choose who you're up against — and how much help you want in your corner.</p>
+          <p class="setup-offline" id="setupOffline">✈️ <b>Works offline.</b> Load this page once with wifi and you can play the AI with no signal — perfect for a flight.</p>
         </div>
         <div class="setup-section">
           <div class="setup-label">Opponent</div>

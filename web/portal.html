@@ -15,6 +15,15 @@
           if (latest && cur && latest !== cur && !sessionStorage.getItem(key)) { sessionStorage.setItem(key, "1"); location.replace(location.pathname + "?v=" + latest); } }).catch(function () {});
     } catch (e) {} })();
   </script>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="theme-color" content="#0c111b" />
+  <link rel="icon" href="./icon.svg" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Glassboard" />
+  <script>
+    if ("serviceWorker" in navigator) { window.addEventListener("load", function () { navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(function () {}); }); }
+  </script>
   <style>
     /* Glassboard portal — committed dark "glass-box" world */
     :root {

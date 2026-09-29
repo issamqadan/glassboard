@@ -565,6 +565,9 @@ button {
   background: rgba(242,180,109,0.09); border: 1px solid rgba(242,180,109,0.24);
   font-size: 0.8rem; color: #c9b79c; line-height: 1.5; }
 .setup-symmetry b { color: #f2c98a; }
+.setup-offline { margin: 10px 0 0; padding: 9px 12px; border-radius: 10px; font-size: 0.8rem; line-height: 1.5;
+  background: rgba(92,201,236,0.09); border: 1px solid rgba(92,201,236,0.24); color: #a9c6d6; }
+.setup-offline b { color: #bfe4f2; }
 
 /* friendly level chips (assess your level without a rating) */
 .lvl-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
