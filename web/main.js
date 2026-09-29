@@ -800,7 +800,7 @@ function onPositionChanged() {
         freeCaptures = assistData.freeCaptures || [];
         if ((assistData.candidates || []).length) {
           helpWasAvailable = true; lastEval = assistData.candidates[0].score;
-          if (!firstGame && lastEval != null) evalTrail.push(lastEval); // the recap's story curve
+          if (!firstGame && lastEval != null) evalTrail.push({ ply: uciHistory.length, cp: lastEval }); // {ply,cp} — the recap's story curve
           if (!firstGame) {
             // The AI's move swung the position your way → it slipped, you've a chance.
             if (evalBeforeEngine != null) {
@@ -1653,12 +1653,18 @@ function buildRecap() {
   const lvl = levelName(engineEloEl.value);
   const style = AI_STYLES[aiStyle] ? AI_STYLES[aiStyle].name : "Balanced";
   const op = currentOpening();
-  const lowest = evalTrail.length ? Math.min(...evalTrail) : 0;
+  const cps = evalTrail.map((e) => e.cp);
+  const lowest = cps.length ? Math.min(...cps) : 0;
   const comeback = R.won && lowest <= -180;
-  // Turning point: the biggest swing your way between consecutive turns.
-  let tpK = -1, tpSwing = 0;
-  for (let i = 1; i < evalTrail.length; i++) { const d = evalTrail[i] - evalTrail[i - 1]; if (d > tpSwing) { tpSwing = d; tpK = i; } }
-  const turning = (tpK > 0 && tpSwing >= 150) ? { san: sanForPly(yourMovePly(tpK)) || sanForPly(yourMovePly(tpK - 1)), swing: tpSwing, move: tpK + 1 } : null;
+  // Turning point: the biggest swing your way between consecutive turns, attributed
+  // to YOUR move that started it (evalTrail[i-1].ply is a real played move → valid SAN).
+  let tpI = -1, tpSwing = 0;
+  for (let i = 1; i < evalTrail.length; i++) { const d = evalTrail[i].cp - evalTrail[i - 1].cp; if (d > tpSwing) { tpSwing = d; tpI = i; } }
+  let turning = null;
+  if (tpI > 0 && tpSwing >= 150) {
+    const ply = evalTrail[tpI - 1].ply;
+    turning = { san: sanForPly(ply), swing: tpSwing, move: Math.floor(ply / 2) + 1 };
+  }
   // Best (a top move — prefer one you found yourself) and biggest slip.
   let best = null, worst = null;
   moveReview.forEach((m, k) => {
@@ -1697,16 +1703,17 @@ function buildRecap() {
 // The game's momentum as a tiny SVG sparkline — your-relative eval over your turns
 // (up = you're ahead, down = behind), teal above the line, red below.
 function recapSparkline(trail) {
-  const n = trail.length;
+  const vals = trail.map((e) => (typeof e === "number" ? e : e.cp));
+  const n = vals.length;
   if (n < 3) return "";
   const W = 300, H = 64, pad = 5, cap = 800;
   const clamp = (v) => Math.max(-cap, Math.min(cap, v));
   const x = (i) => pad + (i / (n - 1)) * (W - 2 * pad);
   const y = (v) => H / 2 - (clamp(v) / cap) * (H / 2 - pad);
-  const pts = trail.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+  const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
   const line = "M" + pts.join(" L");
   const area = `M${x(0).toFixed(1)},${(H / 2).toFixed(1)} L` + pts.join(" L") + ` L${x(n - 1).toFixed(1)},${(H / 2).toFixed(1)} Z`;
-  const endV = trail[n - 1];
+  const endV = vals[n - 1];
   const endColor = endV > 30 ? "#7ee0d6" : endV < -30 ? "#f2707e" : "#93a2c0";
   return `<svg class="rc-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" width="100%" height="${H}" aria-hidden="true">` +
     `<defs><linearGradient id="rcg" x1="0" y1="0" x2="0" y2="1">` +
