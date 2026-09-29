@@ -967,11 +967,24 @@ function renderEval() {
 // "helpfully" scrolls into view, jerking the page on every move. So we snapshot
 // the scroll position before rendering and restore it (now + next frame), keeping
 // the board perfectly stationary as you and the opponent move.
+// A real AI game is playable offline once the app is cached (service worker in
+// control) and the game is saved on this device — surface that subtly, in context.
+function offlineReady() { return !!(navigator.serviceWorker && navigator.serviceWorker.controller); }
+// First visit: repaint once the service worker takes control, so the ✈️ pill shows.
+if (typeof navigator !== "undefined" && navigator.serviceWorker) {
+  navigator.serviceWorker.addEventListener("controllerchange", () => { try { renderOfflinePill(); } catch {} });
+}
+function renderOfflinePill() {
+  const el = document.getElementById("offlinePill");
+  if (!el) return;
+  el.hidden = firstGame || !offlineReady() || !aiSaved;
+}
 function paint() {
   keepScroll(() => {
     renderFirstGame();
     renderBoard();
     renderPlayers();
+    renderOfflinePill();
     renderEval();
     renderAiAssist();
     renderCoach();

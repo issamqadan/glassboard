@@ -112,6 +112,8 @@
     .mode-chip { font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; padding:2px 7px; border-radius:999px; vertical-align:middle;
       background:rgba(92,201,236,0.14); color:var(--accent); border:1px solid rgba(92,201,236,0.3); }
     .mode-chip.casual { background:rgba(126,224,214,0.14); color:#7ee0d6; border-color:rgba(126,224,214,0.3); }
+    .off-chip { font-size:0.62rem; font-weight:700; letter-spacing:0.04em; padding:2px 7px; border-radius:999px; vertical-align:middle;
+      background:rgba(92,201,236,0.12); color:#9fd0e2; border:1px solid rgba(92,201,236,0.28); }
     .g-meta { font-size:0.75rem; color:var(--faint); margin-top:7px; }
     .g-meta .mv-you { color:var(--good); font-weight:640; }
     .g-meta .mv-them { color:var(--muted); font-weight:600; }
@@ -356,6 +358,9 @@
     // Dev/testing affordances (e.g. "Test opponent") only show with ?test or ?dev —
     // a real player never sees the solo-testing plumbing.
     const DEV = (() => { const q = new URLSearchParams(location.search); return q.has('test') || q.has('dev'); })();
+    // A solo AI game is playable with no wifi once the app is cached (service worker
+    // controlling this page) — AI games save to this device, so they resume offline.
+    const offlineReady = () => !!(navigator.serviceWorker && navigator.serviceWorker.controller);
 
     // ---- identity ----
     function openIdentity() {
@@ -835,7 +840,7 @@
           <div class="g-row">
             <div class="g-preview" onclick="location.href='./index.html?g=${g.id}'" title="Resume game" role="button">${miniBoard(g.fen, 'white', boardThemeFor(g.id))}</div>
             <div class="g-main">
-              <div class="g-name">🤖 Glassboard AI <span class="g-elo">${g.engineElo || ''}</span> <span class="mode-chip">vs AI</span></div>
+              <div class="g-name">🤖 Glassboard AI <span class="g-elo">${g.engineElo || ''}</span> <span class="mode-chip">vs AI</span>${offlineReady() ? ' <span class="off-chip" title="Saved on this device — resume with no wifi">✈️ Offline</span>' : ''}</div>
               <div class="g-sub">You ${g.humanElo || ''} · solo game on this device</div>
               ${statusHtml}
               ${meta.length ? `<div class="g-meta">${meta.join(' · ')}</div>` : ''}
@@ -857,6 +862,9 @@
 
     // ---- init ----
     renderLadder(); renderAiGames(); renderGames(); renderRivals();
+    // When the service worker takes control (first visit), the offline chips become
+    // valid — refresh so "✈️ Offline" appears without a manual reload.
+    if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('controllerchange', () => { renderAiGames(); });
     if (me) { renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames(); } else openIdentity();
     setInterval(renderProfile, 20000);
   </script>
