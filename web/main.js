@@ -148,7 +148,7 @@ async function resumeAiGame(id) {
   helpRevealed = helpDelivery === "open"; helpRequestPending = false;
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; aiResigned = false; aiHopeless = 0; mateKingSq = -1;
-  indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
+  indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null; evalTrail = [];
   pickedStrategyId = null; followBook = false; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
   firstGame = false;
   hideOver();
@@ -336,6 +336,8 @@ let indepOwn = 0, indepFollowed = 0;
 // measure how good your (assisted) play actually was in a real game.
 let moveReview = []; // [{cp, wasBest}]
 let lastEval = null; // engine's read of your position (white-relative cp), for the live pill
+let evalTrail = []; // your-relative eval after each of your turns — the recap's story curve
+let lastResult = null; // { won, draw, reason } of the finished game — for the recap
 let evalBeforeEngine = null; // white-relative eval right after YOUR move — to spot the AI slipping
 let freeCaptures = [];
 let lastStratSig = ""; // signature of strategies last seen while the fold was open
@@ -677,6 +679,12 @@ async function main() {
   if (ons) ons.addEventListener("click", () => { hideOver(); firstGame = false; showSetup(); });
   const ocl = document.getElementById("overClose");
   if (ocl) ocl.addEventListener("click", hideOver);
+  const orc = document.getElementById("overRecap");
+  if (orc) orc.addEventListener("click", openRecap);
+  const rcsheet = document.getElementById("recapSheet"), rcclose = document.getElementById("recapSheetClose");
+  const closeRecap = () => { if (rcsheet) rcsheet.style.display = "none"; };
+  if (rcclose) rcclose.addEventListener("click", closeRecap);
+  if (rcsheet) rcsheet.addEventListener("click", (e) => { if (e.target === rcsheet) closeRecap(); });
   // Resume a saved game if the lobby sent us here with ?g=<id>; a total beginner
   // goes straight into the guided first game; otherwise show the match setup.
   const gid = new URLSearchParams(location.search).get("g");
@@ -702,7 +710,7 @@ function newGame() {
   humanMs = engineMs = setupMinutes * 60000;
   flagged = false; flagLoser = "";
   mateKingSq = -1;
-  indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null;
+  indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null; evalTrail = [];
   selected = null;
   legalTargets = [];
   lastMove = null;
@@ -792,6 +800,7 @@ function onPositionChanged() {
         freeCaptures = assistData.freeCaptures || [];
         if ((assistData.candidates || []).length) {
           helpWasAvailable = true; lastEval = assistData.candidates[0].score;
+          if (!firstGame && lastEval != null) evalTrail.push(lastEval); // the recap's story curve
           if (!firstGame) {
             // The AI's move swung the position your way → it slipped, you've a chance.
             if (evalBeforeEngine != null) {
@@ -1584,6 +1593,7 @@ function showGameOverIfNeeded() {
   else if (st === "insufficient") { reason = "insufficient material"; }
   else if (st === "fifty-move") { reason = "fifty-move rule"; }
   const draw = winner === "", won = winner === humanColor;
+  lastResult = { won, draw, reason }; // captured for the ✨ Recap
   const res = document.getElementById("overResult"), rea = document.getElementById("overReason");
 
   let how = "";
@@ -1617,6 +1627,100 @@ function showGameOverIfNeeded() {
   if (window.gbFeedback) gbFeedback.render(document.getElementById("overFeedback"), { mode: "ai", gameId: aiGameId || "" });
   setBoardGlow(draw ? "draw" : won ? "win" : "loss"); // highlight the result on the board (which stays visible)
   ov.style.display = "grid";
+}
+
+// ---- ✨ Game Recap: a playful, shareable highlight reel of the game just played ----
+function yourMovePly(k) { return humanColor === "white" ? 2 * k : 2 * k + 1; }
+function sanForPly(ply) {
+  if (ply == null || ply < 0 || ply >= uciHistory.length) return "";
+  const arr = startBoardArr();
+  for (let i = 0; i < ply; i++) applyUciArr(arr, uciHistory[i]);
+  try { return sanFromArr(arr, uciHistory[ply]); } catch { return ""; }
+}
+function buildRecap() {
+  const R = lastResult || { won: false, draw: false, reason: "" };
+  const rev = moveReview.filter((m) => m.cp != null && m.cp >= 0);
+  const yourMoveCount = moveReview.length;
+  const fullMoves = Math.ceil(uciHistory.length / 2);
+  let accuracy = null;
+  if (rev.length >= 3) {
+    const avg = rev.reduce((s, m) => s + m.cp, 0) / rev.length;
+    accuracy = Math.round(Math.max(12, Math.min(99, 100 * Math.exp(-avg / 300))));
+  }
+  const bestCount = moveReview.filter((m) => m.wasBest).length;
+  const totalHelpable = Math.max(1, indepOwn + indepFollowed);
+  const indepPct = Math.round((indepOwn / totalHelpable) * 100);
+  const lvl = levelName(engineEloEl.value);
+  const style = AI_STYLES[aiStyle] ? AI_STYLES[aiStyle].name : "Balanced";
+  const op = currentOpening();
+  const lowest = evalTrail.length ? Math.min(...evalTrail) : 0;
+  const comeback = R.won && lowest <= -180;
+  // Turning point: the biggest swing your way between consecutive turns.
+  let tpK = -1, tpSwing = 0;
+  for (let i = 1; i < evalTrail.length; i++) { const d = evalTrail[i] - evalTrail[i - 1]; if (d > tpSwing) { tpSwing = d; tpK = i; } }
+  const turning = (tpK > 0 && tpSwing >= 150) ? { san: sanForPly(yourMovePly(tpK)) || sanForPly(yourMovePly(tpK - 1)), swing: tpSwing, move: tpK + 1 } : null;
+  // Best (a top move — prefer one you found yourself) and biggest slip.
+  let best = null, worst = null;
+  moveReview.forEach((m, k) => {
+    if (m.cp == null) return;
+    if (m.wasBest && (!best || (m.prov === "own" && best.prov !== "own"))) best = { k, prov: m.prov };
+    if (!worst || m.cp > worst.cp) worst = { k, cp: m.cp };
+  });
+  const bestSan = best ? sanForPly(yourMovePly(best.k)) : "";
+  const worst2 = worst && worst.cp >= 120 ? { san: sanForPly(yourMovePly(worst.k)), cp: worst.cp, move: worst.k + 1 } : null;
+  const aiLifelines = AI_TOKENS_MAX - aiTokens;
+  // Persona — the fun headline.
+  let persona;
+  if (R.draw) persona = { emoji: "🛡", title: "Held the Line", line: "A hard-fought draw — you didn't crack." };
+  else if (!R.won) persona = { emoji: "📚", title: "Learning Round", line: "Not this time — but every loss teaches. See the turning point below." };
+  else if (comeback) persona = { emoji: "🔥", title: "Comeback Kid", line: "You were on the ropes — and turned it around." };
+  else if (/Master|Expert/.test(lvl)) persona = { emoji: "🐉", title: "Giant Slayer", line: `You took down a ${style} ${lvl}.` };
+  else if (accuracy != null && accuracy >= 90 && indepPct >= 60) persona = { emoji: "🎩", title: "The Maestro", line: "Precise — and mostly on your own." };
+  else if (helpWasAvailable && indepPct >= 75) persona = { emoji: "💪", title: "Solo Act", line: "You found the moves yourself." };
+  else if (helpWasAvailable && indepFollowed > indepOwn) persona = { emoji: "🤝", title: "Well-Guided", line: "You leaned on the help and it paid off — next time, try needing it less." };
+  else if (R.reason === "checkmate") persona = { emoji: "⚔", title: "The Finisher", line: "Closed it out with checkmate." };
+  else persona = { emoji: "🏆", title: "Winner", line: "A solid win." };
+  // Badges.
+  const badges = [];
+  if (accuracy != null && accuracy >= 85) badges.push({ ic: "🎯", label: `${accuracy}% accuracy` });
+  if (R.reason === "checkmate" && R.won) badges.push({ ic: "♚", label: "Checkmate" });
+  if (helpWasAvailable && indepPct >= 70) badges.push({ ic: "💪", label: `${indepPct}% your own` });
+  if (aiLifelines > 0) badges.push({ ic: "🛟", label: `AI dug deep ×${aiLifelines}` });
+  if (op) badges.push({ ic: "📖", label: op.name });
+  if (fullMoves >= 40) badges.push({ ic: "🐢", label: `${fullMoves}-move epic` });
+  if (bestCount >= 5) badges.push({ ic: "⭐", label: `${bestCount} best moves` });
+  if (comeback) badges.push({ ic: "🔥", label: "Comeback" });
+  const verb = R.draw ? "drew with" : R.won ? "beat" : "battled";
+  const share = `I just ${verb} a ${style} ${lvl}${accuracy != null ? ` with ${accuracy}% accuracy` : ""} on Glassboard ♟️ — chess, in the open.`;
+  return { R, persona, accuracy, indepPct, bestCount, fullMoves, lvl, style, op, turning, bestSan, best, worst: worst2, aiLifelines, badges, share, helpable: helpWasAvailable };
+}
+function openRecap() {
+  const sh = document.getElementById("recapSheet"), body = document.getElementById("recapSheetBody");
+  if (!sh || !body) return;
+  const r = buildRecap();
+  const cards = [];
+  if (r.turning) cards.push(`<div class="rc-card turn"><span class="rc-ic">🔀</span><div><b>Turning point</b><p>Move ${r.turning.move}${r.turning.san ? ` — <b>${escapeHtml(r.turning.san)}</b>` : ""} swung it your way (+${(r.turning.swing / 100).toFixed(1)}).</p></div></div>`);
+  if (r.bestSan) cards.push(`<div class="rc-card best"><span class="rc-ic">⭐</span><div><b>Your best move</b><p><b>${escapeHtml(r.bestSan)}</b> — the engine's top choice${r.best && r.best.prov === "own" ? ", and you found it on your own 💪" : "."}</p></div></div>`);
+  if (r.worst) cards.push(`<div class="rc-card slip"><span class="rc-ic">😅</span><div><b>The one that got away</b><p>Move ${r.worst.move}${r.worst.san ? ` — <b>${escapeHtml(r.worst.san)}</b>` : ""} cost about ${(r.worst.cp / 100).toFixed(1)}. One to learn from.</p></div></div>`);
+  if (r.aiLifelines > 0) cards.push(`<div class="rc-card"><span class="rc-ic">🛟</span><div><b>You had it sweating</b><p>The AI spent ${r.aiLifelines} lifeline${r.aiLifelines === 1 ? "" : "s"} — moments it dug deep because you were pushing it.</p></div></div>`);
+  const stat = (n, l) => `<div class="rc-stat"><div class="rc-num">${n}</div><div class="rc-lbl">${l}</div></div>`;
+  body.innerHTML =
+    `<div class="rc-hero"><div class="rc-emoji">${r.persona.emoji}</div><div class="rc-title">${escapeHtml(r.persona.title)}</div><div class="rc-line">${escapeHtml(r.persona.line)}</div></div>` +
+    `<div class="rc-story">You played ${r.op ? `the <b>${escapeHtml(r.op.name)}</b>` : "a game"} against ${/^[AEIOU]/.test(r.style) ? "an" : "a"} <b>${escapeHtml(r.style)} ${escapeHtml(r.lvl)}</b>${r.R.reason ? ` — ${escapeHtml(r.R.won ? "won" : r.R.draw ? "drawn" : "lost")} by ${escapeHtml(r.R.reason)}` : ""} in ${r.fullMoves} moves.</div>` +
+    `<div class="rc-stats">${r.accuracy != null ? stat(r.accuracy + "%", "accuracy") : ""}${r.helpable ? stat(r.indepPct + "%", "your own") : ""}${stat(r.fullMoves, "moves")}</div>` +
+    (r.badges.length ? `<div class="rc-badges">${r.badges.map((b) => `<span class="rc-badge">${b.ic} ${escapeHtml(b.label)}</span>`).join("")}</div>` : "") +
+    (cards.length ? `<div class="rc-cards">${cards.join("")}</div>` : "") +
+    `<div class="rc-actions"><button class="rc-share" id="rcShare">🔗 Share</button><button class="rc-again" id="rcAgain">↻ Play again</button></div>`;
+  const shareBtn = document.getElementById("rcShare");
+  if (shareBtn) shareBtn.onclick = () => {
+    const done = () => { shareBtn.textContent = "✓ Copied"; setTimeout(() => { shareBtn.textContent = "🔗 Share"; }, 1600); };
+    if (navigator.share) { navigator.share({ text: r.share }).catch(() => {}); }
+    else if (navigator.clipboard) { navigator.clipboard.writeText(r.share).then(done).catch(done); }
+    else done();
+  };
+  const again = document.getElementById("rcAgain");
+  if (again) again.onclick = () => { sh.style.display = "none"; hideOver(); newGame(); };
+  sh.style.display = "grid";
 }
 
 // End-of-game agency read: how much help you leaned on, and the trend. The

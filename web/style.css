@@ -323,6 +323,38 @@ button {
 /* Live eval pill — the engine's read of your position (measurement during play). */
 .eval-pill { text-transform: none; font-variant-numeric: tabular-nums; font-weight: 700; }
 .offline-pill { text-transform: none; font-weight: 700; background: rgba(92,201,236,0.12); color: #9fd0e2; border: 1px solid rgba(92,201,236,0.28); }
+/* ✨ Game recap */
+.over-recap-btn { display: block; width: 100%; margin: 4px 0 12px; font: inherit; font-weight: 800; font-size: 1rem; cursor: pointer;
+  color: #04222d; border: 0; border-radius: 12px; padding: 13px;
+  background: linear-gradient(135deg, #f0c06a, #d99a3f); box-shadow: 0 10px 28px -12px rgba(224,190,121,0.8); touch-action: manipulation; }
+.over-recap-btn:hover { transform: translateY(-1px); }
+.recap-sheet-body { display: flex; flex-direction: column; gap: 14px; padding: 6px 2px 10px; }
+.rc-hero { text-align: center; padding: 10px 0 4px; }
+.rc-emoji { font-size: 3.2rem; line-height: 1; animation: rc-pop .5s cubic-bezier(0.2,0.8,0.2,1) both; }
+@keyframes rc-pop { from { opacity: 0; transform: scale(0.5) rotate(-8deg); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .rc-emoji { animation: none; } }
+.rc-title { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; margin-top: 6px; color: #f4e7c8; }
+.rc-line { color: #c3d0e6; font-size: 0.9rem; margin-top: 3px; }
+.rc-story { text-align: center; color: #b3c1d8; font-size: 0.9rem; line-height: 1.5; }
+.rc-story b { color: #eef4fb; }
+.rc-stats { display: flex; justify-content: center; gap: 10px; }
+.rc-stat { flex: 1; max-width: 120px; text-align: center; padding: 12px 6px; border-radius: 14px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); }
+.rc-num { font-size: 1.5rem; font-weight: 800; color: #7ee0d6; font-variant-numeric: tabular-nums; }
+.rc-lbl { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: #8ba0bd; margin-top: 2px; }
+.rc-badges { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
+.rc-badge { font-size: 0.74rem; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  background: rgba(224,190,121,0.14); color: #e6c98a; border: 1px solid rgba(224,190,121,0.3); }
+.rc-cards { display: flex; flex-direction: column; gap: 8px; }
+.rc-card { display: flex; gap: 11px; align-items: flex-start; padding: 11px 13px; border-radius: 12px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); }
+.rc-card.turn { border-color: rgba(126,224,214,0.35); } .rc-card.best { border-color: rgba(224,190,121,0.35); } .rc-card.slip { border-color: rgba(242,112,126,0.3); }
+.rc-card .rc-ic { font-size: 1.2rem; flex: 0 0 auto; }
+.rc-card b { color: #eef4fb; font-size: 0.9rem; } .rc-card p { margin: 2px 0 0; color: #b3c1d8; font-size: 0.84rem; line-height: 1.4; }
+.rc-actions { display: flex; gap: 10px; margin-top: 2px; }
+.rc-share, .rc-again { flex: 1; font: inherit; font-weight: 800; font-size: 0.95rem; cursor: pointer; border-radius: 12px; padding: 13px; touch-action: manipulation; }
+.rc-share { background: rgba(255,255,255,0.07); color: #eaf0fb; border: 1px solid rgba(255,255,255,0.18); }
+.rc-again { background: linear-gradient(140deg, #7ee0d6, #4bb3a6); color: #04222d; border: 0; }
 .eval-pill.good { background: rgba(69,200,110,0.16); color: #6fe0a0; }
 .eval-pill.bad { background: rgba(242,109,122,0.16); color: #f4a2ab; }
 .eval-pill.even { background: rgba(147,162,192,0.14); color: #b9c6da; }

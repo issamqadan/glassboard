@@ -230,6 +230,7 @@
         <div class="over-box">
           <div class="over-result" id="overResult">—</div>
           <div class="over-reason" id="overReason"></div>
+          <button class="over-recap-btn" id="overRecap" title="Your game highlights">✨ See your game recap</button>
           <div id="overFeedback" class="over-feedback" hidden></div>
           <div class="over-actions">
             <button class="over-btn primary" id="overRematch" title="Same opponent, colour & assistance">↻ Rematch</button>
@@ -237,6 +238,12 @@
             <a class="over-btn" href="./portal.html">← Lobby</a>
           </div>
           <button class="over-close" id="overClose">Review the board</button>
+        </div>
+      </div>
+      <div id="recapSheet" class="sheet-overlay" style="display:none">
+        <div class="sheet">
+          <div class="sheet-head"><span>✨ Game recap</span><span class="sheet-sub">your highlights, in the open</span><button class="sheet-close" id="recapSheetClose">✕</button></div>
+          <div id="recapSheetBody" class="recap-sheet-body"></div>
         </div>
       </div>
     </main>
