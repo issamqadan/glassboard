@@ -202,6 +202,29 @@ async fn build_store() -> Store {
             .execute(&pool)
             .await
             .expect("create feedback table");
+            // Play scores — cumulative per player (Self + Assist = Total) + a light
+            // strength rating. Fed by the client on every finished AI game.
+            sqlx::query(
+                "CREATE TABLE IF NOT EXISTS scores (\
+                   player TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', total BIGINT NOT NULL DEFAULT 0, \
+                   self_pts BIGINT NOT NULL DEFAULT 0, assist_pts BIGINT NOT NULL DEFAULT 0, \
+                   games INT NOT NULL DEFAULT 0, wins INT NOT NULL DEFAULT 0, draws INT NOT NULL DEFAULT 0, \
+                   losses INT NOT NULL DEFAULT 0, rating INT NOT NULL DEFAULT 0, updated BIGINT NOT NULL DEFAULT 0)",
+            )
+            .execute(&pool)
+            .await
+            .expect("create scores table");
+            // Per-game results — the log admin aggregates (win-rate per level validates
+            // that the AI actually plays at the level picked).
+            sqlx::query(
+                "CREATE TABLE IF NOT EXISTS results (\
+                   ts BIGINT NOT NULL, player TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '', \
+                   level TEXT NOT NULL DEFAULT '', result TEXT NOT NULL DEFAULT '', accuracy INT NOT NULL DEFAULT 0, \
+                   style TEXT NOT NULL DEFAULT '', opening TEXT NOT NULL DEFAULT '', points INT NOT NULL DEFAULT 0)",
+            )
+            .execute(&pool)
+            .await
+            .expect("create results table");
             println!("Accounts + games: Postgres (durable)");
             Store::Pg(pool)
         }
@@ -546,6 +569,8 @@ async fn main() {
         .route("/account", post(account))
         .route("/profile", get(profile))
         .route("/record", post(record))
+        .route("/score", post(post_score))
+        .route("/admin", get(admin_stats))
         .layer(CorsLayer::permissive())
         .with_state(AppState { rooms, store });
 
@@ -837,6 +862,112 @@ async fn list_feedback(State(store): State<Store>) -> Json<serde_json::Value> {
         }
     }
     Json(serde_json::json!({ "feedback": rows }))
+}
+
+// ---- play scores + admin --------------------------------------------------
+
+#[derive(Deserialize)]
+struct ScoreReq {
+    #[serde(default)]
+    player: String,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    level: String,
+    #[serde(default)]
+    result: String, // "win" | "draw" | "loss"
+    #[serde(default)]
+    accuracy: i32,
+    #[serde(default)]
+    style: String,
+    #[serde(default)]
+    opening: String,
+    #[serde(default)]
+    points: i64,
+    #[serde(default, rename = "self")]
+    self_pts: i64,
+    #[serde(default)]
+    assist: i64,
+    #[serde(default)]
+    rating: i32,
+}
+/// One finished AI game from the client: append to the results log and accumulate
+/// the player's cumulative score. (Client sends per-game deltas; server sums.)
+async fn post_score(State(store): State<Store>, Json(b): Json<ScoreReq>) -> Json<serde_json::Value> {
+    if b.player.is_empty() {
+        return Json(serde_json::json!({ "ok": false }));
+    }
+    if let Store::Pg(pool) = &store {
+        let ts = now_secs() as i64;
+        let (w, d, l) = ((b.result == "win") as i32, (b.result == "draw") as i32, (b.result == "loss") as i32);
+        let _ = sqlx::query(
+            "INSERT INTO results (ts,player,name,level,result,accuracy,style,opening,points) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        )
+        .bind(ts).bind(&b.player).bind(&b.name).bind(&b.level).bind(&b.result)
+        .bind(b.accuracy).bind(&b.style).bind(&b.opening).bind(b.points as i32)
+        .execute(pool).await;
+        let _ = sqlx::query(
+            "INSERT INTO scores (player,name,total,self_pts,assist_pts,games,wins,draws,losses,rating,updated) \
+             VALUES ($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10) \
+             ON CONFLICT (player) DO UPDATE SET name=EXCLUDED.name, total=scores.total+EXCLUDED.total, \
+               self_pts=scores.self_pts+EXCLUDED.self_pts, assist_pts=scores.assist_pts+EXCLUDED.assist_pts, \
+               games=scores.games+1, wins=scores.wins+EXCLUDED.wins, draws=scores.draws+EXCLUDED.draws, \
+               losses=scores.losses+EXCLUDED.losses, rating=EXCLUDED.rating, updated=EXCLUDED.updated",
+        )
+        .bind(&b.player).bind(&b.name).bind(b.points).bind(b.self_pts).bind(b.assist)
+        .bind(w).bind(d).bind(l).bind(b.rating).bind(ts)
+        .execute(pool).await;
+    }
+    Json(serde_json::json!({ "ok": true }))
+}
+
+/// Admin dashboard data — gated by the ADMIN_KEY env var (?key=...). Aggregates the
+/// leaderboard, per-level win-rates (validates AI calibration), top openings, and
+/// recent games. Returns {error} unless the key matches.
+async fn admin_stats(State(store): State<Store>, Query(q): Query<HashMap<String, String>>) -> Json<serde_json::Value> {
+    let key = q.get("key").cloned().unwrap_or_default();
+    let admin = std::env::var("ADMIN_KEY").unwrap_or_default();
+    if admin.is_empty() || key != admin {
+        return Json(serde_json::json!({ "error": "unauthorized" }));
+    }
+    let (mut players, mut levels, mut openings, mut recent) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let (mut games_total, mut players_total) = (0i64, 0i64);
+    if let Store::Pg(pool) = &store {
+        if let Ok(rs) = sqlx::query("SELECT name,total,self_pts,assist_pts,games,wins,draws,losses,rating FROM scores ORDER BY total DESC LIMIT 200").fetch_all(pool).await {
+            for r in rs {
+                players.push(serde_json::json!({
+                    "name": r.get::<String,_>("name"), "total": r.get::<i64,_>("total"),
+                    "self": r.get::<i64,_>("self_pts"), "assist": r.get::<i64,_>("assist_pts"),
+                    "games": r.get::<i32,_>("games"), "wins": r.get::<i32,_>("wins"),
+                    "draws": r.get::<i32,_>("draws"), "losses": r.get::<i32,_>("losses"), "rating": r.get::<i32,_>("rating"),
+                }));
+            }
+        }
+        if let Ok(rs) = sqlx::query("SELECT level, COUNT(*)::bigint AS games, SUM(CASE WHEN result='win' THEN 1 ELSE 0 END)::bigint AS wins, SUM(CASE WHEN result='draw' THEN 1 ELSE 0 END)::bigint AS draws, AVG(accuracy)::float8 AS acc FROM results GROUP BY level ORDER BY games DESC").fetch_all(pool).await {
+            for r in rs {
+                levels.push(serde_json::json!({
+                    "level": r.get::<String,_>("level"), "games": r.get::<i64,_>("games"),
+                    "wins": r.get::<i64,_>("wins"), "draws": r.get::<i64,_>("draws"),
+                    "acc": r.try_get::<f64, _>("acc").unwrap_or(0.0),
+                }));
+            }
+        }
+        if let Ok(rs) = sqlx::query("SELECT opening, COUNT(*)::bigint AS n FROM results WHERE opening <> '' GROUP BY opening ORDER BY n DESC LIMIT 20").fetch_all(pool).await {
+            for r in rs { openings.push(serde_json::json!({ "opening": r.get::<String,_>("opening"), "n": r.get::<i64,_>("n") })); }
+        }
+        if let Ok(rs) = sqlx::query("SELECT ts,name,level,result,accuracy,style,opening FROM results ORDER BY ts DESC LIMIT 50").fetch_all(pool).await {
+            for r in rs {
+                recent.push(serde_json::json!({
+                    "ts": r.get::<i64,_>("ts"), "name": r.get::<String,_>("name"), "level": r.get::<String,_>("level"),
+                    "result": r.get::<String,_>("result"), "accuracy": r.get::<i32,_>("accuracy"),
+                    "style": r.get::<String,_>("style"), "opening": r.get::<String,_>("opening"),
+                }));
+            }
+        }
+        games_total = sqlx::query("SELECT COUNT(*)::bigint AS n FROM results").fetch_one(pool).await.map(|r| r.get::<i64, _>("n")).unwrap_or(0);
+        players_total = sqlx::query("SELECT COUNT(*)::bigint AS n FROM scores").fetch_one(pool).await.map(|r| r.get::<i64, _>("n")).unwrap_or(0);
+    }
+    Json(serde_json::json!({ "ok": true, "totals": { "games": games_total, "players": players_total }, "players": players, "levels": levels, "openings": openings, "recent": recent }))
 }
 
 #[derive(Deserialize)]

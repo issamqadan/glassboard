@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="gb-version" content="__GBVER__" />
+  <meta http-equiv="Cache-Control" content="no-cache" />
+  <meta name="robots" content="noindex" />
+  <title>Glassboard — Admin</title>
+  <style>
+    :root { --bg:#080b12; --bg-2:#0c111b; --glass:rgba(255,255,255,0.045); --glass-hi:rgba(255,255,255,0.07);
+      --line:#1d2740; --line-2:#2b3856; --text:#eaf0fb; --muted:#93a2c0; --faint:#5d6c8c;
+      --accent:#5cc9ec; --accent-2:#7ee0d6; --gold:#e0be79; --good:#45c86e; --urgent:#f26d7a;
+      --sans: ui-sans-serif,system-ui,-apple-system,"SF Pro Display","Segoe UI",Roboto,sans-serif; --mono: ui-monospace,"SF Mono",Menlo,monospace; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:var(--sans); color:var(--text); background:var(--bg); min-height:100vh; line-height:1.5; }
+    .wrap { max-width:1000px; margin:0 auto; padding:26px 20px 80px; }
+    h1 { font-size:1.5rem; letter-spacing:-0.02em; margin:0 0 4px; }
+    .sub { color:var(--muted); margin:0 0 20px; font-size:0.9rem; }
+    .gate { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:24px; }
+    .gate input { padding:11px 14px; border-radius:11px; background:var(--bg-2); border:1px solid var(--line); color:var(--text); font-size:0.95rem; min-width:220px; }
+    .gate button { padding:11px 20px; border-radius:11px; border:0; font-weight:700; cursor:pointer; background:linear-gradient(140deg,var(--accent),#3a97bd); color:#04222d; }
+    .err { color:var(--urgent); font-size:0.88rem; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
+    .kpi { border:1px solid var(--line); border-radius:14px; padding:16px; background:var(--glass); }
+    .kpi .n { font-size:1.8rem; font-weight:800; color:var(--accent-2); font-variant-numeric:tabular-nums; }
+    .kpi .l { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--faint); margin-top:2px; }
+    section { margin-bottom:28px; }
+    section h2 { font-size:1.05rem; margin:0 0 10px; }
+    section .hint { color:var(--faint); font-size:0.82rem; font-weight:400; }
+    table { width:100%; border-collapse:collapse; font-size:0.88rem; }
+    th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+    th { color:var(--faint); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:700; }
+    td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+    .tbl-wrap { overflow-x:auto; border:1px solid var(--line); border-radius:14px; }
+    .win { color:var(--good); } .loss { color:var(--urgent); } .draw { color:var(--muted); }
+    .bar { display:inline-block; height:7px; border-radius:999px; background:linear-gradient(90deg,var(--good),#3aa85c); vertical-align:middle; }
+    .muted { color:var(--muted); }
+    a.back { color:var(--accent); text-decoration:none; font-size:0.9rem; }
+  </style>
+  <script>
+    (function () { try {
+      var m = document.querySelector('meta[name="gb-version"]');
+      var cur = m && m.content !== "__GB" + "VER__" ? m.content : "";
+      fetch("./version.txt?_=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : ""; })
+        .then(function (latest) { latest = (latest || "").trim(); var key = "gb-reloaded-" + latest;
+          if (latest && cur && latest !== cur && !sessionStorage.getItem(key)) { sessionStorage.setItem(key, "1"); location.replace(location.pathname + "?v=" + latest); } }).catch(function () {});
+    } catch (e) {} })();
+  </script>
+</head>
+<body>
+  <main class="wrap">
+    <a class="back" href="./portal.html">← Lobby</a>
+    <h1 style="margin-top:10px">Glassboard — Admin</h1>
+    <p class="sub">Playtest analytics. Win-rate per level validates that the AI actually plays at the level picked.</p>
+
+    <div class="gate">
+      <input id="key" type="password" placeholder="Admin key" autocomplete="off" />
+      <button id="go">View</button>
+      <span class="err" id="err"></span>
+    </div>
+
+    <div id="dash" hidden>
+      <div class="cards" id="kpis"></div>
+      <section>
+        <h2>Calibration — win-rate per level <span class="hint">following help should beat lower levels; the top levels should be a real fight</span></h2>
+        <div class="tbl-wrap"><table id="levels"><thead><tr><th>Level</th><th class="num">Games</th><th class="num">Win %</th><th class="num">Draw %</th><th class="num">Avg accuracy</th><th></th></tr></thead><tbody></tbody></table></div>
+      </section>
+      <section>
+        <h2>Leaderboard</h2>
+        <div class="tbl-wrap"><table id="players"><thead><tr><th>Player</th><th class="num">Score</th><th class="num">💪 Self</th><th class="num">🤝 Assist</th><th class="num">≈Rating</th><th class="num">Games</th><th class="num">W-D-L</th></tr></thead><tbody></tbody></table></div>
+      </section>
+      <section>
+        <h2>Top openings</h2>
+        <div class="tbl-wrap"><table id="openings"><thead><tr><th>Opening</th><th class="num">Times played</th></tr></thead><tbody></tbody></table></div>
+      </section>
+      <section>
+        <h2>Recent games</h2>
+        <div class="tbl-wrap"><table id="recent"><thead><tr><th>When</th><th>Player</th><th>Level</th><th>Style</th><th>Result</th><th class="num">Acc</th><th>Opening</th></tr></thead><tbody></tbody></table></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const SERVER = location.protocol === "https:" ? "https://playglassboard.onrender.com" : "http://" + (location.hostname || "localhost") + ":9001";
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    const ago = (ts) => { if (!ts) return ""; const s = Math.max(0, Math.floor(Date.now() / 1000 - ts)); if (s < 60) return "just now"; const m = (s / 60) | 0; if (m < 60) return m + "m"; const h = (m / 60) | 0; if (h < 24) return h + "h"; return ((h / 24) | 0) + "d"; };
+    const keyEl = document.getElementById("key"), errEl = document.getElementById("err");
+    // Remember the key locally for convenience (admin's own device only).
+    try { keyEl.value = localStorage.getItem("gb_admin_key") || ""; } catch {}
+
+    async function load() {
+      const key = keyEl.value.trim(); errEl.textContent = "";
+      if (!key) { errEl.textContent = "Enter the admin key."; return; }
+      let data;
+      try { data = await (await fetch(SERVER + "/admin?key=" + encodeURIComponent(key))).json(); }
+      catch { errEl.textContent = "Couldn't reach the server (it may be waking up)."; return; }
+      if (!data || data.error) { errEl.textContent = "Wrong key, or the server hasn't shipped the admin endpoint yet."; return; }
+      try { localStorage.setItem("gb_admin_key", key); } catch {}
+      document.getElementById("dash").hidden = false;
+      const t = data.totals || {};
+      document.getElementById("kpis").innerHTML =
+        `<div class="kpi"><div class="n">${(t.players || 0).toLocaleString()}</div><div class="l">Players</div></div>` +
+        `<div class="kpi"><div class="n">${(t.games || 0).toLocaleString()}</div><div class="l">AI games logged</div></div>`;
+      // levels
+      document.querySelector("#levels tbody").innerHTML = (data.levels || []).map((r) => {
+        const winPct = r.games ? Math.round(r.wins / r.games * 100) : 0;
+        const drawPct = r.games ? Math.round(r.draws / r.games * 100) : 0;
+        return `<tr><td>${esc(r.level)}</td><td class="num">${r.games}</td><td class="num">${winPct}%</td><td class="num">${drawPct}%</td><td class="num">${Math.round(r.acc || 0)}%</td><td><span class="bar" style="width:${Math.max(2, winPct)}px"></span></td></tr>`;
+      }).join("") || `<tr><td colspan="6" class="muted">No games yet.</td></tr>`;
+      // players
+      document.querySelector("#players tbody").innerHTML = (data.players || []).map((p) =>
+        `<tr><td>${esc(p.name) || "<span class='muted'>—</span>"}</td><td class="num">${(p.total || 0).toLocaleString()}</td><td class="num">${(p.self || 0).toLocaleString()}</td><td class="num">${(p.assist || 0).toLocaleString()}</td><td class="num">${p.rating || "—"}</td><td class="num">${p.games || 0}</td><td class="num">${p.wins || 0}-${p.draws || 0}-${p.losses || 0}</td></tr>`
+      ).join("") || `<tr><td colspan="7" class="muted">No players yet.</td></tr>`;
+      // openings
+      document.querySelector("#openings tbody").innerHTML = (data.openings || []).map((o) =>
+        `<tr><td>${esc(o.opening)}</td><td class="num">${o.n}</td></tr>`).join("") || `<tr><td colspan="2" class="muted">None yet.</td></tr>`;
+      // recent
+      document.querySelector("#recent tbody").innerHTML = (data.recent || []).map((r) => {
+        const rc = r.result === "win" ? "win" : r.result === "loss" ? "loss" : "draw";
+        return `<tr><td class="muted">${ago(r.ts)}</td><td>${esc(r.name) || "—"}</td><td>${esc(r.level)}</td><td>${esc(r.style)}</td><td class="${rc}">${esc(r.result)}</td><td class="num">${r.accuracy || 0}%</td><td>${esc(r.opening) || "—"}</td></tr>`;
+      }).join("") || `<tr><td colspan="7" class="muted">No games yet.</td></tr>`;
+    }
+    document.getElementById("go").onclick = load;
+    keyEl.addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
+    if (keyEl.value) load();
+  </script>
+</body>
+</html>

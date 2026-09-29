@@ -383,6 +383,28 @@ function scoreFinishedGame() {
   try { localStorage.setItem("gb_score", JSON.stringify(s)); } catch {}
   lastScore = Object.assign(g, { ratingBefore, ratingAfter });
   lastTotals = s;
+  postScoreToServer(); // cross-device + admin (no-ops offline / until the server ships it)
+}
+// Report the finished game to the server (per-game deltas; server accumulates). Used
+// for cross-device totals and the admin dashboard. Fails silently offline.
+function postScoreToServer() {
+  if (!lastScore) return;
+  try {
+    let me = null; try { me = JSON.parse(localStorage.getItem("gb_me")); } catch {}
+    const player = (me && me.id) || aiPlayerId() || "";
+    if (!player) return;
+    const op = currentOpening();
+    fetch(AI_SERVER + "/score", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        player, name: (me && me.name) || "",
+        level: levelName(engineEloEl.value),
+        result: lastScore.won ? "win" : lastScore.draw ? "draw" : "loss",
+        accuracy: lastScore.accuracy || 0, style: aiStyle, opening: op ? op.name : "",
+        points: lastScore.total, self: lastScore.self, assist: lastScore.assist, rating: lastScore.ratingAfter || 0,
+      }),
+    }).catch(() => {});
+  } catch {}
 }
 let evalBeforeEngine = null; // white-relative eval right after YOUR move — to spot the AI slipping
 let freeCaptures = [];
