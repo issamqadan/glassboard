@@ -166,9 +166,9 @@ const AI_LEVELS = [
   { elo: 700, ic: "🌱", name: "Beginner", desc: "Learning the moves", rating: "≈900", skill: 0, depth: 1 },
   { elo: 1100, ic: "♟", name: "Casual", desc: "Plays for fun", rating: "≈1200", skill: 2, depth: 3 },
   { elo: 1500, ic: "♞", name: "Intermediate", desc: "Knows the basics", rating: "≈1500", skill: 6, movetime: 300 },
-  { elo: 1900, ic: "⚔", name: "Club", desc: "Solid, purposeful", rating: "≈1850", skill: 12, movetime: 500 },
-  { elo: 2300, ic: "★", name: "Expert", desc: "Sharp & strong", rating: "≈2200", skill: 18, movetime: 1200 },
-  { elo: 3000, ic: "👑", name: "Master", desc: "The toughest test", rating: "≈2500+", skill: 20, movetime: 1500 },
+  { elo: 1900, ic: "⚔", name: "Club", desc: "Solid, purposeful", rating: "≈1800", skill: 9, movetime: 500 },
+  { elo: 2300, ic: "★", name: "Expert", desc: "Sharp & strong", rating: "≈2100", skill: 12, movetime: 800 },
+  { elo: 3000, ic: "👑", name: "Master", desc: "The toughest test", rating: "≈2400", skill: 16, movetime: 1000 },
 ];
 // Stockfish parameters (and the ≈rating) for an engine rating from the ladder.
 function sfLevelFor(elo) { return AI_LEVELS.reduce((a, l) => (elo <= l.elo && !a ? l : a), null) || AI_LEVELS[AI_LEVELS.length - 1]; }
@@ -183,15 +183,19 @@ function aiLean() {
   const yours = indepOwn + indepFollowed;
   return yours > 0 ? indepFollowed / yours : 0; // 0..1
 }
+// The opponent gets tougher as you lean on help — but is ALWAYS kept below the
+// full-strength assist (skill 20 @ 1400ms), so following the top move reliably WINS
+// (with more effort at the higher levels). Ceiling is 16 (~4 skill below the assist).
+const AI_SKILL_CEIL = 16;
 function aiBoost(baseElo) {
   const lvl = sfLevelFor(baseElo);
   const lean = aiLean();
-  const skill = Math.min(20, Math.round(lvl.skill + lean * (20 - lvl.skill)));
+  const ceil = Math.min(AI_SKILL_CEIL, lvl.skill + 4); // lean can add up to +4, never past 16
+  const skill = Math.min(ceil, Math.round(lvl.skill + lean * (ceil - lvl.skill)));
   const baseMt = lvl.movetime || (lvl.depth ? 300 : 500);
-  // Cap the opponent's think-time BELOW the assist's (1400ms) so the recommended move
-  // is never out-searched — following it should hold/win, not lose to a deeper reply.
+  // Think-time capped below the assist's (1400ms) so the recommendation is never
+  // out-searched — following it out-calculates the opponent instead of losing ground.
   const movetime = Math.min(1100, Math.round(baseMt + lean * (1100 - baseMt)));
-  // Once you're leaning on help, lift the low-rung depth cap so it can play strong.
   const depth = lean > 0.15 ? undefined : lvl.depth;
   return { lean, skill, movetime, depth, base: lvl.skill, boosted: skill > lvl.skill };
 }
