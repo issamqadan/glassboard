@@ -188,7 +188,9 @@ function aiBoost(baseElo) {
   const lean = aiLean();
   const skill = Math.min(20, Math.round(lvl.skill + lean * (20 - lvl.skill)));
   const baseMt = lvl.movetime || (lvl.depth ? 300 : 500);
-  const movetime = Math.round(baseMt + lean * (1500 - baseMt));
+  // Cap the opponent's think-time BELOW the assist's (1400ms) so the recommended move
+  // is never out-searched — following it should hold/win, not lose to a deeper reply.
+  const movetime = Math.min(1100, Math.round(baseMt + lean * (1100 - baseMt)));
   // Once you're leaning on help, lift the low-rung depth cap so it can play strong.
   const depth = lean > 0.15 ? undefined : lvl.depth;
   return { lean, skill, movetime, depth, base: lvl.skill, boosted: skill > lvl.skill };
@@ -687,7 +689,7 @@ function onPositionChanged() {
     // Strong advice: the recommended move comes from Stockfish at FULL strength, so
     // following it genuinely holds up against the (skill-limited) Stockfish opponent.
     if (!firstGame && window.GBEngine && ov !== "off") {
-      const sfOpts = { skill: 20, movetime: 900 };
+      const sfOpts = { skill: 20, movetime: 1400 };
       if (uciHistory.length) sfOpts.moves = uciHistory.slice(); // repetition-aware advice
       GBEngine.bestMove(fen, sfOpts).then((uci) => {
         if (token !== positionToken || !uci || uci.length < 4) return;
