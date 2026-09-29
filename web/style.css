@@ -343,6 +343,17 @@ button {
   background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); }
 .rc-num { font-size: 1.5rem; font-weight: 800; color: #7ee0d6; font-variant-numeric: tabular-nums; }
 .rc-lbl { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: #8ba0bd; margin-top: 2px; }
+.rc-score { padding: 12px 14px; border-radius: 14px; background: linear-gradient(150deg, rgba(224,190,121,0.14), rgba(126,224,214,0.06)); border: 1px solid rgba(224,190,121,0.3); }
+.rc-score-top { display: flex; align-items: baseline; gap: 8px; }
+.rc-score-pts { font-size: 1.6rem; font-weight: 800; color: #f0c06a; font-variant-numeric: tabular-nums; }
+.rc-score-lbl { font-size: 0.8rem; color: #b3c1d8; }
+.rc-rating { margin-left: auto; font-size: 0.86rem; font-weight: 800; color: #7ee0d6; }
+.rc-score-split { display: flex; gap: 10px; margin-top: 8px; }
+.rc-score-split span { flex: 1; text-align: center; font-size: 0.82rem; font-weight: 700; padding: 6px; border-radius: 9px; }
+.rc-self { background: rgba(126,224,214,0.14); color: #a7e6dd; }
+.rc-assist { background: rgba(242,112,126,0.12); color: #f2a6ae; }
+.rc-score-total { margin-top: 8px; font-size: 0.82rem; color: #c3d0e6; text-align: center; }
+.rc-score-total b { color: #f4e7c8; }
 .rc-spark-wrap { padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); }
 .rc-spark-head { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #8ba0bd; margin-bottom: 6px; }
 .rc-spark { display: block; }

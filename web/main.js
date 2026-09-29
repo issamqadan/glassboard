@@ -338,6 +338,52 @@ let moveReview = []; // [{cp, wasBest}]
 let lastEval = null; // engine's read of your position (white-relative cp), for the live pill
 let evalTrail = []; // your-relative eval after each of your turns — the recap's story curve
 let lastResult = null; // { won, draw, reason } of the finished game — for the recap
+let scored = false;    // guard: count each finished game into the score exactly once
+let lastScore = null;  // { total, self, assist, accuracy, ratingBefore, ratingAfter } of the last game
+let lastTotals = null; // lifetime totals after this game
+
+// ---- Play score & strength ------------------------------------------------
+// Total play score = Self (moves you found on your own) + Assist (moves you took
+// help on). Both count toward the total; the split makes the ladder-down visible.
+const gbScoreDefaults = () => ({ total: 0, self: 0, assist: 0, games: 0, wins: 0, draws: 0, losses: 0, rating: null });
+function loadScore() { try { return Object.assign(gbScoreDefaults(), JSON.parse(localStorage.getItem("gb_score")) || {}); } catch { return gbScoreDefaults(); } }
+function ratingNum(elo) { const m = String(ratingFor(elo)).match(/\d+/); return m ? parseInt(m[0], 10) : parseInt(elo, 10) || 1200; }
+function computeGamePoints() {
+  const R = lastResult || {};
+  const lvlIdx = Math.max(0, AI_LEVELS.findIndex((l) => l.name === levelName(engineEloEl.value)));
+  const levelMult = 1 + lvlIdx * 0.4; // Beginner ×1.0 … Master ×3.0
+  const rev = moveReview.filter((m) => m.cp != null && m.cp >= 0);
+  let accuracy = 60;
+  if (rev.length >= 3) { const avg = rev.reduce((s, m) => s + m.cp, 0) / rev.length; accuracy = Math.round(Math.max(12, Math.min(99, 100 * Math.exp(-avg / 300)))); }
+  const resultPts = R.won ? 100 : R.draw ? 40 : 10;
+  const bestMoves = moveReview.filter((m) => m.wasBest).length;
+  const total = Math.round(resultPts * levelMult + accuracy + bestMoves * 5);
+  const indepFrac = indepOwn / Math.max(1, indepOwn + indepFollowed);
+  const self = Math.round(total * indepFrac);
+  return { total, self, assist: total - self, accuracy, won: !!R.won, draw: !!R.draw };
+}
+// Light Elo-style update after an AI game (playful, labelled ≈).
+function updatedRating(prev) {
+  const your = prev != null ? prev : ratingNum(humanEloEl ? humanEloEl.value : 1200);
+  const opp = ratingNum(engineEloEl.value);
+  const expected = 1 / (1 + Math.pow(10, (opp - your) / 400));
+  const actual = lastResult && lastResult.won ? 1 : lastResult && lastResult.draw ? 0.5 : 0;
+  return Math.round(your + 24 * (actual - expected));
+}
+function scoreFinishedGame() {
+  if (firstGame || scored) return;
+  scored = true;
+  const g = computeGamePoints();
+  const s = loadScore();
+  const ratingBefore = s.rating != null ? s.rating : ratingNum(humanEloEl ? humanEloEl.value : 1200);
+  const ratingAfter = updatedRating(ratingBefore);
+  s.total += g.total; s.self += g.self; s.assist += g.assist; s.games += 1;
+  if (g.won) s.wins += 1; else if (g.draw) s.draws += 1; else s.losses += 1;
+  s.rating = ratingAfter;
+  try { localStorage.setItem("gb_score", JSON.stringify(s)); } catch {}
+  lastScore = Object.assign(g, { ratingBefore, ratingAfter });
+  lastTotals = s;
+}
 let evalBeforeEngine = null; // white-relative eval right after YOUR move — to spot the AI slipping
 let freeCaptures = [];
 let lastStratSig = ""; // signature of strategies last seen while the fold was open
@@ -717,6 +763,7 @@ function newGame() {
   busy = false;
   resigned = false;
   aiResigned = false; aiHopeless = 0;
+  scored = false; lastScore = null;
   pickedStrategyId = null;
   followBook = false;
   budgetSpent = 0;
@@ -1594,6 +1641,7 @@ function showGameOverIfNeeded() {
   else if (st === "fifty-move") { reason = "fifty-move rule"; }
   const draw = winner === "", won = winner === humanColor;
   lastResult = { won, draw, reason }; // captured for the ✨ Recap
+  scoreFinishedGame(); // tally the play score once, now the result is known
   const res = document.getElementById("overResult"), rea = document.getElementById("overReason");
 
   let how = "";
@@ -1739,6 +1787,10 @@ function openRecap() {
     `<div class="rc-hero"><div class="rc-emoji">${r.persona.emoji}</div><div class="rc-title">${escapeHtml(r.persona.title)}</div><div class="rc-line">${escapeHtml(r.persona.line)}</div></div>` +
     `<div class="rc-story">You played ${r.op ? `the <b>${escapeHtml(r.op.name)}</b>` : "a game"} against ${/^[AEIOU]/.test(r.style) ? "an" : "a"} <b>${escapeHtml(r.style)} ${escapeHtml(r.lvl)}</b>${r.R.reason ? ` — ${escapeHtml(r.R.won ? "won" : r.R.draw ? "drawn" : "lost")} by ${escapeHtml(r.R.reason)}` : ""} in ${r.fullMoves} moves.</div>` +
     `<div class="rc-stats">${r.accuracy != null ? stat(r.accuracy + "%", "accuracy") : ""}${r.helpable ? stat(r.indepPct + "%", "your own") : ""}${stat(r.fullMoves, "moves")}</div>` +
+    (lastScore ? `<div class="rc-score"><div class="rc-score-top"><span class="rc-score-pts">+${lastScore.total}</span><span class="rc-score-lbl">points this game</span>` +
+      (lastTotals && lastTotals.rating != null ? `<span class="rc-rating" title="Your playful strength estimate">≈${lastTotals.rating}${lastScore.ratingAfter > lastScore.ratingBefore ? " ▲" : lastScore.ratingAfter < lastScore.ratingBefore ? " ▼" : ""}</span>` : "") + `</div>` +
+      `<div class="rc-score-split"><span class="rc-self">💪 ${lastScore.self} you</span><span class="rc-assist">🤝 ${lastScore.assist} help</span></div>` +
+      (lastTotals ? `<div class="rc-score-total">Total play score: <b>${lastTotals.total.toLocaleString()}</b> over ${lastTotals.games} game${lastTotals.games === 1 ? "" : "s"}</div>` : "") + `</div>` : "") +
     (spark ? `<div class="rc-spark-wrap"><div class="rc-spark-head">📈 Momentum</div>${spark}<div class="rc-spark-cap"><span style="color:#7ee0d6">▲ you ahead</span> · <span style="color:#f2707e">▼ behind</span></div></div>` : "") +
     (r.badges.length ? `<div class="rc-badges">${r.badges.map((b) => `<span class="rc-badge">${b.ic} ${escapeHtml(b.label)}</span>`).join("")}</div>` : "") +
     (cards.length ? `<div class="rc-cards">${cards.join("")}</div>` : "") +

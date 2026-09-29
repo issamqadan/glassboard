@@ -114,6 +114,15 @@
     .mode-chip.casual { background:rgba(126,224,214,0.14); color:#7ee0d6; border-color:rgba(126,224,214,0.3); }
     .off-chip { font-size:0.62rem; font-weight:700; letter-spacing:0.04em; padding:2px 7px; border-radius:999px; vertical-align:middle;
       background:rgba(92,201,236,0.12); color:#9fd0e2; border:1px solid rgba(92,201,236,0.28); }
+    .score-card { border:1px solid rgba(224,190,121,0.28); border-radius:var(--radius); padding:16px 18px; margin-bottom:12px;
+      background:linear-gradient(160deg, rgba(224,190,121,0.12), rgba(126,224,214,0.05)); }
+    .score-card .sc-top { display:flex; gap:14px; }
+    .score-card .sc-cell { flex:1; } .score-card .sc-num { font-size:1.4rem; font-weight:800; color:#f0c06a; font-variant-numeric:tabular-nums; }
+    .score-card .sc-lbl { font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--faint); margin-top:2px; }
+    .score-card .sc-bar { height:8px; border-radius:999px; background:rgba(242,112,126,0.25); overflow:hidden; margin:14px 0 7px; }
+    .score-card .sc-self { display:block; height:100%; background:linear-gradient(90deg,#7ee0d6,#4bb3a6); }
+    .score-card .sc-split { display:flex; justify-content:space-between; font-size:0.8rem; font-weight:700; }
+    .score-card .sc-split span:first-child { color:#a7e6dd; } .score-card .sc-split span:last-child { color:#f2a6ae; }
     .g-meta { font-size:0.75rem; color:var(--faint); margin-top:7px; }
     .g-meta .mv-you { color:var(--good); font-weight:640; }
     .g-meta .mv-them { color:var(--muted); font-weight:600; }
@@ -256,6 +265,7 @@
     <div class="rivals" id="rivals"></div>
 
     <div class="section-head" style="margin-top:44px"><h2>Your play</h2><span class="count">Glassboard is learning your game</span></div>
+    <div id="scoreCard" class="score-card" hidden></div>
     <div id="profileCard" class="profile-card"></div>
 
     <div class="section-head" style="margin-top:44px"><h2>How the handicap works</h2><span class="count">Off → Autopilot</span></div>
@@ -860,8 +870,25 @@
         `<div class="rung" style="--rc:${colors[i]}"><div class="lvl">Level ${i}</div><div class="rn">${t.name}</div><div class="rd">${SHORT[i]}</div></div>`).join('');
     }
 
+    // ---- your play score (local, playful) — Self + Assist = Total ----
+    function renderScore() {
+      const el = document.getElementById('scoreCard'); if (!el) return;
+      let s = null; try { s = JSON.parse(localStorage.getItem('gb_score')); } catch {}
+      if (!s || !s.games) { el.hidden = true; return; }
+      el.hidden = false;
+      const selfPct = s.total ? Math.round(s.self / s.total * 100) : 0;
+      el.innerHTML =
+        `<div class="sc-top">` +
+          `<div class="sc-cell"><div class="sc-num">${(s.total || 0).toLocaleString()}</div><div class="sc-lbl">play score</div></div>` +
+          (s.rating != null ? `<div class="sc-cell"><div class="sc-num">≈${s.rating}</div><div class="sc-lbl">your strength</div></div>` : '') +
+          `<div class="sc-cell"><div class="sc-num">${s.wins}-${s.draws}-${s.losses}</div><div class="sc-lbl">W-D-L · ${s.games} game${s.games === 1 ? '' : 's'}</div></div>` +
+        `</div>` +
+        `<div class="sc-bar" title="${selfPct}% of your score you earned on your own"><span class="sc-self" style="width:${selfPct}%"></span></div>` +
+        `<div class="sc-split"><span>💪 Self ${(s.self || 0).toLocaleString()}</span><span>🤝 Assist ${(s.assist || 0).toLocaleString()}</span></div>`;
+    }
+
     // ---- init ----
-    renderLadder(); renderAiGames(); renderGames(); renderRivals();
+    renderLadder(); renderAiGames(); renderGames(); renderRivals(); renderScore();
     // When the service worker takes control (first visit), the offline chips become
     // valid — refresh so "✈️ Offline" appears without a manual reload.
     if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('controllerchange', () => { renderAiGames(); });
