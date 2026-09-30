@@ -2134,10 +2134,11 @@ function renderStatus() {
   else msg = `${cap} to move` + (game.inCheck() ? " — check!" : "");
   statusEl.textContent = msg;
   setLevelPill(game.assistLevel());
-  // Undo is offered only when it's your turn (the engine has replied), you have a
-  // move to take back, and it's a real game.
+  // Undo is a CASUAL aid — it's offered only in an untimed practice game, on your
+  // turn, with a move to take back. Never in a timed game (a takeback can't unspend
+  // the clock, and a timed game is the serious mode).
   const ub = document.getElementById("undoBtn");
-  if (ub) ub.hidden = firstGame || flagged || st !== "ongoing" || side !== humanColor || history.length === 0;
+  if (ub) ub.hidden = firstGame || timedGame || flagged || st !== "ongoing" || side !== humanColor || history.length === 0;
 }
 
 // A playful character for a suggested move — derived from the board, not vibes:
