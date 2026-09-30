@@ -51,6 +51,9 @@ struct RoomState {
     /// "match" (declared handicap, ratings, measured) | "casual" (free, unlimited
     /// two-sided assistance, no ratings).
     mode: String,
+    /// A pending casual takeback request — the colour that asked (awaiting the
+    /// opponent's yes/no).
+    pending_undo: Option<Color>,
 }
 type Rooms = Arc<Mutex<HashMap<String, RoomState>>>;
 
@@ -353,6 +356,7 @@ async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
             last_uci: row.get("last_uci"),
             resigned,
             glass,
+            history: Vec::new(), // not persisted; a fresh boot can't take back pre-restart moves
         };
         let rs = RoomState {
             room,
@@ -360,6 +364,7 @@ async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
             seats: Seats { host, guest },
             started: row.get::<i64, _>("started") as u64,
             mode: row.get::<Option<String>, _>("mode").unwrap_or_else(|| "match".to_string()),
+            pending_undo: None,
         };
         out.push((id, rs));
     }
@@ -497,6 +502,7 @@ fn new_room_state() -> RoomState {
         seats: Seats::default(),
         started: now_secs(),
         mode: "match".to_string(),
+        pending_undo: None,
     }
 }
 
@@ -520,6 +526,12 @@ enum ClientMsg {
     },
     Reset,
     Resign,
+    /// Casual takeback: ask the opponent to allow taking back your last move.
+    UndoRequest,
+    /// Answer to a takeback request.
+    UndoResponse {
+        accept: bool,
+    },
 }
 
 #[derive(Serialize)]
@@ -549,6 +561,15 @@ enum ServerMsg {
     Glass {
         side: String,
         summary: String,
+    },
+    /// A takeback was requested by `from` ("white"|"black") — the opponent decides.
+    UndoAsk {
+        from: String,
+    },
+    /// Result of a takeback request (accepted → the board also reverts via State).
+    Undo {
+        accepted: bool,
+        by: String,
     },
 }
 
@@ -1244,6 +1265,49 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                             }
                             broadcast_state(&rooms, &room_code).await;
                             persist_game(&store, &rooms, &room_code).await;
+                        }
+                        // Casual takeback: relay the request to the opponent to decide.
+                        Ok(ClientMsg::UndoRequest) => {
+                            let mut map = rooms.lock().await;
+                            if let Some(rs) = map.get_mut(&room_code) {
+                                if rs.mode == "casual" && !rs.room.history.is_empty()
+                                    && rs.room.resigned.is_none() && rs.pending_undo.is_none()
+                                {
+                                    rs.pending_undo = Some(color);
+                                    let _ = rs.tx.send(json(&ServerMsg::UndoAsk { from: color_str.to_string() }));
+                                }
+                            }
+                        }
+                        // The opponent's yes/no. On yes, revert to before the requester's
+                        // last move; the server stays authoritative.
+                        Ok(ClientMsg::UndoResponse { accept }) => {
+                            let did = {
+                                let mut map = rooms.lock().await;
+                                if let Some(rs) = map.get_mut(&room_code) {
+                                    match rs.pending_undo {
+                                        Some(req) if req != color => {
+                                            rs.pending_undo = None;
+                                            if accept {
+                                                let n = if rs.room.board.side == req { 2 } else { 1 };
+                                                let n = n.min(rs.room.history.len());
+                                                let ok = rs.room.undo(n);
+                                                let _ = rs.tx.send(json(&ServerMsg::Undo { accepted: true, by: color_str.to_string() }));
+                                                ok
+                                            } else {
+                                                let _ = rs.tx.send(json(&ServerMsg::Undo { accepted: false, by: color_str.to_string() }));
+                                                false
+                                            }
+                                        }
+                                        _ => false,
+                                    }
+                                } else {
+                                    false
+                                }
+                            };
+                            if did {
+                                broadcast_state(&rooms, &room_code).await;
+                                persist_game(&store, &rooms, &room_code).await;
+                            }
                         }
                         _ => {}
                     }

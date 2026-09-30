@@ -25,6 +25,8 @@ pub struct Room {
     pub resigned: Option<Color>,
     /// Full glass-box history for this game (replayed to anyone who joins).
     pub glass: Vec<GlassEntry>,
+    /// UCI move history — so a takeback (casual, by agreement) can revert moves.
+    pub history: Vec<String>,
 }
 
 impl Default for Room {
@@ -44,6 +46,7 @@ impl Room {
             last_uci: None,
             resigned: None,
             glass: Vec::new(),
+            history: Vec::new(),
         }
     }
 
@@ -84,6 +87,27 @@ impl Room {
         self.last_uci = None;
         self.resigned = None;
         self.glass.clear();
+        self.history.clear();
+    }
+
+    /// Take back the last `n` plies (a casual, agreed takeback). Rebuilds the board
+    /// from the start by replaying the kept moves — the server stays authoritative.
+    pub fn undo(&mut self, n: usize) -> bool {
+        if n == 0 || n > self.history.len() {
+            return false;
+        }
+        let keep = self.history.len() - n;
+        let kept: Vec<String> = self.history[..keep].to_vec();
+        self.board = Board::startpos();
+        for u in &kept {
+            if let Some(mv) = parse_uci(&self.board, u) {
+                self.board.make_move(mv);
+            }
+        }
+        self.last_uci = kept.last().cloned();
+        self.history = kept;
+        self.resigned = None; // a takeback resumes play
+        true
     }
 
     /// `who` resigns — that colour loses. First resignation sticks.
@@ -129,6 +153,7 @@ impl Room {
         let mv = parse_uci(&self.board, uci).ok_or_else(|| "illegal move".to_string())?;
         self.board.make_move(mv);
         self.last_uci = Some(uci.to_string());
+        self.history.push(uci.to_string());
         Ok(())
     }
 

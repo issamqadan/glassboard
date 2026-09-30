@@ -39,6 +39,7 @@ const eloEl = el("elo");
 
 let ws = null;
 let myColor = null;
+let undoPending = false; // you asked for a takeback and are waiting on the opponent
 let sim = false; // same-screen practice: play both sides locally to test the UI
 const orient = () => (sim ? "white" : myColor); // board orientation (fixed white-bottom in sim)
 let game = null;
@@ -174,6 +175,19 @@ async function main() {
 
   const rb = el("resignBtn");
   if (rb) rb.addEventListener("click", resign);
+
+  // Casual takeback: request → the opponent allows or declines.
+  const ub = el("undoBtn");
+  if (ub) ub.addEventListener("click", () => {
+    if (undoPending || !ws || ws.readyState !== 1) return;
+    ws.send(JSON.stringify({ t: "undorequest" }));
+    undoPending = true;
+    statusEl.textContent = "Takeback requested — waiting for your opponent…";
+    renderStatus();
+  });
+  const uy = el("undoYes"), un = el("undoNo");
+  if (uy) uy.addEventListener("click", () => { ws && ws.send(JSON.stringify({ t: "undoresponse", accept: true })); hideUndoPrompt(); });
+  if (un) un.addEventListener("click", () => { ws && ws.send(JSON.stringify({ t: "undoresponse", accept: false })); hideUndoPrompt(); });
 
   const mf = el("movesFold");
   if (mf) mf.addEventListener("toggle", () => { if (mf.open && hintState === "pending") revealHint(); });
@@ -326,10 +340,28 @@ function onMessage(msg) {
       glassList.push({ side: msg.side, summary: msg.summary });
       renderGlass();
       break;
+    case "undoask":
+      // Only the opponent's request prompts you; your own echo just confirms waiting.
+      if (msg.from && msg.from !== myColor) showUndoPrompt();
+      else statusEl.textContent = "Takeback requested — waiting for your opponent…";
+      break;
+    case "undo":
+      hideUndoPrompt();
+      undoPending = false;
+      statusEl.textContent = msg.accepted ? "Takeback allowed — the move was taken back." : "Your opponent declined the takeback.";
+      renderStatus();
+      break;
   }
 }
+function showUndoPrompt() {
+  const p = el("undoPrompt"), t = el("undoPromptText");
+  if (t) t.textContent = (oppLabel() || "Your opponent") + " asks to take back a move.";
+  if (p) p.hidden = false;
+}
+function hideUndoPrompt() { const p = el("undoPrompt"); if (p) p.hidden = true; }
 
 function onState(msg) {
+  undoPending = false; // any new position resolves a pending takeback request
   state = msg;
   game = Game.fromFen(msg.fen);
   game.setRatings(myElo(), oppElo());
@@ -932,6 +964,9 @@ function renderStatus() {
 
   const rb = el("resignBtn");
   if (rb) rb.hidden = !(myColor && state.status === "ongoing" && !over);
+  // Takeback: casual only, once a move has been played, while the game is live.
+  const ub = el("undoBtn");
+  if (ub) ub.hidden = undoPending || !(casualMode() && myColor && state.status === "ongoing" && !over && state.last);
   const rmb = el("rematchBtn");
   if (rmb) rmb.hidden = !(myColor && over);
 
