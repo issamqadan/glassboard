@@ -225,6 +225,15 @@ async fn build_store() -> Store {
             .execute(&pool)
             .await
             .expect("create results table");
+            // Page hits — lightweight traffic/activity for the admin view (anonymous
+            // device id + the chosen name; no PII beyond that).
+            sqlx::query(
+                "CREATE TABLE IF NOT EXISTS hits (\
+                   ts BIGINT NOT NULL, page TEXT NOT NULL DEFAULT '', visitor TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '')",
+            )
+            .execute(&pool)
+            .await
+            .expect("create hits table");
             println!("Accounts + games: Postgres (durable)");
             Store::Pg(pool)
         }
@@ -570,6 +579,7 @@ async fn main() {
         .route("/profile", get(profile))
         .route("/record", post(record))
         .route("/score", post(post_score))
+        .route("/hit", post(post_hit))
         .route("/admin", get(admin_stats))
         .layer(CorsLayer::permissive())
         .with_state(AppState { rooms, store });
@@ -921,9 +931,31 @@ async fn post_score(State(store): State<Store>, Json(b): Json<ScoreReq>) -> Json
     Json(serde_json::json!({ "ok": true }))
 }
 
+#[derive(Deserialize)]
+struct HitReq {
+    #[serde(default)]
+    page: String,
+    #[serde(default)]
+    visitor: String,
+    #[serde(default)]
+    name: String,
+}
+/// A page view (anonymous). Fire-and-forget from the client on each page load.
+async fn post_hit(State(store): State<Store>, Json(b): Json<HitReq>) -> Json<serde_json::Value> {
+    if let Store::Pg(pool) = &store {
+        let page: String = b.page.chars().take(40).collect();
+        let name: String = b.name.chars().take(40).collect();
+        let visitor: String = b.visitor.chars().take(64).collect();
+        let _ = sqlx::query("INSERT INTO hits (ts,page,visitor,name) VALUES ($1,$2,$3,$4)")
+            .bind(now_secs() as i64).bind(&page).bind(&visitor).bind(&name)
+            .execute(pool).await;
+    }
+    Json(serde_json::json!({ "ok": true }))
+}
+
 /// Admin dashboard data — gated by the ADMIN_KEY env var (?key=...). Aggregates the
-/// leaderboard, per-level win-rates (validates AI calibration), top openings, and
-/// recent games. Returns {error} unless the key matches.
+/// leaderboard, per-level win-rates (validates AI calibration), top openings, recent
+/// games, and page-hit traffic. Returns {error} unless the key matches.
 async fn admin_stats(State(store): State<Store>, Query(q): Query<HashMap<String, String>>) -> Json<serde_json::Value> {
     let key = q.get("key").cloned().unwrap_or_default();
     let admin = std::env::var("ADMIN_KEY").unwrap_or_default();
@@ -967,7 +999,27 @@ async fn admin_stats(State(store): State<Store>, Query(q): Query<HashMap<String,
         games_total = sqlx::query("SELECT COUNT(*)::bigint AS n FROM results").fetch_one(pool).await.map(|r| r.get::<i64, _>("n")).unwrap_or(0);
         players_total = sqlx::query("SELECT COUNT(*)::bigint AS n FROM scores").fetch_one(pool).await.map(|r| r.get::<i64, _>("n")).unwrap_or(0);
     }
-    Json(serde_json::json!({ "ok": true, "totals": { "games": games_total, "players": players_total }, "players": players, "levels": levels, "openings": openings, "recent": recent }))
+    // ---- traffic / activity ----
+    let now = now_secs() as i64;
+    let (mut hits_total, mut visitors_total, mut hits_24h, mut hits_7d, mut active_now) = (0i64, 0i64, 0i64, 0i64, 0i64);
+    let (mut pages, mut activity) = (Vec::new(), Vec::new());
+    if let Store::Pg(pool) = &store {
+        hits_total = sqlx::query("SELECT COUNT(*)::bigint AS n FROM hits").fetch_one(pool).await.map(|r| r.get::<i64, _>("n")).unwrap_or(0);
+        visitors_total = sqlx::query("SELECT COUNT(DISTINCT visitor)::bigint AS n FROM hits").fetch_one(pool).await.map(|r| r.get::<i64, _>("n")).unwrap_or(0);
+        hits_24h = sqlx::query("SELECT COUNT(*)::bigint AS n FROM hits WHERE ts >= $1").bind(now - 86400).fetch_one(pool).await.map(|r| r.get::<i64, _>("n")).unwrap_or(0);
+        hits_7d = sqlx::query("SELECT COUNT(*)::bigint AS n FROM hits WHERE ts >= $1").bind(now - 604800).fetch_one(pool).await.map(|r| r.get::<i64, _>("n")).unwrap_or(0);
+        active_now = sqlx::query("SELECT COUNT(DISTINCT visitor)::bigint AS n FROM hits WHERE ts >= $1").bind(now - 300).fetch_one(pool).await.map(|r| r.get::<i64, _>("n")).unwrap_or(0);
+        if let Ok(rs) = sqlx::query("SELECT page, COUNT(*)::bigint AS n, COUNT(DISTINCT visitor)::bigint AS u FROM hits GROUP BY page ORDER BY n DESC LIMIT 30").fetch_all(pool).await {
+            for r in rs { pages.push(serde_json::json!({ "page": r.get::<String,_>("page"), "n": r.get::<i64,_>("n"), "visitors": r.get::<i64,_>("u") })); }
+        }
+        if let Ok(rs) = sqlx::query("SELECT ts,page,name,visitor FROM hits ORDER BY ts DESC LIMIT 60").fetch_all(pool).await {
+            for r in rs { activity.push(serde_json::json!({ "ts": r.get::<i64,_>("ts"), "page": r.get::<String,_>("page"), "name": r.get::<String,_>("name"), "visitor": r.get::<String,_>("visitor") })); }
+        }
+    }
+    Json(serde_json::json!({ "ok": true,
+        "totals": { "games": games_total, "players": players_total, "hits": hits_total, "visitors": visitors_total, "hits24h": hits_24h, "hits7d": hits_7d, "activeNow": active_now },
+        "players": players, "levels": levels, "openings": openings, "recent": recent,
+        "pages": pages, "activity": activity }))
 }
 
 #[derive(Deserialize)]

@@ -78,6 +78,14 @@
         <h2>Recent games</h2>
         <div class="tbl-wrap"><table id="recent"><thead><tr><th>When</th><th>Player</th><th>Level</th><th>Style</th><th>Result</th><th class="num">Acc</th><th>Opening</th></tr></thead><tbody></tbody></table></div>
       </section>
+      <section>
+        <h2>Traffic — pages <span class="hint">views &amp; unique visitors per page</span></h2>
+        <div class="tbl-wrap"><table id="pages"><thead><tr><th>Page</th><th class="num">Views</th><th class="num">Visitors</th></tr></thead><tbody></tbody></table></div>
+      </section>
+      <section>
+        <h2>Activity <span class="hint">recent page visits</span></h2>
+        <div class="tbl-wrap"><table id="activity"><thead><tr><th>When</th><th>Who</th><th>Page</th></tr></thead><tbody></tbody></table></div>
+      </section>
     </div>
   </main>
 
@@ -100,6 +108,10 @@
       document.getElementById("dash").hidden = false;
       const t = data.totals || {};
       document.getElementById("kpis").innerHTML =
+        `<div class="kpi"><div class="n">${(t.activeNow || 0).toLocaleString()}</div><div class="l">Active now</div></div>` +
+        `<div class="kpi"><div class="n">${(t.visitors || 0).toLocaleString()}</div><div class="l">Unique visitors</div></div>` +
+        `<div class="kpi"><div class="n">${(t.hits || 0).toLocaleString()}</div><div class="l">Page views</div></div>` +
+        `<div class="kpi"><div class="n">${(t.hits24h || 0).toLocaleString()}</div><div class="l">Views · 24h</div></div>` +
         `<div class="kpi"><div class="n">${(t.players || 0).toLocaleString()}</div><div class="l">Players</div></div>` +
         `<div class="kpi"><div class="n">${(t.games || 0).toLocaleString()}</div><div class="l">AI games logged</div></div>`;
       // levels
@@ -120,6 +132,14 @@
         const rc = r.result === "win" ? "win" : r.result === "loss" ? "loss" : "draw";
         return `<tr><td class="muted">${ago(r.ts)}</td><td>${esc(r.name) || "—"}</td><td>${esc(r.level)}</td><td>${esc(r.style)}</td><td class="${rc}">${esc(r.result)}</td><td class="num">${r.accuracy || 0}%</td><td>${esc(r.opening) || "—"}</td></tr>`;
       }).join("") || `<tr><td colspan="7" class="muted">No games yet.</td></tr>`;
+      // traffic — pages
+      document.querySelector("#pages tbody").innerHTML = (data.pages || []).map((p) =>
+        `<tr><td>${esc(p.page)}</td><td class="num">${(p.n || 0).toLocaleString()}</td><td class="num">${(p.visitors || 0).toLocaleString()}</td></tr>`
+      ).join("") || `<tr><td colspan="3" class="muted">No visits yet.</td></tr>`;
+      // activity feed
+      document.querySelector("#activity tbody").innerHTML = (data.activity || []).map((a) =>
+        `<tr><td class="muted">${ago(a.ts)}</td><td>${esc(a.name) || `<span class='muted'>${esc((a.visitor || '').slice(0, 8))}</span>`}</td><td>${esc(a.page)}</td></tr>`
+      ).join("") || `<tr><td colspan="3" class="muted">No activity yet.</td></tr>`;
     }
     document.getElementById("go").onclick = load;
     keyEl.addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });

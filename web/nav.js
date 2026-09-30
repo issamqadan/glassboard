@@ -161,3 +161,19 @@ function gbnav() {
   setInterval(gbTurnPoll, 12000);
 }
 gbnav();
+
+// Anonymous page-hit beacon (admin traffic view). Device id + chosen name only.
+(function gbHit() {
+  try {
+    var page = (location.pathname.split("/").pop() || "index.html").toLowerCase();
+    if (page === "admin.html" || page === "sf-test.html") return; // don't count admin/diagnostics
+    var server = location.protocol === "https:" ? "https://playglassboard.onrender.com" : "http://" + (location.hostname || "localhost") + ":9001";
+    var vid = "";
+    try { vid = localStorage.getItem("gb_pid") || ""; if (!vid) { vid = "v" + Math.random().toString(36).slice(2, 10); localStorage.setItem("gb_pid", vid); } } catch (e) {}
+    var name = "";
+    try { var me = JSON.parse(localStorage.getItem("gb_me")); name = me && me.name ? me.name : ""; } catch (e) {}
+    var body = JSON.stringify({ page: page, visitor: vid, name: name });
+    if (navigator.sendBeacon) navigator.sendBeacon(server + "/hit", new Blob([body], { type: "application/json" }));
+    else fetch(server + "/hit", { method: "POST", headers: { "Content-Type": "application/json" }, body: body, keepalive: true }).catch(function () {});
+  } catch (e) {}
+})();
