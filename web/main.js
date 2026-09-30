@@ -358,7 +358,11 @@ function computeGamePoints() {
   const resultPts = R.won ? 100 : R.draw ? 40 : 10;
   const bestMoves = moveReview.filter((m) => m.wasBest).length;
   const total = Math.round(resultPts * levelMult + accuracy + bestMoves * 5);
-  const indepFrac = indepOwn / Math.max(1, indepOwn + indepFollowed);
+  // Split by how much you leaned on help. With NO help (assistance off, or none was
+  // ever on the board), it's 100% you — never attribute it to "help".
+  const noHelp = aiAssistOverride === "off" || !helpWasAvailable;
+  const denom = indepOwn + indepFollowed;
+  const indepFrac = noHelp ? 1 : (denom > 0 ? indepOwn / denom : 1);
   const self = Math.round(total * indepFrac);
   return { total, self, assist: total - self, accuracy, won: !!R.won, draw: !!R.draw };
 }
@@ -1518,6 +1522,8 @@ function fmtClock(ms) {
   const m = Math.floor(t / 60), s = t % 60;
   return `${m}:${s < 10 ? "0" : ""}${s}`;
 }
+// Returning from a hidden tab: reset the reference so the away-time isn't charged.
+if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (!document.hidden) clockLast = Date.now(); });
 function stopClock() { if (clockTimer) { clearInterval(clockTimer); clockTimer = null; } }
 function startClock() {
   stopClock();
@@ -1529,8 +1535,13 @@ function tickClock() {
   if (!timedGame || flagged) { stopClock(); return; }
   if (resigned || game.status() !== "ongoing") { stopClock(); return; }
   const now = Date.now();
-  const dt = now - clockLast;
+  let dt = now - clockLast;
   clockLast = now;
+  // Don't charge time the player didn't actually spend at the board: skip when the
+  // tab is hidden (backgrounded / screen locked) or when a tick gap is abnormally
+  // large (the timer was throttled/asleep). Foreground ticks are ~200ms, so real
+  // thinking still counts fully.
+  if (document.hidden || dt > 2000) dt = 0;
   const side = game.sideToMove();
   if (side === humanColor) humanMs = Math.max(0, humanMs - dt);
   else engineMs = Math.max(0, engineMs - dt);
