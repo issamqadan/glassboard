@@ -895,7 +895,10 @@ details.panel > *:not(summary) { padding: 12px 15px; }
      takes the largest square that fits the height left after (nav + game bar),
      giving up width only for the leftover rail. Board grows big; the rail
      negotiates for what remains. */
-  main.game .board-col { width: min(900px, calc(100vh - 244px), calc(100vw - 380px)); flex: 0 0 auto; }  /* room for material bar + plan dock */
+  /* Cap at 820 so the board + 20px gap + 288px (min) rail always fit inside the
+     centered 1180px container (1136 inner) — otherwise the centered row overflows
+     and the board gets clipped on the LEFT. The 100vw term covers narrower windows. */
+  main.game .board-col { width: min(820px, calc(100vh - 244px), calc(100vw - 360px)); flex: 0 0 auto; }  /* room for material bar + plan dock */
   /* The rail takes leftover width (not a reserved slab), and scrolls itself. */
   main.game .panels { flex: 0 1 360px; min-width: 288px; align-self: stretch;
     position: sticky; top: 66px; max-height: calc(100vh - 78px); overflow-y: auto;
