@@ -2592,8 +2592,10 @@ const DRAG_THRESH = 6; // px before a press becomes a drag (so a tap stays a tap
 function sqElFromPoint(x, y) { const el = document.elementFromPoint(x, y); const s = el && el.closest && el.closest(".sq"); return s || null; }
 function moveGhost(x, y) {
   if (!press || !press.ghost) return;
+  // On touch, lift the piece above the finger so it isn't hidden under it.
+  const lift = press.touch ? press.h * 0.7 : 0;
   press.ghost.style.left = (x - press.w / 2) + "px";
-  press.ghost.style.top = (y - press.h / 2) + "px";
+  press.ghost.style.top = (y - press.h / 2 - lift) + "px";
   boardEl.querySelectorAll(".sq.drag-over").forEach((s) => s.classList.remove("drag-over"));
   const se = sqElFromPoint(x, y);
   if (se && legalTargets.includes(+se.dataset.sq)) se.classList.add("drag-over");
@@ -2619,7 +2621,7 @@ function onBoardPointerDown(e) {
   const sqEl = e.target.closest && e.target.closest(".sq");
   if (!sqEl) { press = null; return; }
   const i = +sqEl.dataset.sq;
-  press = { from: i, x0: e.clientX, y0: e.clientY, hasPiece: isHumanPiece(game.boardString()[i]), dragging: false };
+  press = { from: i, x0: e.clientX, y0: e.clientY, hasPiece: isHumanPiece(game.boardString()[i]), dragging: false, touch: e.pointerType === "touch" };
 }
 function onBoardPointerMove(e) {
   if (!press || !press.hasPiece) return;

@@ -426,7 +426,7 @@
       btn.disabled = false; btn.textContent = label;
       toast(data.returning ? 'Welcome back, ' + data.name : 'Player created — ' + data.name, data.returning ? 'Signed in on this device.' : 'Your name + PIN work on any device.');
       renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames();
-      if (!data.returning) showWelcome(); // first-time experience for a brand-new player
+      if (!data.returning || !seenWelcome()) showWelcome(); // first-time experience
     }
     function renderMe() {
       if (!me) return;
@@ -920,15 +920,16 @@
         : `<a class="btn btn-primary" href="./index.html">🤖 Play the AI</a><button class="btn btn-ghost" onclick="closeWelcome();openCreate()">＋ New game</button><a class="btn btn-ghost" href="./learn.html">👋 Learn</a>`;
       document.getElementById('welcomeOverlay').classList.add('open');
     }
-    function closeWelcome() { document.getElementById('welcomeOverlay').classList.remove('open'); }
+    function closeWelcome() { document.getElementById('welcomeOverlay').classList.remove('open'); try { localStorage.setItem('gb_welcomed', '1'); } catch {} }
     window.closeWelcome = closeWelcome;
+    const seenWelcome = () => { try { return localStorage.getItem('gb_welcomed') === '1'; } catch { return false; } };
 
     // ---- init ----
     renderLadder(); renderAiGames(); renderGames(); renderRivals(); renderScore();
     // When the service worker takes control (first visit), the offline chips become
     // valid — refresh so "✈️ Offline" appears without a manual reload.
     if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('controllerchange', () => { renderAiGames(); });
-    if (me) { renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames(); } else openIdentity();
+    if (me) { renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames(); if (!seenWelcome()) showWelcome(); } else openIdentity();
     setInterval(renderProfile, 20000);
   </script>
 </body>
