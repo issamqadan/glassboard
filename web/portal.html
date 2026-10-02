@@ -308,6 +308,7 @@
       </div>
       <div id="idError" style="color:#f0808a;font-size:0.84rem;min-height:1.1em;margin-bottom:8px"></div>
       <button class="btn btn-primary" id="idSave" style="width:100%;justify-content:center" onclick="saveIdentity()">Continue</button>
+      <button class="link-quiet" id="idWelcome" type="button" style="display:none;background:none;border:0;margin-top:12px;cursor:pointer" onclick="document.getElementById('idOverlay').classList.remove('open');showWelcome()">👋 Show the welcome tour</button>
     </div>
   </div>
 
@@ -398,6 +399,7 @@
       if (me) { document.getElementById('idName').value = me.name; document.getElementById('idRating').value = me.rating; }
       const pin = document.getElementById('idPin'); if (pin) pin.value = '';
       const err = document.getElementById('idError'); if (err) err.textContent = '';
+      const w = document.getElementById('idWelcome'); if (w) w.style.display = me ? 'inline-block' : 'none'; // replay the tour from your account
       document.getElementById('idOverlay').classList.add('open');
     }
     async function saveIdentity() {
@@ -426,7 +428,7 @@
       btn.disabled = false; btn.textContent = label;
       toast(data.returning ? 'Welcome back, ' + data.name : 'Player created — ' + data.name, data.returning ? 'Signed in on this device.' : 'Your name + PIN work on any device.');
       renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames();
-      if (!data.returning || !seenWelcome()) showWelcome(); // first-time experience
+      if (!data.returning) showWelcome(); // genuine first-time (new account)
     }
     function renderMe() {
       if (!me) return;
@@ -929,7 +931,7 @@
     // When the service worker takes control (first visit), the offline chips become
     // valid — refresh so "✈️ Offline" appears without a manual reload.
     if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('controllerchange', () => { renderAiGames(); });
-    if (me) { renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames(); if (!seenWelcome()) showWelcome(); } else openIdentity();
+    if (me) { renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames(); } else openIdentity();
     setInterval(renderProfile, 20000);
   </script>
 </body>
