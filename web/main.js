@@ -2338,9 +2338,14 @@ function renderGlassLens() {
   let planRow = "";
   if (picked) planRow = `<div class="gl-planrow"><button class="gl-plan" id="lensPlan" type="button">🧭 ${escapeHtml(picked.name)} · steps</button>${plansBtn}</div>`;
   else if (bookOp) planRow = `<div class="gl-planrow"><span class="gl-planlab book">📖 ${escapeHtml(bookOp.name)}</span>${plansBtn}</div>`;
-  else if (strategies.length) planRow = `<div class="gl-planrow"><span class="gl-planlab">🧭 Plan:</span>` +
-    strategies.slice(0, 2).map((s) => `<button class="gl-planpick" data-id="${s.id}" type="button">${STRAT_ICON[s.id] || "◆"} ${escapeHtml(s.name)}</button>`).join("") + plansBtn + `</div>`;
-  else planRow = `<div class="gl-planrow">${plansBtn}</div>`;
+  else if (strategies.length) {
+    // Proactive recommendation: the engine's best-fit plan for THIS position, offered
+    // as a one-tap "Try…" — plus the rest behind the Plans button.
+    const top = strategies[0];
+    const rec = `<button class="gl-planrec" data-id="${top.id}" type="button" title="${escapeHtml(top.idea || "")}">💡 Try: ${STRAT_ICON[top.id] || "◆"} ${escapeHtml(top.name)}</button>`;
+    const next = strategies[1] ? `<button class="gl-planpick" data-id="${strategies[1].id}" type="button">${STRAT_ICON[strategies[1].id] || "◆"} ${escapeHtml(strategies[1].name)}</button>` : "";
+    planRow = `<div class="gl-planrow">${rec}${next}${plansBtn}</div>`;
+  } else planRow = `<div class="gl-planrow">${plansBtn}</div>`;
   const meaning = explainMoves ? moveMeaning(p.move) : "";
   el.className = "glass-lens kind-" + p.kind;
   el.innerHTML = glIdentityRow() +
@@ -2361,7 +2366,7 @@ function renderGlassLens() {
   const ex = document.getElementById("lensExplain"); if (ex) ex.onclick = toggleExplain;
   const pl = document.getElementById("lensPlan"); if (pl) pl.onclick = () => openStepsSheet(picked);
   const pls = document.getElementById("lensPlans"); if (pls) pls.onclick = openPlanSheet;
-  el.querySelectorAll(".gl-planpick").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; followBook = false; paint(); });
+  el.querySelectorAll(".gl-planpick, .gl-planrec").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; followBook = false; paint(); });
 }
 
 // The Strategy picker — a bottom sheet of plans that FIT this position, filtered by

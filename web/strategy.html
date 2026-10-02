@@ -125,6 +125,7 @@
 
     <div class="filters" id="filters"></div>
     <div class="filters cx" id="cxfilters"></div>
+    <div class="filters cx" id="sidefilters"></div>
     <div class="grid" id="grid"></div>
   </main>
 
@@ -185,6 +186,8 @@
     let active = "All";
     let activeCx = "Any level";
     const CX_FILTERS = ["Any level"].concat(S.complexities || ["Beginner", "Intermediate", "Advanced"]);
+    let activeSide = "Both sides";
+    const SIDE_FILTERS = ["Both sides", "White", "Black"];
     function matchesPhase(o, f) {
       if (f === "All") return true;
       if (f === "Openings") return o.kind === "opening";
@@ -192,8 +195,13 @@
       if (f === "Endgame") return o.phase === "endgame";
       return o.kind === "opening" && FAMILY(o.uci[0]) === f; // an opening-family chip
     }
+    function matchesSide(o) {
+      if (activeSide === "Both sides") return true;
+      if (activeSide === "White") return o.side === "white" || o.side === "both";
+      return o.side === "black" || o.side === "both"; // Black
+    }
     function matches(o) {
-      return matchesPhase(o, active) && (activeCx === "Any level" || o.cx === activeCx);
+      return matchesPhase(o, active) && (activeCx === "Any level" || o.cx === activeCx) && matchesSide(o);
     }
 
     const sqIdx = (alg) => (alg.charCodeAt(1) - 49) * 8 + (alg.charCodeAt(0) - 97);
@@ -252,6 +260,11 @@
       document.getElementById("cxfilters").innerHTML = CX_FILTERS.map((f) =>
         `<button class="filter ${f === activeCx ? "on" : ""}" data-cx="${f}">${f}</button>`).join("");
       document.querySelectorAll("#cxfilters .filter").forEach((b) => b.onclick = () => { activeCx = b.dataset.cx; renderCxFilters(); renderGrid(); });
+    }
+    function renderSideFilters() {
+      document.getElementById("sidefilters").innerHTML = SIDE_FILTERS.map((f) =>
+        `<button class="filter ${f === activeSide ? "on" : ""}" data-side="${f}">${f === "White" ? "♔ White" : f === "Black" ? "♚ Black" : f}</button>`).join("");
+      document.querySelectorAll("#sidefilters .filter").forEach((b) => b.onclick = () => { activeSide = b.dataset.side; renderSideFilters(); renderGrid(); });
     }
     function card(o) {
       const gi = list.indexOf(o);
@@ -331,7 +344,7 @@
       if (e.key === "Escape") closeDemo(); else if (e.key === "ArrowRight") step(1); else if (e.key === "ArrowLeft") step(-1);
     });
 
-    renderFilters(); renderCxFilters(); renderGrid();
+    renderFilters(); renderCxFilters(); renderSideFilters(); renderGrid();
   </script>
 </body>
 </html>
