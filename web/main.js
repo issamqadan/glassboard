@@ -743,6 +743,9 @@ async function main() {
   if (plsheet) plsheet.addEventListener("click", (e) => { if (e.target === plsheet) closePlan(); });
   const rb = document.getElementById("resignBtn");
   if (rb) rb.addEventListener("click", () => { closeMenu(); resign(); });
+  setupBoardInput(); // tap + drag piece movement
+  const snd = document.getElementById("soundToggle");
+  if (snd) { snd.checked = soundOn; snd.addEventListener("change", toggleSound); }
   const ub = document.getElementById("undoBtn");
   if (ub) ub.addEventListener("click", () => { closeMenu(); undoMove(); });
   const orm = document.getElementById("overRematch");
@@ -2080,7 +2083,8 @@ function renderBoard() {
         b.className = "ll-badge"; b.textContent = "🛟"; b.title = "The AI used a lifeline for this move";
         sq.appendChild(b);
       }
-      sq.addEventListener("click", () => onSquareClick(i));
+      // Tap AND drag are handled by delegated pointer events on boardEl (setupBoardInput),
+      // so we don't bind per-square click here (that would double-fire with pointerup).
       boardEl.appendChild(sq);
     }
   }
@@ -2577,6 +2581,96 @@ function onSquareClick(i) {
   else clearSelection();
 }
 
+// ---- Drag-to-move (pointer events: mouse + touch), with tap-to-move preserved ----
+let press = null; // { from, x0, y0, hasPiece, dragging, ghost, pieceEl, w, h }
+const DRAG_THRESH = 6; // px before a press becomes a drag (so a tap stays a tap)
+function sqElFromPoint(x, y) { const el = document.elementFromPoint(x, y); const s = el && el.closest && el.closest(".sq"); return s || null; }
+function moveGhost(x, y) {
+  if (!press || !press.ghost) return;
+  press.ghost.style.left = (x - press.w / 2) + "px";
+  press.ghost.style.top = (y - press.h / 2) + "px";
+  boardEl.querySelectorAll(".sq.drag-over").forEach((s) => s.classList.remove("drag-over"));
+  const se = sqElFromPoint(x, y);
+  if (se && legalTargets.includes(+se.dataset.sq)) se.classList.add("drag-over");
+}
+function startDrag(i, e) {
+  if (selected !== i) selectSquare(i); // highlight legal targets (rebuilds the board)
+  const sqEl = boardEl.querySelector(`.sq[data-sq="${i}"]`);
+  const pieceEl = sqEl && sqEl.querySelector(".piece");
+  if (!pieceEl) { press = null; return; }
+  const rect = pieceEl.getBoundingClientRect();
+  const ghost = pieceEl.cloneNode(true);
+  ghost.classList.add("drag-ghost");
+  ghost.style.width = rect.width + "px"; ghost.style.height = rect.height + "px";
+  document.body.appendChild(ghost);
+  pieceEl.classList.add("dragging-src");
+  press.dragging = true; press.ghost = ghost; press.pieceEl = pieceEl; press.w = rect.width; press.h = rect.height;
+  moveGhost(e.clientX, e.clientY);
+  playSound("lift");
+}
+function onBoardPointerDown(e) {
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  if (busy || flagged || repetitionDraw || aiResigned || game.status() !== "ongoing" || game.sideToMove() !== humanColor) { press = null; return; }
+  const sqEl = e.target.closest && e.target.closest(".sq");
+  if (!sqEl) { press = null; return; }
+  const i = +sqEl.dataset.sq;
+  press = { from: i, x0: e.clientX, y0: e.clientY, hasPiece: isHumanPiece(game.boardString()[i]), dragging: false };
+}
+function onBoardPointerMove(e) {
+  if (!press || !press.hasPiece) return;
+  if (!press.dragging) {
+    if (Math.hypot(e.clientX - press.x0, e.clientY - press.y0) < DRAG_THRESH) return;
+    startDrag(press.from, e);
+  }
+  if (press && press.dragging) { e.preventDefault(); moveGhost(e.clientX, e.clientY); }
+}
+function onBoardPointerUp(e) {
+  if (!press) return;
+  const p = press; press = null;
+  if (p.dragging) {
+    if (p.ghost) p.ghost.remove();
+    if (p.pieceEl) p.pieceEl.classList.remove("dragging-src");
+    boardEl.querySelectorAll(".sq.drag-over").forEach((s) => s.classList.remove("drag-over"));
+    const se = sqElFromPoint(e.clientX, e.clientY);
+    const to = se ? +se.dataset.sq : -1;
+    if (to >= 0 && to !== p.from && legalTargets.includes(to)) {
+      if (game.boardString()[to] !== ".") playSound("capture"); else playSound("move");
+      playMove(p.from, to, false);
+    } else {
+      clearSelection(); // dropped off a legal square → just put it back
+    }
+  } else {
+    onSquareClick(p.from); // a tap — run the normal select/move logic
+  }
+}
+function setupBoardInput() {
+  if (!boardEl) return;
+  boardEl.addEventListener("pointerdown", onBoardPointerDown);
+  window.addEventListener("pointermove", onBoardPointerMove, { passive: false });
+  window.addEventListener("pointerup", onBoardPointerUp);
+  window.addEventListener("pointercancel", () => { if (press && press.ghost) press.ghost.remove(); if (press && press.pieceEl) press.pieceEl.classList.remove("dragging-src"); press = null; });
+}
+
+// ---- Optional move sounds (Web Audio — synthesized, netless/offline) -----------
+let soundOn = (() => { try { return localStorage.getItem("gb_sound") === "1"; } catch { return false; } })();
+let audioCtx = null;
+function playSound(kind) {
+  if (!soundOn) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const t = audioCtx.currentTime, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    let f = 180, dur = 0.09, type = "triangle", vol = 0.09;
+    if (kind === "lift") { f = 320; dur = 0.045; type = "sine"; vol = 0.04; }
+    else if (kind === "capture") { f = 95; dur = 0.15; type = "sawtooth"; vol = 0.12; }
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur);
+  } catch {}
+}
+function toggleSound() { soundOn = !soundOn; try { localStorage.setItem("gb_sound", soundOn ? "1" : "0"); } catch {} if (soundOn) playSound("move"); paint(); }
+
 function selectSquare(i) {
   if (previewedMove && i !== previewedMove.from) previewedMove = null; // picking your own piece drops the lens preview
   selected = i;
@@ -2757,11 +2851,13 @@ function engineReply() {
       if (flagged || game.fen() !== fenBefore || game.status() !== "ongoing" || game.sideToMove() !== engineColor()) { busy = false; return; }
       if (uci && uci.length >= 4) {
         const sq = uciToSquares(uci);
+        const capturedByEngine = game.boardString()[sq.to] !== "."; // before the move lands
         game.makeMove(sq.from, sq.to, uci.length > 4 ? uci[4] : undefined);
         lastMove = sq;
         uciHistory.push(uci); // for opening identification
         recordPosition(); // threefold check
         lastMoveLifeline = usedLifeline; // mark the assisted move on the board
+        playSound(capturedByEngine ? "capture" : "move"); // the opponent's move clicks too
       }
       busy = false;
       maybeEngineResign(); // a real opponent resigns when hopelessly lost
