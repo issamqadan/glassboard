@@ -2589,16 +2589,27 @@ function onSquareClick(i) {
 // ---- Drag-to-move (pointer events: mouse + touch), with tap-to-move preserved ----
 let press = null; // { from, x0, y0, hasPiece, dragging, ghost, pieceEl, w, h }
 const DRAG_THRESH = 6; // px before a press becomes a drag (so a tap stays a tap)
+// Physics state: the ghost SPRINGS toward the pointer (trailing weight) and TILTS
+// with its sideways velocity, so a drag feels like lifting a real piece.
+let gx = 0, gy = 0, tx = 0, ty = 0, grot = 0, dragRAF = null;
 function sqElFromPoint(x, y) { const el = document.elementFromPoint(x, y); const s = el && el.closest && el.closest(".sq"); return s || null; }
 function moveGhost(x, y) {
   if (!press || !press.ghost) return;
-  // On touch, lift the piece above the finger so it isn't hidden under it.
-  const lift = press.touch ? press.h * 0.7 : 0;
-  press.ghost.style.left = (x - press.w / 2) + "px";
-  press.ghost.style.top = (y - press.h / 2 - lift) + "px";
+  const lift = press.touch ? press.h * 0.7 : 0; // on touch, raise it above the finger
+  tx = x - press.w / 2;
+  ty = y - press.h / 2 - lift;
   boardEl.querySelectorAll(".sq.drag-over").forEach((s) => s.classList.remove("drag-over"));
   const se = sqElFromPoint(x, y);
   if (se && legalTargets.includes(+se.dataset.sq)) se.classList.add("drag-over");
+}
+function dragTick() {
+  if (!press || !press.ghost) { dragRAF = null; return; }
+  const dx = tx - gx, dy = ty - gy;
+  gx += dx * 0.38; gy += dy * 0.38;              // spring follow (trailing weight)
+  const tilt = Math.max(-18, Math.min(18, dx * 0.7)); // lean into the sideways motion
+  grot += (tilt - grot) * 0.25;
+  press.ghost.style.transform = `translate3d(${gx}px, ${gy}px, 0) scale(1.22) rotate(${grot}deg)`;
+  dragRAF = requestAnimationFrame(dragTick);
 }
 function startDrag(i, e) {
   if (selected !== i) selectSquare(i); // highlight legal targets (rebuilds the board)
@@ -2609,12 +2620,18 @@ function startDrag(i, e) {
   const ghost = pieceEl.cloneNode(true);
   ghost.classList.add("drag-ghost");
   ghost.style.width = rect.width + "px"; ghost.style.height = rect.height + "px";
+  ghost.style.left = "0px"; ghost.style.top = "0px";
   document.body.appendChild(ghost);
   pieceEl.classList.add("dragging-src");
   press.dragging = true; press.ghost = ghost; press.pieceEl = pieceEl; press.w = rect.width; press.h = rect.height;
+  const lift = press.touch ? press.h * 0.7 : 0;
+  gx = tx = e.clientX - rect.width / 2; gy = ty = e.clientY - rect.height / 2 - lift; grot = 0;
+  ghost.style.transform = `translate3d(${gx}px, ${gy}px, 0) scale(1.22)`;
   moveGhost(e.clientX, e.clientY);
+  if (!dragRAF) dragRAF = requestAnimationFrame(dragTick);
   playSound("lift");
 }
+function endDragVisual() { if (dragRAF) { cancelAnimationFrame(dragRAF); dragRAF = null; } }
 function onBoardPointerDown(e) {
   if (e.pointerType === "mouse" && e.button !== 0) return;
   if (busy || flagged || repetitionDraw || aiResigned || game.status() !== "ongoing" || game.sideToMove() !== humanColor) { press = null; return; }
@@ -2635,6 +2652,7 @@ function onBoardPointerUp(e) {
   if (!press) return;
   const p = press; press = null;
   if (p.dragging) {
+    endDragVisual();
     if (p.ghost) p.ghost.remove();
     if (p.pieceEl) p.pieceEl.classList.remove("dragging-src");
     boardEl.querySelectorAll(".sq.drag-over").forEach((s) => s.classList.remove("drag-over"));
@@ -2655,7 +2673,7 @@ function setupBoardInput() {
   boardEl.addEventListener("pointerdown", onBoardPointerDown);
   window.addEventListener("pointermove", onBoardPointerMove, { passive: false });
   window.addEventListener("pointerup", onBoardPointerUp);
-  window.addEventListener("pointercancel", () => { if (press && press.ghost) press.ghost.remove(); if (press && press.pieceEl) press.pieceEl.classList.remove("dragging-src"); press = null; });
+  window.addEventListener("pointercancel", () => { endDragVisual(); if (press && press.ghost) press.ghost.remove(); if (press && press.pieceEl) press.pieceEl.classList.remove("dragging-src"); press = null; });
 }
 
 // ---- Optional move sounds (Web Audio — synthesized, netless/offline) -----------

@@ -125,7 +125,7 @@ button {
 .sq.drag-over::after { content: ""; position: absolute; inset: 4%; border-radius: 12px;
   box-shadow: inset 0 0 0 4px rgba(126,224,214,0.95); background: rgba(126,224,214,0.12); pointer-events: none; z-index: 3; }
 .drag-ghost { position: fixed; z-index: 300; pointer-events: none; left: 0; top: 0;
-  filter: drop-shadow(0 10px 12px rgba(0,0,0,0.55)); transform: scale(1.22); }
+  filter: drop-shadow(0 12px 14px rgba(0,0,0,0.6)); will-change: transform; transform-origin: 50% 70%; }
 .board {
   touch-action: none;
   display: grid;
