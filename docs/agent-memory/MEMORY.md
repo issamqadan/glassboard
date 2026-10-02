@@ -10,3 +10,4 @@
 - [Assist priority doctrine](assist-priority-doctrine.md) — safety outranks the plan, move-by-move; value-aware threats; vs-AI games are device-local
 - [Don't override search](dont-override-search.md) — never re-rank engine moves with static heuristics (it lost ~6 pawns); measure strength with selfplay_diag
 - [Strength & handicap model](strength-and-handicap-model.md) — AI level→depth; assist searches a ply deeper (wins below Master, even at Master); depth-5 = ~4s/move ceiling
+- [Portable session context](portable-session-context.md) — keep docs/CONTINUATION.md + docs/agent-memory synced so Claude continues on another Mac
