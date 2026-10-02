@@ -125,7 +125,15 @@ button {
 .sq.drag-over::after { content: ""; position: absolute; inset: 4%; border-radius: 12px;
   box-shadow: inset 0 0 0 4px rgba(126,224,214,0.95); background: rgba(126,224,214,0.12); pointer-events: none; z-index: 3; }
 .drag-ghost { position: fixed; z-index: 300; pointer-events: none; left: 0; top: 0;
-  filter: drop-shadow(0 12px 14px rgba(0,0,0,0.6)); will-change: transform; transform-origin: 50% 70%; }
+  filter: drop-shadow(0 4px 5px rgba(0,0,0,0.35)); will-change: transform, filter; transform-origin: 50% 70%; }
+/* Touch-down after a drag: JS settles the transform into the square; the shadow
+   shrinks to nothing as the piece makes contact. */
+.piece.landing { z-index: 6; animation: gb-land .32s ease-out; }
+@keyframes gb-land {
+  0%   { filter: drop-shadow(0 14px 14px rgba(0,0,0,0.55)); }
+  70%  { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35)); }
+  100% { filter: none; }
+}
 .board {
   touch-action: none;
   display: grid;

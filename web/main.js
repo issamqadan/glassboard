@@ -2105,6 +2105,8 @@ function animateLastMove() {
   const piece = toEl && toEl.querySelector(".piece");
   if (!piece) return;
   if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const drop = dropFlip; dropFlip = null; // a dragged move lands from where it was dropped
+  if (drop && drop.key === key && performance.now() - drop.t < 1500) { flipPieceFrom(piece, drop); return; }
   const cell = toEl.getBoundingClientRect().width || 0;
   if (!cell) return;
   const from = rc(lastMove.from), to = rc(lastMove.to);
@@ -2589,9 +2591,14 @@ function onSquareClick(i) {
 // ---- Drag-to-move (pointer events: mouse + touch), with tap-to-move preserved ----
 let press = null; // { from, x0, y0, hasPiece, dragging, ghost, pieceEl, w, h }
 const DRAG_THRESH = 6; // px before a press becomes a drag (so a tap stays a tap)
-// Physics state: the ghost SPRINGS toward the pointer (trailing weight) and TILTS
-// with its sideways velocity, so a drag feels like lifting a real piece.
-let gx = 0, gy = 0, tx = 0, ty = 0, grot = 0, dragRAF = null;
+// Physics: the ghost is a mass on a slightly under-damped spring tied to the pointer
+// (momentum + a soft settle), it LIFTS on pickup (scale + growing shadow), and it
+// TILTS with its real sideways velocity. On release it lands *from where you let go*
+// (a FLIP into the square) — or swings back home if the drop wasn't legal.
+const SPRING_K = 520, SPRING_C = 34; // stiffness / damping (ζ≈0.75 → a tiny overshoot)
+let gx = 0, gy = 0, vx = 0, vy = 0, tx = 0, ty = 0, grot = 0, glift = 0, gLast = 0, gw = 0, gh = 0, dragRAF = null;
+let dropFlip = null; // { key, x, y, scale, rot, t } — the ghost's pose at the moment of the drop
+const reduceMotion = () => !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 function sqElFromPoint(x, y) { const el = document.elementFromPoint(x, y); const s = el && el.closest && el.closest(".sq"); return s || null; }
 function moveGhost(x, y) {
   if (!press || !press.ghost) return;
@@ -2602,13 +2609,24 @@ function moveGhost(x, y) {
   const se = sqElFromPoint(x, y);
   if (se && legalTargets.includes(+se.dataset.sq)) se.classList.add("drag-over");
 }
-function dragTick() {
+function paintGhost() {
+  const g = press && press.ghost; if (!g) return;
+  g.style.transform = `translate3d(${gx}px, ${gy}px, 0) scale(${1 + 0.2 * glift}) rotate(${grot}deg)`;
+  g.style.filter = `drop-shadow(0 ${4 + 12 * glift}px ${5 + 11 * glift}px rgba(0,0,0,${0.35 + 0.25 * glift}))`;
+}
+function dragTick(now) {
   if (!press || !press.ghost) { dragRAF = null; return; }
-  const dx = tx - gx, dy = ty - gy;
-  gx += dx * 0.38; gy += dy * 0.38;              // spring follow (trailing weight)
-  const tilt = Math.max(-18, Math.min(18, dx * 0.7)); // lean into the sideways motion
-  grot += (tilt - grot) * 0.25;
-  press.ghost.style.transform = `translate3d(${gx}px, ${gy}px, 0) scale(1.22) rotate(${grot}deg)`;
+  const dt = Math.min(0.032, Math.max(0.001, gLast ? (now - gLast) / 1000 : 0.016)); gLast = now;
+  if (reduceMotion()) { gx = tx; gy = ty; vx = vy = 0; glift = 1; grot = 0; }
+  else {
+    // semi-implicit Euler on a damped spring — stable at any frame rate
+    vx += (SPRING_K * (tx - gx) - SPRING_C * vx) * dt; vy += (SPRING_K * (ty - gy) - SPRING_C * vy) * dt;
+    gx += vx * dt; gy += vy * dt;
+    glift += (1 - glift) * Math.min(1, dt * 14);                // ease up into the lift
+    const tilt = Math.max(-16, Math.min(16, vx * 0.018));      // lean with real velocity
+    grot += (tilt - grot) * Math.min(1, dt * 18);
+  }
+  paintGhost();
   dragRAF = requestAnimationFrame(dragTick);
 }
 function startDrag(i, e) {
@@ -2623,15 +2641,34 @@ function startDrag(i, e) {
   ghost.style.left = "0px"; ghost.style.top = "0px";
   document.body.appendChild(ghost);
   pieceEl.classList.add("dragging-src");
-  press.dragging = true; press.ghost = ghost; press.pieceEl = pieceEl; press.w = rect.width; press.h = rect.height;
-  const lift = press.touch ? press.h * 0.7 : 0;
-  gx = tx = e.clientX - rect.width / 2; gy = ty = e.clientY - rect.height / 2 - lift; grot = 0;
-  ghost.style.transform = `translate3d(${gx}px, ${gy}px, 0) scale(1.22)`;
+  press.dragging = true; press.ghost = ghost; press.pieceEl = pieceEl; press.w = gw = rect.width; press.h = gh = rect.height;
+  // Start exactly where the piece sits and let the spring carry it to the pointer —
+  // picking it up, not teleporting it.
+  gx = rect.left; gy = rect.top; vx = vy = 0; grot = 0; glift = 0; gLast = 0;
+  paintGhost();
   moveGhost(e.clientX, e.clientY);
   if (!dragRAF) dragRAF = requestAnimationFrame(dragTick);
   playSound("lift");
 }
 function endDragVisual() { if (dragRAF) { cancelAnimationFrame(dragRAF); dragRAF = null; } }
+// The ghost's on-screen pose (centre, scale, tilt) so the real piece can FLIP from it.
+function ghostPose() { return { x: gx + gw / 2, y: gy + gh / 2, scale: 1 + 0.2 * glift, rot: grot }; }
+// Land a rendered piece from a screen pose into its square: a soft overshoot as it
+// settles, shadow shrinking as it touches down.
+function flipPieceFrom(pieceEl, pose) {
+  if (!pieceEl || !pose || reduceMotion()) return;
+  const r = pieceEl.getBoundingClientRect(); if (!r.width) return;
+  const dx = pose.x - (r.left + r.width / 2), dy = pose.y - (r.top + r.height / 2);
+  pieceEl.classList.add("moving", "landing");
+  pieceEl.style.transition = "none";
+  pieceEl.style.transform = `translate(${dx}px, ${dy}px) scale(${pose.scale}) rotate(${pose.rot}deg)`;
+  const ms = Math.round(Math.min(300, 150 + Math.hypot(dx, dy) * 0.35));
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    pieceEl.style.transition = `transform ${ms}ms cubic-bezier(.3,1.35,.55,1)`;
+    pieceEl.style.transform = "translate(0, 0)";
+    setTimeout(() => { pieceEl.classList.remove("moving", "landing"); pieceEl.style.transition = ""; pieceEl.style.transform = ""; }, ms + 20);
+  }));
+}
 function onBoardPointerDown(e) {
   if (e.pointerType === "mouse" && e.button !== 0) return;
   if (busy || flagged || repetitionDraw || aiResigned || game.status() !== "ongoing" || game.sideToMove() !== humanColor) { press = null; return; }
@@ -2653,6 +2690,7 @@ function onBoardPointerUp(e) {
   const p = press; press = null;
   if (p.dragging) {
     endDragVisual();
+    const pose = ghostPose();
     if (p.ghost) p.ghost.remove();
     if (p.pieceEl) p.pieceEl.classList.remove("dragging-src");
     boardEl.querySelectorAll(".sq.drag-over").forEach((s) => s.classList.remove("drag-over"));
@@ -2660,9 +2698,11 @@ function onBoardPointerUp(e) {
     const to = se ? +se.dataset.sq : -1;
     if (to >= 0 && to !== p.from && legalTargets.includes(to)) {
       if (game.boardString()[to] !== ".") playSound("capture"); else playSound("move");
+      dropFlip = { key: p.from + "-" + to, t: performance.now(), ...pose }; // land from the hand, not the old square
       playMove(p.from, to, false);
     } else {
-      clearSelection(); // dropped off a legal square → just put it back
+      clearSelection(); // dropped off a legal square → swing it back home
+      flipPieceFrom(boardEl.querySelector(`.sq[data-sq="${p.from}"] .piece`), pose);
     }
   } else {
     onSquareClick(p.from); // a tap — run the normal select/move logic
@@ -2673,7 +2713,14 @@ function setupBoardInput() {
   boardEl.addEventListener("pointerdown", onBoardPointerDown);
   window.addEventListener("pointermove", onBoardPointerMove, { passive: false });
   window.addEventListener("pointerup", onBoardPointerUp);
-  window.addEventListener("pointercancel", () => { endDragVisual(); if (press && press.ghost) press.ghost.remove(); if (press && press.pieceEl) press.pieceEl.classList.remove("dragging-src"); press = null; });
+  window.addEventListener("pointercancel", () => {
+    if (!press) return;
+    endDragVisual();
+    const p = press, pose = p.dragging ? ghostPose() : null; press = null;
+    if (p.ghost) p.ghost.remove();
+    if (p.pieceEl) { p.pieceEl.classList.remove("dragging-src"); flipPieceFrom(p.pieceEl, pose); }
+    boardEl.querySelectorAll(".sq.drag-over").forEach((s) => s.classList.remove("drag-over"));
+  });
 }
 
 // ---- Optional move sounds (Web Audio — synthesized, netless/offline) -----------
