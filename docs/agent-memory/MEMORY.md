@@ -1,0 +1,12 @@
+- [Game UX doctrine](game-ux-doctrine.md) — board sovereignty + transient assistance rules for the active-game screen (docs/GAME-UX.md)
+- [Fun over clever](fun-over-clever.md) — enjoyment is the metric; strategy is the headline; help free in AI/Casual; don't over-abstract
+- [Deploy/hosting gotchas](deploy-hosting-gotchas.md) — free Pages needs a PUBLIC repo; empty commits don't deploy; game data is in Neon not GitHub
+- [Symmetric assistance](symmetric-assistance.md) — assistance is a shared, visible game layer both sides use; first slice = AI lifelines (Play-AI)
+- [Help modes & levels](help-modes-and-levels.md) — 3 help-visibility modes (always/on-demand/negotiated), honest opponent levels, named + opponent strategies
+- [Offer code-level explanation](offer-code-level-explanation.md) — after finishing work, ask if he wants the what/where/why code breakdown
+- [Site map & beginner journey](site-map-and-beginner-journey.md) — page map + link→Learn→Play flow; Help/Forum pages; in-game move explanations (💡)
+- [UI lockdown](ui-lockdown.md) — Play-AI UI locked as baseline `ui-lockdown-v1`; tweaks only, no structural churn
+- [Glass HUD concept](glass-hud-concept.md) — proposed pattern-worthy mobile leap: board-native assistance + Assist Dock + help-duel bar (validating w/ ChatGPT)
+- [Assist priority doctrine](assist-priority-doctrine.md) — safety outranks the plan, move-by-move; value-aware threats; vs-AI games are device-local
+- [Don't override search](dont-override-search.md) — never re-rank engine moves with static heuristics (it lost ~6 pawns); measure strength with selfplay_diag
+- [Strength & handicap model](strength-and-handicap-model.md) — AI level→depth; assist searches a ply deeper (wins below Master, even at Master); depth-5 = ~4s/move ceiling

@@ -4,6 +4,13 @@ This file governs how Claude Code works in this repository. It derives from and 
 consistent with **[docs/VISION.md](docs/VISION.md)** — the founding document. When this file
 and the vision conflict, the vision wins and this file should be corrected.
 
+> **🔀 Continuing on a different machine (or a fresh session)?** Read
+> **[docs/CONTINUATION.md](docs/CONTINUATION.md) FIRST.** Claude's own memory and session
+> transcript live in `~/.claude/` and do **not** travel with a `git clone`. `docs/CONTINUATION.md`
+> + `docs/agent-memory/` carry the full session context, conventions, dev/deploy workflow, and
+> current state so you can pick up exactly where the last session left off. Keep them updated and
+> commit them alongside code (see §7 of that file).
+
 **Last updated:** 2026-08-30 · **Status:** Living document, expected to grow with the project.
 
 ---
