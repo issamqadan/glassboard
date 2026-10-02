@@ -123,6 +123,12 @@
     .score-card .sc-self { display:block; height:100%; background:linear-gradient(90deg,#7ee0d6,#4bb3a6); }
     .score-card .sc-split { display:flex; justify-content:space-between; font-size:0.8rem; font-weight:700; }
     .score-card .sc-split span:first-child { color:#a7e6dd; } .score-card .sc-split span:last-child { color:#f2a6ae; }
+    .welcome-points { display:flex; flex-direction:column; gap:12px; margin:4px 0 18px; }
+    .wp { display:flex; gap:12px; align-items:flex-start; }
+    .wp-ic { font-size:1.4rem; flex:0 0 auto; }
+    .wp b { display:block; color:var(--text); font-size:0.95rem; }
+    .wp span { color:var(--muted); font-size:0.86rem; line-height:1.4; }
+    .welcome-cta { display:flex; gap:10px; flex-wrap:wrap; }
     .g-meta { font-size:0.75rem; color:var(--faint); margin-top:7px; }
     .g-meta .mv-you { color:var(--good); font-weight:640; }
     .g-meta .mv-them { color:var(--muted); font-weight:600; }
@@ -323,6 +329,20 @@
     </div>
   </div>
 
+  <!-- First-time experience: shown once, right after a new player is created. -->
+  <div class="overlay" id="welcomeOverlay" onclick="if(event.target===this)closeWelcome()">
+    <div class="modal">
+      <div class="modal-head"><div><span class="eyebrow" style="color:var(--accent)">Welcome</span><h3 id="welcomeTitle">Welcome to Glassboard ♟️</h3><p class="lede">Chess, in the open — AI help here is <b style="color:var(--text)">transparent, adjustable, and shared by both sides</b>. You learn to need it less.</p></div><button class="closebtn" onclick="closeWelcome()">✕</button></div>
+      <div class="welcome-points">
+        <div class="wp"><span class="wp-ic">🔍</span><div><b>Glass-box</b><span>Any help you get, your opponent sees too. No hidden moves.</span></div></div>
+        <div class="wp"><span class="wp-ic">🎚️</span><div><b>Dial the help</b><span>From none to a co-pilot — pick how much, and it fades as you improve.</span></div></div>
+        <div class="wp"><span class="wp-ic">📈</span><div><b>Your score grows</b><span>Earn points split into 💪 your own vs 🤝 help — watch the "your own" part rise.</span></div></div>
+      </div>
+      <div class="welcome-cta" id="welcomeCta"></div>
+      <a href="./help.html" class="link-quiet" style="display:inline-block;margin-top:14px">❓ How Glassboard works</a>
+    </div>
+  </div>
+
   <div class="toasts" id="toasts"></div>
 
   <script src="./pieces.js"></script>
@@ -406,6 +426,7 @@
       btn.disabled = false; btn.textContent = label;
       toast(data.returning ? 'Welcome back, ' + data.name : 'Player created — ' + data.name, data.returning ? 'Signed in on this device.' : 'Your name + PIN work on any device.');
       renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames();
+      if (!data.returning) showWelcome(); // first-time experience for a brand-new player
     }
     function renderMe() {
       if (!me) return;
@@ -887,6 +908,20 @@
         `<div class="sc-bar" title="${selfPct}% of your score you earned on your own"><span class="sc-self" style="width:${selfPct}%"></span></div>` +
         `<div class="sc-split"><span>💪 Self ${(s.self || 0).toLocaleString()}</span><span>🤝 Assist ${(s.assist || 0).toLocaleString()}</span></div>`;
     }
+
+    // ---- first-time experience ----
+    function showWelcome() {
+      const t = document.getElementById('welcomeTitle');
+      if (t && me) t.textContent = `Welcome to Glassboard, ${(me.name || '').split(' ')[0]}! ♟️`;
+      const cta = document.getElementById('welcomeCta');
+      const beginner = !me || !me.rating || me.rating < 1000;
+      if (cta) cta.innerHTML = beginner
+        ? `<a class="btn btn-primary" href="./learn.html">👋 Learn to play</a><a class="btn btn-ghost" href="./index.html">🤖 Play the AI</a>`
+        : `<a class="btn btn-primary" href="./index.html">🤖 Play the AI</a><button class="btn btn-ghost" onclick="closeWelcome();openCreate()">＋ New game</button><a class="btn btn-ghost" href="./learn.html">👋 Learn</a>`;
+      document.getElementById('welcomeOverlay').classList.add('open');
+    }
+    function closeWelcome() { document.getElementById('welcomeOverlay').classList.remove('open'); }
+    window.closeWelcome = closeWelcome;
 
     // ---- init ----
     renderLadder(); renderAiGames(); renderGames(); renderRivals(); renderScore();

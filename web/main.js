@@ -470,8 +470,8 @@ const COST_SUGG = 2, COST_BEST = 4;
 let firstGame = false, fgStep = 0, fgHintSquares = [];
 const FG = [
   { ic: "👋", text: "Welcome! You'll learn chess just by playing. You're <b>White</b> — your pieces are along the bottom, and you move first.", cta: "Show me →" },
-  { ic: "👆", text: "Tap one of the <b>glowing</b> pieces to pick it up.", hint: "curated" },
-  { ic: "✨", text: "The <b>dots</b> show every square that piece can move to. Tap a dot to move there." },
+  { ic: "👆", text: "Tap one of the <b>glowing</b> pieces to pick it up — or just <b>drag</b> it.", hint: "curated" },
+  { ic: "✨", text: "The <b>dots</b> show every square that piece can move to. Tap a dot — or drag the piece onto one — to move." },
   { ic: "🤝", text: "Nice — that's a move! Your opponent (the computer) takes its turn now…" },
   { ic: "♟", text: "Your turn again. Same idea: <b>tap a piece, then a dot</b>. If a piece is in danger, the coach under the board warns you." },
   { ic: "💡", text: "One more thing: <b>tap any piece anytime</b> to learn how it moves, when it's strong, and what it works well with. The first time you touch each piece, a tip pops up automatically.", cta: "Got it" },

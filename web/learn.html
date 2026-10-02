@@ -216,7 +216,7 @@
       <h1 id="res-title" style="font-size:1.5rem">Nice — you're all set</h1>
       <p class="lede" id="res-sub"></p>
       <div class="field"><label>What should we call you?</label><input id="res-name" placeholder="e.g. Maya" maxlength="24" autocomplete="off" oninput="this.style.borderColor=''"></div>
-      <div style="margin-top:20px"><button class="btn" onclick="finish()">Save &amp; play →</button></div>
+      <div style="margin-top:20px"><button class="btn" id="res-cta" onclick="finish()">Save &amp; play →</button></div>
       <button class="link" onclick="restart()">Take it again</button>
     </section>
   </main>
@@ -416,6 +416,10 @@
       document.getElementById("res-title").textContent = title;
       document.getElementById("res-sub").textContent = sub;
       document.getElementById("res-lab").textContent = bandOf(estimate);
+      // Beginners head into the guided first game — name the button for it.
+      const beginner = path === "new" || estimate < 900;
+      const cta = document.getElementById("res-cta");
+      if (cta && !nextUrl()) cta.textContent = beginner ? "Save & play your first game →" : "Save & play →";
       try { const m = JSON.parse(localStorage.getItem("gb_me")); if (m && m.name) document.getElementById("res-name").value = m.name; } catch {}
       go("result");
       // count-up animation
