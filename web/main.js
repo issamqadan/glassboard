@@ -148,7 +148,7 @@ async function resumeAiGame(id) {
   helpRevealed = helpDelivery === "open"; helpRequestPending = false;
   aiGameId = id; aiSaved = true;
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; aiResigned = false; aiHopeless = 0; mateKingSq = -1;
-  indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null; evalTrail = [];
+  indepOwn = 0; indepFollowed = 0; moveReview = []; rateMoves = []; ratePending = []; lastRating = null; lastEval = null; evalTrail = [];
   pickedStrategyId = null; followBook = false; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
   firstGame = false;
   hideOver();
@@ -335,6 +335,13 @@ let indepOwn = 0, indepFollowed = 0;
 // Strength telemetry: per-move centipawn loss vs the engine's best, so we can
 // measure how good your (assisted) play actually was in a real game.
 let moveReview = []; // [{cp, wasBest}]
+// Earned-rating ruler: EVERY move you make is measured at a fixed depth, whatever
+// the help setting (moveReview only exists when help is on — and help-off games
+// are exactly the pure own-play ones the rating cares about most).
+const RATING_DEPTH = 4;
+let rateMoves = [];    // [{cp, own}] — your moves; own=false if taken from the help
+let ratePending = [];  // in-flight measurements, awaited at game end
+let lastRating = null; // GBRating.record() result for the last game
 let lastEval = null; // engine's read of your position (white-relative cp), for the live pill
 let evalTrail = []; // your-relative eval after each of your turns — the recap's story curve
 let lastResult = null; // { won, draw, reason } of the finished game — for the recap
@@ -366,28 +373,56 @@ function computeGamePoints() {
   const self = Math.round(total * indepFrac);
   return { total, self, assist: total - self, accuracy, won: !!R.won, draw: !!R.draw };
 }
-// Light Elo-style update after an AI game (playful, labelled ≈).
-function updatedRating(prev) {
-  const your = prev != null ? prev : ratingNum(humanEloEl ? humanEloEl.value : 1200);
-  const opp = ratingNum(engineEloEl.value);
-  const expected = 1 / (1 + Math.pow(10, (opp - your) / 400));
-  const actual = lastResult && lastResult.won ? 1 : lastResult && lastResult.draw ? 0.5 : 0;
-  return Math.round(your + 24 * (actual - expected));
-}
 function scoreFinishedGame() {
   if (firstGame || scored) return;
   scored = true;
   const g = computeGamePoints();
   const s = loadScore();
-  const ratingBefore = s.rating != null ? s.rating : ratingNum(humanEloEl ? humanEloEl.value : 1200);
-  const ratingAfter = updatedRating(ratingBefore);
   s.total += g.total; s.self += g.self; s.assist += g.assist; s.games += 1;
   if (g.won) s.wins += 1; else if (g.draw) s.draws += 1; else s.losses += 1;
-  s.rating = ratingAfter;
   try { localStorage.setItem("gb_score", JSON.stringify(s)); } catch {}
-  lastScore = Object.assign(g, { ratingBefore, ratingAfter });
+  lastScore = g;
   lastTotals = s;
-  postScoreToServer(); // cross-device + admin (no-ops offline / until the server ships it)
+  // The earned rating waits (briefly) for the last move measurements to land.
+  const settle = Promise.all(ratePending.map((p) => p.catch(() => {})));
+  const timeout = new Promise((r) => setTimeout(r, 4000));
+  const moves = rateMoves.slice(), helpOnOffer = !(aiAssistOverride === "off" || !helpWasAvailable);
+  Promise.race([settle, timeout]).then(() => {
+    const actual = g.won ? 1 : g.draw ? 0.5 : 0;
+    lastRating = window.GBRating ? GBRating.record(moves, actual, ratingNum(engineEloEl.value), { lvl: levelName(engineEloEl.value), res: actual }) : null;
+    showRatingOutcome(lastRating, { won: g.won, helpOnOffer });
+    postScoreToServer(); // cross-device + admin (no-ops offline)
+  });
+}
+// Game-over: the rating line + (for real milestones) confetti + chime.
+function showRatingOutcome(rec, ctx) {
+  renderRatingChip(rec && rec.rated && rec.before != null ? rec.after - rec.before : 0);
+  const box = document.getElementById("overRating"); if (!box || !window.GBRating) return;
+  const c = GBRating.celebration(rec, ctx);
+  let html = c ? c.html : "";
+  if (!c && rec && !rec.rated) html = `<b>Not rated</b><small>Too few of your own moves to measure this game fairly.</small>`;
+  if (!c && rec && rec.rated && rec.after != null && rec.before != null) {
+    const d = rec.after - rec.before;
+    html = `<b>Rating ${d < 0 ? "▼" + Math.abs(d) : "±0"} → ${rec.after}</b><small>You played like ≈${rec.game.est} this game. It's measured on your own moves only.</small>`;
+  }
+  box.innerHTML = html ? `<span class="or-ic">💪</span><span class="or-txt">${html}</span>` : "";
+  box.hidden = !html;
+  box.classList.toggle("big", !!(c && c.big));
+  if (c && c.big) { GBRating.confetti(); if (soundOn) GBRating.chime(); }
+}
+// The always-on earned-rating chip in the game bar.
+function renderRatingChip(delta) {
+  const el = document.getElementById("ratingChip"); if (!el || !window.GBRating) return;
+  el.innerHTML = GBRating.chipHTML(delta || 0);
+  if (delta > 0) { el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); }
+}
+// Once you're rated, the handicap uses the EARNED number — not a typed-in one.
+function syncEarnedRating() {
+  if (!window.GBRating || !humanEloEl) return;
+  const g = GBRating.get();
+  if (g.r == null) return;
+  humanEloEl.value = g.r; humanEloEl.readOnly = true;
+  humanEloEl.title = "Your earned rating — set by your own play, not typed in";
 }
 // Report the finished game to the server (per-game deltas; server accumulates). Used
 // for cross-device totals and the admin dashboard. Fails silently offline.
@@ -405,7 +440,7 @@ function postScoreToServer() {
         level: levelName(engineEloEl.value),
         result: lastScore.won ? "win" : lastScore.draw ? "draw" : "loss",
         accuracy: lastScore.accuracy || 0, style: aiStyle, opening: op ? op.name : "",
-        points: lastScore.total, self: lastScore.self, assist: lastScore.assist, rating: lastScore.ratingAfter || 0,
+        points: lastScore.total, self: lastScore.self, assist: lastScore.assist, rating: (window.GBRating && GBRating.get().r) || 0,
       }),
     }).catch(() => {});
   } catch {}
@@ -744,6 +779,7 @@ async function main() {
   const rb = document.getElementById("resignBtn");
   if (rb) rb.addEventListener("click", () => { closeMenu(); resign(); });
   setupBoardInput(); // tap + drag piece movement
+  syncEarnedRating(); renderRatingChip(0);
   const snd = document.getElementById("soundToggle");
   if (snd) { snd.checked = soundOn; snd.addEventListener("change", toggleSound); }
   const ub = document.getElementById("undoBtn");
@@ -769,6 +805,7 @@ async function main() {
 const hideOver = () => { const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; };
 
 function newGame() {
+  syncEarnedRating();
   game = new Game();
   posCounts = Object.create(null); repetitionDraw = false; recordPosition();
   game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
@@ -785,7 +822,7 @@ function newGame() {
   humanMs = engineMs = setupMinutes * 60000;
   flagged = false; flagLoser = "";
   mateKingSq = -1;
-  indepOwn = 0; indepFollowed = 0; moveReview = []; lastEval = null; evalTrail = [];
+  indepOwn = 0; indepFollowed = 0; moveReview = []; rateMoves = []; ratePending = []; lastRating = null; lastEval = null; evalTrail = [];
   selected = null;
   legalTargets = [];
   lastMove = null;
@@ -1620,6 +1657,7 @@ function undoMove() {
   indepOwn = snap.indepOwn; indepFollowed = snap.indepFollowed;
   playerFollows = snap.playerFollows; playerTokens = Math.max(0, PLAYER_TOKENS_MAX - playerFollows);
   if (moveReview.length > snap.reviewLen) moveReview.length = snap.reviewLen;
+  if (snap.rateLen != null && rateMoves.length > snap.rateLen) rateMoves.length = snap.rateLen;
   if (typeof snap.uciLen === "number" && uciHistory.length > snap.uciLen) uciHistory.length = snap.uciLen;
   if (typeof snap.helpLogLen === "number" && playerHelpLog.length > snap.helpLogLen) playerHelpLog.length = snap.helpLogLen;
   selected = null; legalTargets = []; lastMove = null; lastMoveLifeline = false;
@@ -1824,7 +1862,7 @@ function openRecap() {
     `<div class="rc-story">You played ${r.op ? `the <b>${escapeHtml(r.op.name)}</b>` : "a game"} against ${/^[AEIOU]/.test(r.style) ? "an" : "a"} <b>${escapeHtml(r.style)} ${escapeHtml(r.lvl)}</b>${r.R.reason ? ` — ${escapeHtml(r.R.won ? "won" : r.R.draw ? "drawn" : "lost")} by ${escapeHtml(r.R.reason)}` : ""} in ${r.fullMoves} moves.</div>` +
     `<div class="rc-stats">${r.accuracy != null ? stat(r.accuracy + "%", "accuracy") : ""}${r.helpable ? stat(r.indepPct + "%", "your own") : ""}${stat(r.fullMoves, "moves")}</div>` +
     (lastScore ? `<div class="rc-score"><div class="rc-score-top"><span class="rc-score-pts">+${lastScore.total}</span><span class="rc-score-lbl">points this game</span>` +
-      (lastTotals && lastTotals.rating != null ? `<span class="rc-rating" title="Your playful strength estimate">≈${lastTotals.rating}${lastScore.ratingAfter > lastScore.ratingBefore ? " ▲" : lastScore.ratingAfter < lastScore.ratingBefore ? " ▼" : ""}</span>` : "") + `</div>` +
+      (window.GBRating ? `<span class="rc-rating">${GBRating.chipHTML(lastRating && lastRating.rated && lastRating.before != null ? lastRating.after - lastRating.before : 0)}</span>` : "") + `</div>` +
       `<div class="rc-score-split"><span class="rc-self">💪 ${lastScore.self} you</span><span class="rc-assist">🤝 ${lastScore.assist} help</span></div>` +
       (lastTotals ? `<div class="rc-score-total">Total play score: <b>${lastTotals.total.toLocaleString()}</b> over ${lastTotals.games} game${lastTotals.games === 1 ? "" : "s"}</div>` : "") + `</div>` : "") +
     (spark ? `<div class="rc-spark-wrap"><div class="rc-spark-head">📈 Momentum</div>${spark}<div class="rc-spark-cap"><span style="color:#7ee0d6">▲ you ahead</span> · <span style="color:#f2707e">▼ behind</span></div></div>` : "") +
@@ -2829,11 +2867,25 @@ function provenanceOf(viaHelp) {
   if (!a || a.level === "off" || !(a.candidates || []).length) return null;
   return viaHelp ? "followed" : "own";
 }
+// Measure one of your moves for the earned rating: centipawn loss vs the best move
+// at a fixed depth. Already-decided positions (|eval| > 10 pawns) aren't counted —
+// every move "loses" nothing there, which would flatter the number.
+function measureForRating(fen, from, to, own) {
+  const entry = { cp: null, own };
+  rateMoves.push(entry);
+  const job = askEngine("bestScore", { fen, depth: RATING_DEPTH }).then((best) => {
+    if (best == null || Math.abs(best) > 1000) return;
+    return askEngine("scoreMove", { fen, from, to, depth: RATING_DEPTH }).then((played) => {
+      if (played > -1000000) entry.cp = Math.max(0, best - played);
+    });
+  }).catch(() => {});
+  ratePending.push(job);
+}
 function doPlay(from, to, promo, viaHelp) {
   if (flagged || busy || repetitionDraw || aiResigned) return; // clock's out, mid-think, a draw, or the engine resigned
   const preFen = game.fen(); // position before the human's move (for the Player Model)
   // Takeback snapshot: this position + the pre-move counters. Undo restores here.
-  history.push({ fen: preFen, indepOwn, indepFollowed, reviewLen: moveReview.length, playerFollows, uciLen: uciHistory.length, helpLogLen: playerHelpLog.length });
+  history.push({ fen: preFen, indepOwn, indepFollowed, reviewLen: moveReview.length, rateLen: rateMoves.length, playerFollows, uciLen: uciHistory.length, helpLogLen: playerHelpLog.length });
   const prov = provenanceOf(viaHelp); // by SOURCE (clicked help vs your own board move)
   if (prov === "own") indepOwn += 1; else if (prov === "followed") indepFollowed += 1;
   lastMoveLifeline = false; // your move — clear the AI's lifeline board badge
@@ -2842,6 +2894,7 @@ function doPlay(from, to, promo, viaHelp) {
     // Glass: taking a suggested move is help received — put it on the record.
     playerHelpLog.push({ move: Math.floor(uciHistory.length / 2) + 1, note: "played the suggested move" });
   }
+  if (!firstGame) measureForRating(preFen, from, to, prov !== "followed");
   // Strength telemetry: how far from best was this move? The cp-loss needs a deep
   // search (scoreMove at depth()), so it runs on the worker and fills in the entry
   // when it returns — the "found it on your own" moment (which only needs wasBest)

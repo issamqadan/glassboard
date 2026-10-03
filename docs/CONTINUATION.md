@@ -5,7 +5,7 @@
 > travel with a `git clone`. This file + `docs/agent-memory/` carry everything a fresh
 > Claude session needs to continue exactly where the last one left off.
 >
-> **Last updated:** 2026-10-02.
+> **Last updated:** 2026-10-03.
 
 ## 0. First actions for a new session
 1. Read **`CLAUDE.md`** (operating agreement) and **`docs/VISION.md`** (the anchor).
@@ -63,7 +63,7 @@ once; so after a deploy, open tabs self-refresh. `sw.js` precaches the app for *
 
 **Commit footer** (end every commit message with):
 ```
-Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_<current>
 ```
 (The session id changes per machine/session — it's informational, not load-bearing.)
@@ -93,6 +93,17 @@ The POC "beginner journey + fun" phase is deep in. Recently shipped (all live):
   **admin dashboard** (leaderboard, per-level win-rate = calibration, openings, recent games,
   **page-hit traffic**).
 - **Offline/PWA** (`sw.js` + manifest), self-updater on every page.
+
+- **Earned rating (2026-10-03, `web/rating.js`):** 💪 chip always on in Play-AI + Lobby; *earned, not
+  self-declared* — Unrated until 3 placement games. Every human move is measured (cp-loss at fixed
+  depth 4, regardless of help setting); help-followed moves excluded; result weighted by independence;
+  <6 own moves → game not rated. Once rated, the earned number drives handicaps (Play-AI humanElo,
+  multiplayer join, Lobby create) and the typed fields lock. Celebrations: placed / tier-up / personal
+  best / zero-help win (confetti + chime if sounds on). ACPL→rating curve is an ≈ seed — calibrate
+  against admin data (P4). Human-vs-human games don't feed it yet (multiplayer needs per-move scoring).
+- **Drag physics (2026-10-03):** spring+lift pickup, FLIP landing from the drop point, snap-back on
+  illegal drop; touch never selects page text. Ghost CSS must be `.piece.drag-ghost` (specificity!).
+- **Git remote is SSH** (`git@github.com:issamqadan/glassboard.git`) — HTTPS has no stored creds.
 
 **Postponed (user's call), not built:** #1 social login (Apple/Google OAuth — needs their dev
 accounts + Render secrets), #6 Web Push notifications (needs VAPID keys + Render + install).

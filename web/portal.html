@@ -349,6 +349,7 @@
   <script src="./pieces.js"></script>
   <script src="./theme.js"></script>
   <script src="./social.js"></script>
+  <script src="./rating.js"></script>
   <script>
     const TIERS = [
       { max:100, name:'Off',        text:'An even match — no assistance.' },
@@ -394,9 +395,26 @@
     // controlling this page) — AI games save to this device, so they resume offline.
     const offlineReady = () => !!(navigator.serviceWorker && navigator.serviceWorker.controller);
 
+    // ---- earned rating: once placed, your rating is set by play, not typed ----
+    function earnedOr(v) { return window.GBRating ? GBRating.effective(v) : v; }
+    function lockEarned(id) {
+      const e = document.getElementById(id); const r = window.GBRating ? GBRating.get().r : null;
+      if (!e || r == null) return;
+      e.value = r; e.readOnly = true; e.title = 'Your earned rating — set by your own play, not typed in';
+    }
+    // Keep the shared identity in step with the earned number (handicaps use it).
+    (function syncMeRating() {
+      try {
+        const r = window.GBRating ? GBRating.get().r : null; if (r == null) return;
+        const m = JSON.parse(localStorage.getItem('gb_me')); if (m && m.rating !== r) { m.rating = r; localStorage.setItem('gb_me', JSON.stringify(m)); }
+        try { if (me) me.rating = r; } catch {}
+      } catch {}
+    })();
+
     // ---- identity ----
     function openIdentity() {
       if (me) { document.getElementById('idName').value = me.name; document.getElementById('idRating').value = me.rating; }
+      lockEarned('idRating');
       const pin = document.getElementById('idPin'); if (pin) pin.value = '';
       const err = document.getElementById('idError'); if (err) err.textContent = '';
       const w = document.getElementById('idWelcome'); if (w) w.style.display = me ? 'inline-block' : 'none'; // replay the tour from your account
@@ -405,7 +423,7 @@
     async function saveIdentity() {
       const name = document.getElementById('idName').value.trim();
       const pin = document.getElementById('idPin').value.trim();
-      const rating = Math.max(400, Math.min(3000, parseInt(document.getElementById('idRating').value, 10) || 1200));
+      const rating = earnedOr(Math.max(400, Math.min(3000, parseInt(document.getElementById('idRating').value, 10) || 1200)));
       const err = document.getElementById('idError'); err.textContent = '';
       if (!name) { err.textContent = 'Enter a player name.'; return; }
       if (!/^\d{4}$/.test(pin)) { err.textContent = 'PIN must be exactly 4 digits.'; return; }
@@ -479,6 +497,7 @@
     function openCreate() {
       if (!me) { openIdentity(); return; }
       document.getElementById('cYou').value = me.rating;
+      lockEarned('cYou');
       document.getElementById('cOppName').value = '';
       setMode('match');
       document.getElementById('createOverlay').classList.add('open');
@@ -495,7 +514,7 @@
     function createGame() {
       const oppName = document.getElementById('cOppName').value.trim() || 'Open invite';
       const casual = createMode === 'casual';
-      const you = casual ? me.rating : Math.max(400, Math.min(3000, +document.getElementById('cYou').value || me.rating));
+      const you = earnedOr(casual ? me.rating : Math.max(400, Math.min(3000, +document.getElementById('cYou').value || me.rating)));
       if (!casual) { me.rating = you; saveMe(me); renderMe(); }
       const id = Math.random().toString(36).slice(2, 6) + Math.random().toString(36).slice(2, 5);
       const g = { id, oppName, myRating: you, status: 'waiting', created: Date.now(), mode: createMode };
@@ -904,7 +923,7 @@
       el.innerHTML =
         `<div class="sc-top">` +
           `<div class="sc-cell"><div class="sc-num">${(s.total || 0).toLocaleString()}</div><div class="sc-lbl">play score</div></div>` +
-          (s.rating != null ? `<div class="sc-cell"><div class="sc-num">≈${s.rating}</div><div class="sc-lbl">your strength</div></div>` : '') +
+          (window.GBRating ? `<div class="sc-cell"><div class="sc-num">${GBRating.chipHTML(0)}</div><div class="sc-lbl">earned rating · your own moves</div></div>` : '') +
           `<div class="sc-cell"><div class="sc-num">${s.wins}-${s.draws}-${s.losses}</div><div class="sc-lbl">W-D-L · ${s.games} game${s.games === 1 ? '' : 's'}</div></div>` +
         `</div>` +
         `<div class="sc-bar" title="${selfPct}% of your score you earned on your own"><span class="sc-self" style="width:${selfPct}%"></span></div>` +

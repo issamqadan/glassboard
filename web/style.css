@@ -1703,3 +1703,25 @@ main.game .strat-panel { display: none; }
   background: transparent !important; padding: 1px 2px; }
 .move-list .mv-cell.you { color: #e7eef8 !important; font-weight: 600; }
 .move-list .mv-prov { font-size: 0.74rem; opacity: 0.9; }
+
+/* ---- Earned rating (rating.js): chip, game-over line, confetti ---- */
+.gbr-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 700; white-space: nowrap; color: #e9eef6;
+  background: rgba(126,224,214,0.12); border: 1px solid rgba(126,224,214,0.35); }
+.gbr-chip.unrated { font-weight: 600; color: #b8c4d6; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.14); }
+.gbr-d { font-size: 11px; font-weight: 800; }
+.gbr-d.up { color: #7ee0d6; } .gbr-d.down { color: #f2707e; }
+.rating-chip-slot.pop .gbr-chip { animation: gbr-pop .7s cubic-bezier(.3,1.6,.5,1); }
+@keyframes gbr-pop { 0% { transform: scale(1); } 35% { transform: scale(1.25); box-shadow: 0 0 18px rgba(126,224,214,0.7); } 100% { transform: scale(1); } }
+.over-rating { display: flex; gap: 10px; align-items: center; margin: 10px auto 4px; padding: 10px 14px; max-width: 340px;
+  border-radius: 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); text-align: left; }
+.over-rating .or-ic { font-size: 22px; }
+.over-rating .or-txt { display: flex; flex-direction: column; gap: 2px; }
+.over-rating small { color: #9fb0c6; font-size: 12px; }
+.over-rating.big { background: linear-gradient(135deg, rgba(126,224,214,0.18), rgba(224,190,121,0.18));
+  border-color: rgba(224,190,121,0.55); animation: gbr-glow 1.6s ease-in-out 2; }
+@keyframes gbr-glow { 50% { box-shadow: 0 0 26px rgba(224,190,121,0.55); } }
+.gbr-confetti { position: fixed; inset: 0; pointer-events: none; z-index: 1000; overflow: hidden; }
+.gbr-confetti i { position: absolute; top: -12px; width: 8px; height: 13px; border-radius: 2px; opacity: 0.95;
+  animation-name: gbr-fall; animation-timing-function: cubic-bezier(.25,.6,.45,1); animation-fill-mode: forwards; }
+@keyframes gbr-fall { to { transform: translate(var(--dx), 105vh) rotate(var(--rot)); opacity: 0.9; } }

@@ -107,7 +107,8 @@ function currentPlayer() {
   let m = null;
   try { m = JSON.parse(localStorage.getItem("gb_me")); } catch {}
   const name = (el("pname") && el("pname").value.trim()) || (m && m.name) || "Player";
-  const rating = parseInt(el("elo").value, 10) || (m && m.rating) || 1200;
+  const typed = parseInt(el("elo").value, 10) || (m && m.rating) || 1200;
+  const rating = window.GBRating ? GBRating.effective(typed) : typed; // earned beats typed
   localStorage.setItem("gb_me", JSON.stringify({ name, rating }));
   return { id: playerId(), name, rating };
 }
@@ -249,7 +250,11 @@ async function main() {
   if (isJoiner) {
     let saved = null;
     try { const m = JSON.parse(localStorage.getItem("gb_me")); if (m && m.rating) saved = m.rating; } catch {}
-    if (saved) { eloEl.value = saved; }
+    const earned = window.GBRating ? GBRating.get().r : null;
+    if (earned != null) {
+      // Rated players don't type a number — the board already knows (no sandbagging).
+      eloEl.value = earned; eloEl.readOnly = true; eloEl.title = "Your earned rating — set by your own play";
+    } else if (saved) { eloEl.value = saved; }
     else { eloEl.value = ""; eloEl.placeholder = "your rating, e.g. 1400"; }
   }
 

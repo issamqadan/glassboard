@@ -115,6 +115,7 @@
         <div id="clocks" class="clocks" hidden><span id="clkYou" class="clk"></span><span id="clkAi" class="clk"></span></div>
         <div class="gb-actions">
           <span id="evalPill" class="pill eval-pill" title="Engine's read of your position (live)" hidden></span>
+          <span id="ratingChip" class="rating-chip-slot"></span>
           <span id="level" class="pill" title="Assistance level">—</span>
           <span id="offlinePill" class="pill offline-pill" title="Saved on this device and playable offline — no wifi needed" hidden>✈️ Offline</span>
           <button id="undoBtn" class="gb-btn" title="Take back your last move" type="button" hidden>↩ Undo</button>
@@ -231,6 +232,7 @@
         <div class="over-box">
           <div class="over-result" id="overResult">—</div>
           <div class="over-reason" id="overReason"></div>
+          <div class="over-rating" id="overRating" hidden></div>
           <button class="over-recap-btn" id="overRecap" title="Your game highlights">✨ See your game recap</button>
           <div id="overFeedback" class="over-feedback" hidden></div>
           <div class="over-actions">
@@ -255,6 +257,7 @@
     <script src="./sf.js"></script>
     <script src="./feedback.js"></script>
     <script src="./theme.js"></script>
+    <script src="./rating.js"></script>
     <script type="module" src="./main.js"></script>
   </body>
 </html>
