@@ -1338,7 +1338,11 @@ main.game .first-game .fg-dot.on { background: #7ee0d6; }
 /* ---- Game Mode: one slim glanceable bar (players · turn · level + actions) ---- */
 main.game .gamebar { display: flex; align-items: center; gap: 12px; padding: 4px 0 8px; flex-wrap: wrap; }
 main.game .gamebar .players { flex: 1 1 auto; margin: 0; border: 0; background: none; padding: 0; min-width: 0; }
-main.game .gamebar .gb-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto; }
+/* The action row must never be wider than the screen: it WRAPS and may shrink.
+   (It used to be flex-shrink:0 with no wrap, so a full bar pushed the whole page
+   sideways on a phone — the board got clipped and buttons ran off-screen.) */
+main.game .gamebar .gb-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  justify-content: flex-end; flex: 0 1 auto; min-width: 0; margin-left: auto; }
 .gb-btn { background: var(--glass-card, rgba(255,255,255,0.035)); border: 1px solid var(--glass-line, rgba(255,255,255,0.08)); color: #cdd8e8;
   border-radius: 10px; padding: 8px 13px; font-size: 0.85rem; font-weight: 620; cursor: pointer; white-space: nowrap; }
 .gb-btn:hover { border-color: #5cc9ec; color: #eaf0fb; }
@@ -1689,7 +1693,16 @@ main.game .strat-panel { display: none; }
   main.game .panels > #thinkWindow, main.game .panels > #aiAssist { display: none; }
   main.game #glassLens { margin: 0 auto 8px; width: 100%; }
   main.game .players { margin: 0 0 6px; padding: 7px 10px; gap: 8px; }
-  main.game .gb-actions { gap: 8px; }
+  /* Belt-and-braces: nothing may push the page sideways on a phone. Without this a
+     single over-wide row scrolls the whole document and clips the board. (Safe here
+     because the sticky right-rail only exists at >=861px.) */
+  html, body { max-width: 100%; overflow-x: hidden; }
+  main.game, main.game .layout, main.game .board-col, main.game .gamebar { max-width: 100%; min-width: 0; }
+  main.game .gb-actions { gap: 6px; row-gap: 6px; }
+  /* Let the bar's own controls shrink gracefully instead of overflowing. */
+  main.game .gb-actions .gb-btn, main.game .gb-actions .gb-chip, main.game .gb-actions .pill {
+    font-size: 0.78rem; padding: 6px 10px; white-space: nowrap; }
+  main.game .gamebar .players { flex: 1 1 100%; }
 }
 
 /* ---- DESKTOP: board centered (fits viewport height) + a right "Glass" panel that
