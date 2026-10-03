@@ -66,11 +66,14 @@
         <div class="board-col">
           <!-- Always-on strategy strip: what each side is actually playing (free awareness). -->
           <div id="openingLine" class="opening-line" hidden></div>
+          <!-- COCKPIT: each player's info on THEIR side of the board. -->
+          <div id="oppStrip" class="pstrip opp" hidden></div>
           <div id="materialBar" class="matbar" aria-label="material — captured pieces and who leads"></div>
           <div class="board-wrap">
             <div id="board" class="board" aria-label="chess board"></div>
             <svg id="planOverlay" class="plan-overlay" viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg>
           </div>
+          <div id="youStrip" class="pstrip you" hidden></div>
           <!-- Plan Dock: the always-visible strategy summary (plan · progress · next move). -->
           <div id="planDock" class="plan-dock" hidden></div>
         </div>

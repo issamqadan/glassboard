@@ -218,6 +218,20 @@
     return { move: rec, label: (fl && byFlavor[fl.key]) || "Best move", why: rec.note || "The engine's strongest move here.", tag: "Best move", kind: "best" };
   }
 
+  // One player's cockpit strip — name · rating · captured pieces · lead · pips ·
+  // clock · turn. Shared so both games render the identical row. Fixed height and
+  // single line is enforced in CSS (.pstrip): nothing above the board may resize.
+  function playerStripHTML(o) {
+    o = o || {};
+    return `<span class="ps-id">${o.icon || ""} <b>${esc(o.name || "")}</b>${o.rating ? `<span class="ps-rating">${esc(o.rating)}</span>` : ""}</span>` +
+      (o.pips ? `<span class="ps-pips" title="${esc(o.pipsTitle || "")}">${o.pips}</span>` : "") +
+      `<span class="ps-caps">${o.caps || ""}</span>` +
+      (o.lead > 0 ? `<span class="ps-lead">+${o.lead}</span>` : "") +
+      (o.clock ? `<span class="ps-clock${o.low ? " low" : ""}">${esc(o.clock)}</span>` : "") +
+      (o.extra || "") +
+      (o.turn ? `<span class="ps-turn">${esc(o.turnText || "")}</span>` : "");
+  }
+
   // The board "thinks out loud": the recommended move as a breathing arrow + ring.
   // Pure SVG; the caller passes its own orientation-aware square→centre mapper, so
   // the same arrow works on a flipped board in either game.
@@ -243,5 +257,5 @@
     return { uci: u, from: (u.charCodeAt(0) - 97) + (u.charCodeAt(1) - 49) * 8, to: (u.charCodeAt(2) - 97) + (u.charCodeAt(3) - 49) * 8 };
   }
 
-  global.GBAssistUI = { PVAL, PIECE_WORD, STRAT_VERB, verbFor, pieceAttacks, moveMeaning, identity, identityRowHTML, stripHTML, pickPriority, adviceSVG, bookNextMove, esc };
+  global.GBAssistUI = { PVAL, PIECE_WORD, STRAT_VERB, verbFor, pieceAttacks, moveMeaning, identity, identityRowHTML, stripHTML, playerStripHTML, pickPriority, adviceSVG, bookNextMove, esc };
 })(window);

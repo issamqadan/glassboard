@@ -1519,14 +1519,7 @@ function levelName(elo) {
 // below) — name · rating · captured pieces · material lead · lifelines · clock ·
 // whose turn. Spatial mapping: you look where the information belongs.
 // Both strips are FIXED HEIGHT so the board never moves (board sovereignty).
-function stripHTML_player(o) {
-  return `<span class="ps-id">${o.icon} <b>${o.name}</b>${o.rating ? `<span class="ps-rating">${o.rating}</span>` : ""}</span>` +
-    (o.pips ? `<span class="ps-pips" title="${escapeHtml(o.pipsTitle || "")}">${o.pips}</span>` : "") +
-    `<span class="ps-caps">${o.caps || ""}</span>` +
-    (o.lead > 0 ? `<span class="ps-lead">+${o.lead}</span>` : "") +
-    (o.clock ? `<span class="ps-clock${o.low ? " low" : ""}">${o.clock}</span>` : "") +
-    (o.turn ? `<span class="ps-turn">${o.turnText}</span>` : "");
-}
+const stripHTML_player = (o) => GBAssistUI.playerStripHTML(o);
 function renderPlayers() {
   updateSetupSum();
   const legacy = document.getElementById("players"); // retired: the cockpit replaces it

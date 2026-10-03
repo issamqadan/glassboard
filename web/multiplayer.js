@@ -767,8 +767,13 @@ function agencySummaryHtml() {
   try { prev = JSON.parse(localStorage.getItem("gb_lasthelp")); } catch {}
   localStorage.setItem("gb_lasthelp", JSON.stringify(pct));
   let body;
-  if (budgetSpent === 0) {
+  // "On your own" must account for every way help was taken (see main.js) — budget
+  // spends AND revealing the suggestions. Otherwise the glass-box contradicts itself.
+  const tookHelp = budgetSpent > 0 || revealedBest || revealedSugg;
+  if (!tookHelp) {
     body = "You played this one <b>entirely on your own</b> — no help spent. 🎉";
+  } else if (budgetSpent === 0) {
+    body = "You revealed the suggestions during this game. Needing them less is the whole idea.";
   } else {
     let trend = "";
     if (prev != null && isFinite(prev)) {
@@ -855,29 +860,53 @@ function renderCoach() {
   }
 }
 
+// THE COCKPIT in human games — each player's info on THEIR side of the board, with
+// captured pieces + material lead. Same shared renderer as Play-AI, so both match.
+function capGlyphsMP(chars) {
+  return (chars || []).map((c) => {
+    const g = typeof pieceSVG === "function" ? pieceSVG(c) : c;
+    return `<span class="cap-pc ${c === c.toUpperCase() ? "white" : "black"}">${g}</span>`;
+  }).join("");
+}
 function renderPlayers() {
-  const el = document.getElementById("players");
-  if (!el || !state || !myColor) return;
-  el.hidden = false;
+  const legacy = document.getElementById("players"); // retired: the cockpit replaces it
+  if (legacy) { legacy.hidden = true; legacy.innerHTML = ""; }
+  const oppEl = el2("oppStrip"), youEl = el2("youStrip");
+  if (!oppEl || !youEl || !state || !myColor || !game) return;
   const wName = state.white_name || (myColor === "white" ? (myName || "You") : (hostName || "White"));
   const bName = state.black_name || (myColor === "black" ? (myName || "You") : "Opponent");
-  const w = { name: wName, elo: state.white_elo, color: "white" };
-  const b = { name: bName, elo: state.black_elo, color: "black" };
-  const you = myColor === "white" ? w : b;
-  const opp = myColor === "white" ? b : w;
+  const youName = myColor === "white" ? wName : bName;
+  const oppName = myColor === "white" ? bName : wName;
+  const youElo = myColor === "white" ? state.white_elo : state.black_elo;
+  const oppElo2 = myColor === "white" ? state.black_elo : state.white_elo;
   const oppSeated = myColor === "white" ? !!state.black_name : !!state.white_name;
-  const yourTurn = state.status === "ongoing" && state.turn === myColor;
-  const turnHtml = state.status === "ongoing"
-    ? (yourTurn ? `<span class="turn you">💡 Your move</span>` : `<span class="turn wait">Their move</span>`)
-    : "";
-  el.innerHTML =
-    `<div class="pl"><span class="dot ${you.color}"></span> You · <b>${escapeHtml(you.name)}</b> <span class="tnum">${you.elo}</span></div>` +
-    `<div class="vs">vs</div>` +
-    (oppSeated
-      ? `<div class="pl"><span class="dot ${opp.color}"></span> <b>${escapeHtml(opp.name)}</b> <span class="tnum">${opp.elo}</span></div>`
-      : `<div class="pl"><span class="waiting-dot"></span> Waiting for opponent…</div>`) +
-    turnHtml +
-    (oppSeated ? rivalryChip(opp.name) : "");
+  const over = state.status !== "ongoing";
+  const turn = over ? null : state.turn;
+  const cap = window.capturedFromBoard ? window.capturedFromBoard(game.boardString()) : { whiteCaptured: [], blackCaptured: [], materialDiff: 0 };
+  // whiteCaptured = black pieces White took. Attribute each list to its taker.
+  const youCap = myColor === "white" ? cap.whiteCaptured : cap.blackCaptured;
+  const oppCap = myColor === "white" ? cap.blackCaptured : cap.whiteCaptured;
+  const youLead = myColor === "white" ? cap.materialDiff : -cap.materialDiff;
+  const S = window.GBAssistUI;
+  if (!S) return;
+  const opp = S.playerStripHTML({
+    icon: `<span class="dot ${myColor === "white" ? "black" : "white"}"></span>${oppSeated ? "👤" : "⏳"}`,
+    name: oppSeated ? oppName : "Waiting for opponent…", rating: oppSeated ? String(oppElo2 || "") : "",
+    caps: capGlyphsMP(oppCap), lead: -youLead,
+    extra: oppSeated ? rivalryChip(oppName) : "", // keep the head-to-head record visible
+    turn: turn && turn !== myColor, turnText: "their move",
+  });
+  const you = S.playerStripHTML({
+    icon: `<span class="dot ${myColor}"></span>👤`,
+    name: youName, rating: String(youElo || ""),
+    caps: capGlyphsMP(youCap), lead: youLead,
+    turn: turn === myColor, turnText: "your move",
+  });
+  oppEl.hidden = false; youEl.hidden = false;
+  if (oppEl._h !== opp) { oppEl.innerHTML = opp; oppEl._h = opp; }
+  if (youEl._h !== you) { youEl.innerHTML = you; youEl._h = you; }
+  oppEl.classList.toggle("active", !!turn && turn !== myColor);
+  youEl.classList.toggle("active", turn === myColor);
 }
 
 // Reflect the rivalry in-game: head-to-head record vs the current opponent,
