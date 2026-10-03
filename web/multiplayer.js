@@ -671,10 +671,22 @@ const oppElo = () => (myColor === "white" ? state.black_elo : state.white_elo);
 
 // --- rendering -------------------------------------------------------------
 
+// The ALWAYS-ON strategy strip — identical to Play-AI's (shared renderer), shown at
+// every assistance level because naming what's being played is awareness, not help.
+function renderOpening() {
+  const box = el("openingLine");
+  if (!box || !window.GBAssistUI || !game || !state) return;
+  if (state.status !== "ongoing") { box.hidden = true; box.innerHTML = ""; box._h = ""; return; }
+  const html = GBAssistUI.stripHTML({ opening: mpOpening(), assistData, myColor, oppColor: myColor === "white" ? "black" : "white" });
+  if (!html) { box.hidden = true; if (box._h) { box.innerHTML = ""; box._h = ""; } return; }
+  box.hidden = false;
+  if (html !== box._h) { box.innerHTML = html; box._h = html; }
+}
 function paint() {
   renderBoard();
   renderPlayers();
   renderCaptured();
+  renderOpening();
   renderCoach();
   renderAssist();
   renderStrategy();

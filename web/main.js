@@ -1182,10 +1182,20 @@ function openStepsSheet(picked) {
 function currentOpening() {
   return (window.GBStrategies && !firstGame) ? GBStrategies.identify(uciHistory) : null;
 }
+// The ALWAYS-ON strategy strip above the board: which opening you're actually
+// playing (named from your moves — so it tells you even when you didn't choose one),
+// what your opponent is playing, and the live plan. This is AWARENESS, not a move
+// answer, so it shows at EVERY assistance level — including "No help" — and is
+// never gated behind the Lens. Tapping it opens the Plans picker.
+// Cached on its own HTML so repaints can't make it flash (an old complaint).
 function renderOpening() {
-  // Retired from above the board (it flashed on every move and wasn't actionable).
   const el = document.getElementById("openingLine");
-  if (el) { el.hidden = true; el.innerHTML = ""; }
+  if (!el || !window.GBAssistUI) return;
+  if (firstGame || game.status() !== "ongoing") { el.hidden = true; el.innerHTML = ""; el._h = ""; return; }
+  const html = GBAssistUI.stripHTML({ opening: currentOpening(), assistData, myColor: humanColor, oppColor: engineColor() });
+  if (!html) { el.hidden = true; if (el._h) { el.innerHTML = ""; el._h = ""; } return; }
+  el.hidden = false;
+  if (html !== el._h) { el.innerHTML = html; el._h = html; el.onclick = openPlanSheet; }
 }
 
 // "Who's playing what" — fuse the NAMED opening (attributed to whichever side it

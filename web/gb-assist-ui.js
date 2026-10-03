@@ -119,6 +119,37 @@
     return `<div class="gl-identity">${idn.phase ? `<span class="gl-phase">${esc(idn.phase)}</span>` : ""}${bits.join("")}</div>`;
   }
 
+  // ALWAYS-ON strategy strip — "what am I actually playing, and what are they?"
+  //
+  // This is pure AWARENESS: the opening is identified from the MOVE LIST alone, so it
+  // needs no engine assistance and is shown at EVERY help level (including No help).
+  // It answers "which strategy did I follow, knowingly or not — and my opponent?".
+  // The engine's live plan (develop/attack/…) is richer help, so it only rides along
+  // when the engine actually produced one.
+  //
+  // ctx: { opening, assistData?, myColor, oppColor }
+  // Returns "" when there's nothing honest to say yet (stays quiet in the first moves).
+  function stripHTML(ctx) {
+    ctx = ctx || {};
+    const op = ctx.opening;
+    const sr = ctx.assistData && ctx.assistData.strategy;
+    const bits = [];
+    if (op) {
+      const mine = op.side === ctx.myColor || op.side === "both";
+      const theirs = op.side === ctx.oppColor || op.side === "both";
+      const who = mine ? "You're playing" : theirs ? "Opponent is playing" : "In play";
+      bits.push(`<span class="gs-op" title="${esc(op.idea || "")}">📖 <b>${esc(who)}:</b> ${esc(op.name)}</span>`);
+    }
+    if (sr && sr.strategies && sr.strategies.length) {
+      const top = sr.strategies[0];
+      bits.push(`<span class="gs-plan" title="${esc(top.idea || "")}">🧭 ${esc(top.name)}</span>`);
+    }
+    if (sr && sr.opponent) bits.push(`<span class="gs-opp" title="${esc(sr.opponent)}">🎯 ${esc(sr.opponent)}</span>`);
+    if (!bits.length) return "";
+    const phase = sr && sr.phase ? `<span class="gs-phase">${esc(sr.phase)}</span>` : "";
+    return `<div class="gs-row">${phase}${bits.join("")}<span class="gs-more">Plans ›</span></div>`;
+  }
+
   // The NEXT move in a chosen opening's book line, if the game is still following it.
   // ctx: { opening, history } — returns {uci,from,to} or null.
   function bookNextMove(ctx) {
@@ -130,5 +161,5 @@
     return { uci: u, from: (u.charCodeAt(0) - 97) + (u.charCodeAt(1) - 49) * 8, to: (u.charCodeAt(2) - 97) + (u.charCodeAt(3) - 49) * 8 };
   }
 
-  global.GBAssistUI = { PVAL, PIECE_WORD, pieceAttacks, moveMeaning, identity, identityRowHTML, bookNextMove, esc };
+  global.GBAssistUI = { PVAL, PIECE_WORD, pieceAttacks, moveMeaning, identity, identityRowHTML, stripHTML, bookNextMove, esc };
 })(window);
