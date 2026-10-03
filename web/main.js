@@ -2358,10 +2358,8 @@ function moveMeaning(m) {
 // ---- Glass Lens: the thumb-first "what matters NOW" control ----------------
 // One prioritised recommendation surfaced every turn (urgent threat → your plan →
 // best move), previewed on the board, with alternatives a thumb-drag away.
-const STRAT_VERB = { attack_king: "attack", pawn_storm: "attack", win_material: "material win", save_piece: "defense",
-  develop: "development", center: "central control", simplify: "simplification", passer: "passed pawn",
-  iso_attack: "attack", minority_attack: "minority attack", iqp_attack: "IQP play", open_file: "file pressure", fianchetto: "fianchetto plan", outpost: "outpost plan",
-  rook_seventh: "rook lift", improve: "piece play", pawn_break: "pawn break" };
+// Plan verbs live in the shared module so both games phrase plans identically.
+const STRAT_VERB = (window.GBAssistUI && GBAssistUI.STRAT_VERB) || {};
 let previewedMove = null; // {from,to,uci,san} currently previewed by the lens
 let sfBest = null;        // {from,to,uci,san,note} — Stockfish full-strength best move this turn
 

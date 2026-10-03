@@ -673,6 +673,7 @@ const oppElo = () => (myColor === "white" ? state.black_elo : state.white_elo);
 
 // The ALWAYS-ON strategy strip — identical to Play-AI's (shared renderer), shown at
 // every assistance level because naming what's being played is awareness, not help.
+const el2 = (id) => el(id);
 function renderOpening() {
   const box = el("openingLine");
   if (!box || !window.GBAssistUI || !game || !state) return;
@@ -688,6 +689,7 @@ function paint() {
   renderPlayers();
   renderCaptured();
   renderOpening();
+  renderGlassLens();
   renderCoach();
   renderAssist();
   renderStrategy();
@@ -1046,6 +1048,59 @@ function mpMeaning(m) {
     hanging: assistData.hanging || [], freeCaptures: assistData.freeCaptures || [],
   }, m);
 }
+// ---- THE GLASS LENS in human games -----------------------------------------
+// Same prioritised surface as Play-AI, driven by the SHARED ladder. The engine here
+// is the server-validated Rust pick (assistData.recommended) rather than Stockfish —
+// the module takes whatever engine the page supplies.
+function mpRecommended() {
+  const a = assistData;
+  if (!a || !a.recommended) return null;
+  const c = (a.candidates || []).find((x) => x.uci === a.recommended);
+  const q = uciToSquares(a.recommended);
+  if (!q) return null;
+  return { uci: a.recommended, from: q.from, to: q.to, san: (c && c.san) || a.recommended, note: (c && c.note) || "" };
+}
+function renderGlassLens() {
+  const el = el2("glassLens");
+  if (!el) return;
+  const a = assistData;
+  const myTurn = state && state.status === "ongoing" && state.turn === myColor;
+  if (!a || !myTurn || !(a.candidates || []).length) { el.hidden = true; el.innerHTML = ""; return; }
+  // Match games gate deeper help behind the agency budget — mirror that here: show
+  // the ask button until it's been revealed (casual is free, as it always was).
+  const revealed = casualMode() || revealedBest || revealedSugg;
+  const idRow = window.GBAssistUI
+    ? GBAssistUI.identityRowHTML({ assistData: a, opening: mpOpening(), myColor, oppColor: myColor === "white" ? "black" : "white" })
+    : "";
+  el.hidden = false;
+  if (!revealed) {
+    el.className = "glass-lens ask";
+    el.innerHTML = idRow + `<button class="gl-askbtn" id="mpLensAsk" type="button">💡 Show the key move <small>−${COST_BEST} from your help budget</small></button>`;
+    const b = el2("mpLensAsk");
+    if (b) b.onclick = () => { spend(COST_BEST); revealedBest = true; paint(); };
+    return;
+  }
+  const sr = a.strategy;
+  const picked = sr && sr.strategies && sr.strategies.find((x) => x.id === pickedStrategyId);
+  const p = window.GBAssistUI ? GBAssistUI.pickPriority({
+    assistData: a, recommended: mpRecommended(),
+    picked: picked ? Object.assign({ verb: GBAssistUI.verbFor(picked.id) }, picked) : null,
+    opening: mpOpening(), history: mpHistory(),
+    pieceNameAt, sqName,
+  }) : null;
+  if (!p) { el.hidden = true; el.innerHTML = ""; return; }
+  if (p.analyzing) { el.className = "glass-lens analyzing"; el.innerHTML = idRow + `<div class="gl-analyzing"><span class="gl-spin"></span> Analyzing the position…</div>`; return; }
+  const meaning = mpMeaning(p.move);
+  el.className = "glass-lens kind-" + p.kind;
+  el.innerHTML = idRow +
+    `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span></div>` +
+    (meaning ? `<div class="gl-mean">💡 ${escapeHtml(meaning)}</div>` : "") +
+    (p.why ? `<div class="gl-why">${escapeHtml(p.why)}</div>` : "") +
+    `<div class="gl-actions"><button class="gl-playmove" id="mpLensPlay" type="button">▶ ${escapeHtml(p.move.san || "Play")}</button></div>`;
+  const pb = el2("mpLensPlay");
+  if (pb) pb.onclick = () => sendMove(p.move.from, p.move.to);
+}
+
 function renderAssist() {
   assistEl.innerHTML = "";
   if (!assistData) {

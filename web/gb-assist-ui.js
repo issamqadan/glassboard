@@ -12,6 +12,14 @@
 (function (global) {
   const PVAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
   const PIECE_WORD = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
+  // Engine plan-id → the noun used in "Continue your <verb>". Shared so the phrasing
+  // is identical in both games.
+  const STRAT_VERB = { attack_king: "attack", pawn_storm: "attack", win_material: "material win", save_piece: "defense",
+    develop: "development", center: "central control", simplify: "simplification", passer: "passed pawn",
+    iso_attack: "attack", minority_attack: "minority attack", iqp_attack: "IQP play", open_file: "file pressure",
+    fianchetto: "fianchetto plan", outpost: "outpost plan", rook_seventh: "rook lift", improve: "piece play",
+    pawn_break: "pawn break" };
+  const verbFor = (id) => STRAT_VERB[id] || "plan";
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   // Squares a piece on `sq` attacks/guards on a 64-char board string (a1=0 … h8=63),
@@ -221,5 +229,5 @@
     return { uci: u, from: (u.charCodeAt(0) - 97) + (u.charCodeAt(1) - 49) * 8, to: (u.charCodeAt(2) - 97) + (u.charCodeAt(3) - 49) * 8 };
   }
 
-  global.GBAssistUI = { PVAL, PIECE_WORD, pieceAttacks, moveMeaning, identity, identityRowHTML, stripHTML, pickPriority, bookNextMove, esc };
+  global.GBAssistUI = { PVAL, PIECE_WORD, STRAT_VERB, verbFor, pieceAttacks, moveMeaning, identity, identityRowHTML, stripHTML, pickPriority, bookNextMove, esc };
 })(window);
