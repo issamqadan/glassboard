@@ -117,6 +117,16 @@ The POC "beginner journey + fun" phase is deep in. Recently shipped (all live):
   (moveMeaning / identity / identityRowHTML / bookNextMove, pure, takes an explicit ctx). main.js now
   delegates to it; multiplayer.js uses it for the identity strip + per-candidate "💡 what this does".
   See `docs/agent-memory/ai-human-parity-doctrine.md`.
+- **PARITY PROGRESS (2026-10-04): 13 of 16 gameplay features now SHARED.** Modules:
+  `gb-assist-ui.js` (moveMeaning, identity strip, always-on strategy strip, pickPriority
+  ladder, adviceSVG, playerStripHTML, STRAT_VERB), `gb-sound.js` (wooden move sounds),
+  `gb-board-input.js` (tap + physics drag, fully injected context). Human games now have:
+  explanations, identity strip, opening awareness, sounds, strategy strip, Glass Lens,
+  board arrow, "💡 Try" rec, Plans picker, follow-the-book, the COCKPIT (player strips
+  with captured pieces), and drag-to-move.
+  **STILL Play-AI only: Game Recap, play score, provenance move list.** Note: a
+  full-fidelity Recap in human games needs PER-MOVE SCORING there (multiplayer never
+  computes cp-loss) — adding it would also unlock the earned rating for human games.
 - **POC priority stack:** P1 assistance surface in human games (criterion #2, in progress) → P2 recap+score,
   then drag+sounds in human games (criteria #1/#6) → P3 **run the unequal-pair playtest** (the gate).
   NOTE: calibrating rating/levels is **explicitly out of scope this phase** (POC.md says P4).
