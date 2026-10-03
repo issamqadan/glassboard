@@ -1,0 +1,8 @@
+#!/bin/sh
+# Mirror Claude's session context into the repo on every commit, so work can be
+# continued from any machine after a clone. Never blocks a commit.
+# Enable once per machine with:  git config core.hooksPath .githooks
+if [ -x scripts/sync-context.sh ]; then
+  sh scripts/sync-context.sh || true
+fi
+exit 0

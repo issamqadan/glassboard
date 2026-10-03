@@ -132,7 +132,28 @@ Awaiting Issam's on-phone feedback on drag feel + sounds + rating chip.
 **The POC exit gate** is still a real unequal-pair playtest (beginner + stronger, both say
 fun+fair) — see `docs/POC.md`. The family playtests are that gate in motion.
 
-## 7. Keeping this portable (do this every session)
+## 7. Keeping this portable — AUTOMATIC (do this once per machine)
+
+Context sync is no longer a discipline problem; a **git hook does it on every commit**.
+
+**One-time, on each Mac after cloning:**
+```sh
+git config core.hooksPath .githooks
+```
+
+That's it. From then on, every `git commit` runs `scripts/sync-context.sh`, which:
+- mirrors `~/.claude/projects/<slug>/memory/*.md` → `docs/agent-memory/`
+  (it auto-detects the slug, which differs depending on where Claude was launched),
+- stamps today's date into this file's **Last updated**,
+- stages both so they ride along with the commit.
+
+It never fails a commit, and quietly does nothing on a checkout with no local memory.
+
+**Still worth doing by hand:** update §6 (current state) when the picture really
+changes — the hook copies memories, it can't write your narrative.
+
+<!-- superseded manual process, kept for reference -->
+### (old) Keeping this portable (manual)
 When you commit meaningful work, also:
 - Update this file's **State** section if the picture changed.
 - Re-copy the memory so the repo stays in sync:
