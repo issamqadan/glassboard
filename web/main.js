@@ -270,13 +270,22 @@ function givesCheck(uci) {
 // Choose among near-best candidates by the opponent's style. Candidates are
 // Stockfish's MultiPV list (best-first, with evals); we only ever pick from moves
 // within a small eval margin of the best, so personality never costs a blunder.
-function pickStyleMove(cands, style, aiWhite) {
+function pickStyleMove(cands, style, aiWhite, skill) {
   if (!cands || !cands.length) return null;
   cands = cands.filter((c) => c && c.uci);
   if (!cands.length) return null;
   if (style === "balanced" || cands.length === 1) return cands[0].uci;
   const best = cands[0].cp;
-  const margin = (style === "aggressive" || style === "wildcard") ? 90 : 55; // centipawns of allowed "personality"
+  // STYLE IS *HOW* YOU PLAY AMONG EQUALLY GOOD MOVES — never a handicap. The margin
+  // of "personality" therefore SHRINKS as strength rises: a club player can indulge
+  // half a pawn for flavour, a Master cannot. (A flat 90cp margin was letting a
+  // Wildcard Master bleed ~7 pawns over a game and resign — it wasn't a Master.)
+  const sk = typeof skill === "number" ? skill : 12;
+  const wide = style === "aggressive" || style === "wildcard";
+  const base = wide ? 90 : 55;
+  // skill 0-10 → full margin … skill 20 → ~1/6 of it (15cp wide / 9cp tight).
+  const scale = sk <= 10 ? 1 : Math.max(0.17, 1 - (sk - 10) * 0.083);
+  const margin = Math.round(base * scale);
   const pool = cands.filter((c) => best - c.cp <= margin).slice(0, 5);
   if (pool.length <= 1) return cands[0].uci;
   if (style === "wildcard") return pool[Math.floor(Math.random() * pool.length)].uci;
@@ -321,7 +330,7 @@ function opponentMove(fen, usedLifeline, baseElo) {
     const opts = { skill: b.skill, movetime: b.movetime, multipv: 4 };
     if (moves) opts.moves = moves;
     return GBEngine.bestMoves(fen, opts)
-      .then((cands) => pickStyleMove(cands, aiStyle, engineColor() === "white") || rustFallback())
+      .then((cands) => pickStyleMove(cands, aiStyle, engineColor() === "white", b.skill) || rustFallback())
       .catch(rustFallback);
   }
   const opts = usedLifeline ? { skill: 20, movetime: 900 } : { skill: b.skill, movetime: b.movetime, depth: b.depth };
