@@ -735,21 +735,47 @@ async function main() {
   // under the gear. Fixed elements escape every ancestor's overflow.
   const fold = document.getElementById("setupFold");
   if (fold) {
+    // PORTAL the panel to <body> while it's open. On desktop main.game is a clipped,
+    // height-constrained flex column, and any ancestor with overflow/transform can
+    // trap or hide a dropdown. Re-parenting to <body> removes every such risk —
+    // then we just position it under the gear. It goes back on close so the markup
+    // (and <details> semantics) stay intact.
+    const panel = fold.querySelector(".opts-body");
     const place = () => {
-      const body = fold.querySelector(".opts-body"), sum = fold.querySelector("summary");
-      if (!body || !sum) return;
+      const sum = fold.querySelector("summary");
+      if (!panel || !sum) return;
       const r = sum.getBoundingClientRect();
-      body.style.position = "fixed";
-      body.style.top = Math.round(r.bottom + 6) + "px";
-      body.style.right = Math.max(8, Math.round(window.innerWidth - r.right)) + "px";
-      body.style.maxHeight = Math.max(160, Math.round(window.innerHeight - r.bottom - 24)) + "px";
-      body.style.overflowY = "auto";
+      panel.style.position = "fixed";
+      panel.style.top = Math.round(r.bottom + 6) + "px";
+      panel.style.right = Math.max(8, Math.round(window.innerWidth - r.right)) + "px";
+      panel.style.left = "auto";
+      panel.style.zIndex = "400";
+      panel.style.maxHeight = Math.max(160, Math.round(window.innerHeight - r.bottom - 24)) + "px";
+      panel.style.overflowY = "auto";
     };
-    fold.addEventListener("toggle", () => { if (fold.open) place(); });
+    // The portal host carries the SAME .gb-opts class, so every descendant style
+    // (.gb-opts .opts-body, .menu-item, .menu-sep, .menu-theme…) still applies once
+    // the panel is re-parented. Zero-size + fixed, so it never affects layout.
+    const portalHost = () => {
+      let h = document.getElementById("gbOptsPortal");
+      if (!h) {
+        h = document.createElement("div");
+        h.id = "gbOptsPortal"; h.className = "gb-opts";
+        h.style.cssText = "position:fixed;top:0;left:0;width:0;height:0;z-index:400;";
+        document.body.appendChild(h);
+      }
+      return h;
+    };
+    const open = () => { if (panel) portalHost().appendChild(panel); place(); };
+    const shut = () => { if (panel && panel.parentNode !== fold) fold.appendChild(panel); };
+    fold.addEventListener("toggle", () => { if (fold.open) open(); else shut(); });
     window.addEventListener("resize", () => { if (fold.open) place(); });
+    window.addEventListener("scroll", () => { if (fold.open) place(); }, true);
     // Tapping outside closes it (it's a popover now, not part of the bar's flow).
     document.addEventListener("pointerdown", (e) => {
-      if (fold.open && !fold.contains(e.target)) fold.removeAttribute("open");
+      if (!fold.open) return;
+      if (fold.contains(e.target) || (panel && panel.contains(e.target))) return;
+      fold.removeAttribute("open"); shut();
     });
   }
   // AI-level chooser → sets the opponent's rating (drives its strength + the
