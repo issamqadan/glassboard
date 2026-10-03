@@ -182,6 +182,26 @@ async function main() {
   if (plclose) plclose.addEventListener("click", closePlan);
   if (plsheet) plsheet.addEventListener("click", (e) => { if (e.target === plsheet) closePlan(); });
 
+  // Board input — tap + physics drag, the SAME module Play-AI uses.
+  if (window.GBBoardInput && boardEl) {
+    GBBoardInput.attach({
+      boardEl,
+      canMove: () => !!(state && game && state.status === "ongoing" && state.turn === myColor),
+      isMyPiece: (i) => { const c = game.boardString()[i];
+        return (myColor === "white" && isWhitePiece(c)) || (myColor === "black" && c !== "." && !isWhitePiece(c)); },
+      isCapture: (i) => game.boardString()[i] !== ".",
+      legalTargets: () => legalTargets,
+      selected: () => selected,
+      select: selectSquare,
+      clearSelection,
+      playMove: (from, to) => sendMove(from, to),
+      tap: onSquareClick,
+      sound: (kind, intensity, delay) => { if (window.GBSound) GBSound.play(kind, intensity, delay); },
+      setDropIntensity: () => {},
+      setDropFlip: () => {},
+    });
+  }
+
   const rb = el("resignBtn");
   if (rb) rb.addEventListener("click", resign);
 
@@ -978,7 +998,7 @@ function renderBoard() {
       else span.textContent = GLYPH[c.toLowerCase()];
       sq.appendChild(span);
     }
-    sq.addEventListener("click", () => onSquareClick(i));
+    // Tap AND drag are handled by the shared board input (gb-board-input.js).
     boardEl.appendChild(sq);
   }
   animateLastMove();
