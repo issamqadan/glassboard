@@ -63,6 +63,11 @@
     <div id="dash" hidden>
       <div class="cards" id="kpis"></div>
       <section>
+        <h2>🎯 POC exit gate — fun &amp; fair <span class="hint">the one criterion: an unequal pair plays a full game and BOTH say it was fun and fair</span></h2>
+        <div class="cards" id="gate"></div>
+        <div class="tbl-wrap" style="margin-top:10px"><table id="verdicts"><thead><tr><th>When</th><th>Mode</th><th>Fun</th><th>Fair</th><th>Note</th></tr></thead><tbody></tbody></table></div>
+      </section>
+      <section>
         <h2>Calibration — win-rate per level <span class="hint">following help should beat lower levels; the top levels should be a real fight</span></h2>
         <div class="tbl-wrap"><table id="levels"><thead><tr><th>Level</th><th class="num">Games</th><th class="num">Win %</th><th class="num">Draw %</th><th class="num">Avg accuracy</th><th></th></tr></thead><tbody></tbody></table></div>
       </section>
@@ -114,6 +119,19 @@
         `<div class="kpi"><div class="n">${(t.hits24h || 0).toLocaleString()}</div><div class="l">Views · 24h</div></div>` +
         `<div class="kpi"><div class="n">${(t.players || 0).toLocaleString()}</div><div class="l">Players</div></div>` +
         `<div class="kpi"><div class="n">${(t.games || 0).toLocaleString()}</div><div class="l">AI games logged</div></div>`;
+      // POC gate — fun/fair verdicts
+      const pt = data.playtest || {};
+      const pct = (y, n) => (y + n) ? Math.round(y / (y + n) * 100) + "%" : "—";
+      document.getElementById("gate").innerHTML =
+        `<div class="kpi"><div class="n">${pct(pt.funYes || 0, pt.funNo || 0)}</div><div class="l">said FUN (${pt.funYes || 0}👍 / ${pt.funNo || 0}👎)</div></div>` +
+        `<div class="kpi"><div class="n">${pct(pt.fairYes || 0, pt.fairNo || 0)}</div><div class="l">said FAIR (${pt.fairYes || 0}👍 / ${pt.fairNo || 0}👎)</div></div>` +
+        `<div class="kpi"><div class="n">${(pt.verdicts || []).length}</div><div class="l">verdicts collected</div></div>`;
+      document.querySelector("#verdicts tbody").innerHTML = (pt.verdicts || []).map((v) =>
+        `<tr><td class="muted">${ago(v.ts)}</td><td>${esc(v.mode) || "—"}</td>` +
+        `<td class="${v.fun ? "win" : "loss"}">${v.fun ? "👍" : "👎"}</td>` +
+        `<td class="${v.fair ? "win" : "loss"}">${v.fair ? "👍" : "👎"}</td>` +
+        `<td>${esc(v.note) || "<span class='muted'>—</span>"}</td></tr>`
+      ).join("") || `<tr><td colspan="5" class="muted">No verdicts yet — play a full game and answer the fun/fair prompt at the end.</td></tr>`;
       // levels
       document.querySelector("#levels tbody").innerHTML = (data.levels || []).map((r) => {
         const winPct = r.games ? Math.round(r.wins / r.games * 100) : 0;

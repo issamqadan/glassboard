@@ -1020,6 +1020,37 @@ async fn admin_stats(State(store): State<Store>, Query(q): Query<HashMap<String,
         games_total = sqlx::query("SELECT COUNT(*)::bigint AS n FROM results").fetch_one(pool).await.map(|r| r.get::<i64, _>("n")).unwrap_or(0);
         players_total = sqlx::query("SELECT COUNT(*)::bigint AS n FROM scores").fetch_one(pool).await.map(|r| r.get::<i64, _>("n")).unwrap_or(0);
     }
+    // ---- playtest verdicts: THE POC EXIT-GATE SIGNAL ----
+    // "an unequal pair plays a full game and both independently say it was fun and
+    // fair". Surfaced here because a bare 👍/👍 carries no note, so it was invisible
+    // in the Forum (which only lists entries that have one).
+    let (mut fun_yes, mut fun_no, mut fair_yes, mut fair_no) = (0i64, 0i64, 0i64, 0i64);
+    let mut verdicts = Vec::new();
+    if let Store::Pg(pool) = &store {
+        if let Ok(r) = sqlx::query(
+            "SELECT SUM(CASE WHEN fun=1 THEN 1 ELSE 0 END)::bigint AS fy, \
+                    SUM(CASE WHEN fun=0 THEN 1 ELSE 0 END)::bigint AS fn2, \
+                    SUM(CASE WHEN fair=1 THEN 1 ELSE 0 END)::bigint AS ry, \
+                    SUM(CASE WHEN fair=0 THEN 1 ELSE 0 END)::bigint AS rn \
+             FROM feedback WHERE mode NOT LIKE 'forum:%'").fetch_one(pool).await {
+            fun_yes = r.try_get::<i64,_>("fy").unwrap_or(0);
+            fun_no = r.try_get::<i64,_>("fn2").unwrap_or(0);
+            fair_yes = r.try_get::<i64,_>("ry").unwrap_or(0);
+            fair_no = r.try_get::<i64,_>("rn").unwrap_or(0);
+        }
+        if let Ok(rs) = sqlx::query(
+            "SELECT ts,game_id,mode,fun,fair,note FROM feedback WHERE mode NOT LIKE 'forum:%' ORDER BY ts DESC LIMIT 50")
+            .fetch_all(pool).await {
+            for r in rs {
+                verdicts.push(serde_json::json!({
+                    "ts": r.get::<i64,_>("ts"), "game": r.get::<String,_>("game_id"),
+                    "mode": r.get::<String,_>("mode"), "fun": r.get::<i32,_>("fun") != 0,
+                    "fair": r.get::<i32,_>("fair") != 0, "note": r.get::<String,_>("note"),
+                }));
+            }
+        }
+    }
+
     // ---- traffic / activity ----
     let now = now_secs() as i64;
     let (mut hits_total, mut visitors_total, mut hits_24h, mut hits_7d, mut active_now) = (0i64, 0i64, 0i64, 0i64, 0i64);
@@ -1040,6 +1071,7 @@ async fn admin_stats(State(store): State<Store>, Query(q): Query<HashMap<String,
     Json(serde_json::json!({ "ok": true,
         "totals": { "games": games_total, "players": players_total, "hits": hits_total, "visitors": visitors_total, "hits24h": hits_24h, "hits7d": hits_7d, "activeNow": active_now },
         "players": players, "levels": levels, "openings": openings, "recent": recent,
+        "playtest": { "funYes": fun_yes, "funNo": fun_no, "fairYes": fair_yes, "fairNo": fair_no, "verdicts": verdicts },
         "pages": pages, "activity": activity }))
 }
 
