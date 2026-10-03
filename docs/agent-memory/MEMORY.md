@@ -11,3 +11,5 @@
 - [Don't override search](dont-override-search.md) — never re-rank engine moves with static heuristics (it lost ~6 pawns); measure strength with selfplay_diag
 - [Strength & handicap model](strength-and-handicap-model.md) — AI level→depth; assist searches a ply deeper (wins below Master, even at Master); depth-5 = ~4s/move ceiling
 - [Portable session context](portable-session-context.md) — keep docs/CONTINUATION.md + docs/agent-memory synced so Claude continues on another Mac
+- [Earned rating doctrine](earned-rating-doctrine.md) — 💪 rating earned from own moves only, never typed; drives handicaps once placed
+- [Ship-live workflow](ship-live-workflow.md) — he tests on the live site/phone; commit+push+confirm deploy; say what wasn't verified

@@ -18,6 +18,6 @@ with the repo, so without an in-repo handoff a new machine starts blind.
 - The in-repo handoff is **`docs/CONTINUATION.md`** (single "read this first") + **`docs/agent-memory/`**
   (a copy of these memory files). `CLAUDE.md` points to CONTINUATION.md at the top.
 - On meaningful commits, KEEP THEM CURRENT: update `docs/CONTINUATION.md`'s state section, and
-  re-sync `cp ~/.claude/projects/-Users-issamqadan-chessAI/memory/*.md docs/agent-memory/`, then
+  re-sync `cp ~/.claude/projects/<project-dir>/memory/*.md docs/agent-memory/` (the dir is `-Users-issamqadan-chessAI-glassboard` when Claude is launched in the repo, `-Users-issamqadan-chessAI` if launched one level up; on a new Mac, seed it FROM docs/agent-memory first), then
   commit both with the code. See §7 of docs/CONTINUATION.md.
 - Links to [[site-map-and-beginner-journey]], [[strength-and-handicap-model]], [[deploy-hosting-gotchas]].

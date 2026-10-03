@@ -103,10 +103,18 @@ The POC "beginner journey + fun" phase is deep in. Recently shipped (all live):
   against admin data (P4). Human-vs-human games don't feed it yet (multiplayer needs per-move scoring).
 - **Drag physics (2026-10-03):** spring+lift pickup, FLIP landing from the drop point, snap-back on
   illegal drop; touch never selects page text. Ghost CSS must be `.piece.drag-ghost` (specificity!).
+- **Physical move sounds (2026-10-03):** synthesized wood click+knock+body+thump in `playSound`
+  (main.js); played from `animateLastMove` timed to touch-down (via `moveSound`); drop speed →
+  intensity; capture/castle/snap-back/lift variants; tap-to-move now has sound. Needs on-device tuning.
 - **Git remote is SSH** (`git@github.com:issamqadan/glassboard.git`) — HTTPS has no stored creds.
 
 **Postponed (user's call), not built:** #1 social login (Apple/Google OAuth — needs their dev
 accounts + Render secrets), #6 Web Push notifications (needs VAPID keys + Render + install).
+
+**Next up (proposed, user to pick):** (a) feed human-vs-human games into the earned rating
+(multiplayer per-move scoring), (b) end-of-game "fun/fair?" playtest card → admin panel (POC gate data),
+(c) multiplayer polish (rematch, promotion picker, reconnect), (d) rotate the Neon DB password.
+Awaiting Issam's on-phone feedback on drag feel + sounds + rating chip.
 
 **The POC exit gate** is still a real unequal-pair playtest (beginner + stronger, both say
 fun+fair) — see `docs/POC.md`. The family playtests are that gate in motion.
@@ -115,5 +123,10 @@ fun+fair) — see `docs/POC.md`. The family playtests are that gate in motion.
 When you commit meaningful work, also:
 - Update this file's **State** section if the picture changed.
 - Re-copy the memory so the repo stays in sync:
-  `cp ~/.claude/projects/-Users-issamqadan-chessAI/memory/*.md docs/agent-memory/`
+  `cp ~/.claude/projects/<project-dir>/memory/*.md docs/agent-memory/` — `<project-dir>` is
+  `-Users-issamqadan-chessAI-glassboard` when Claude is launched inside the repo (current convention),
+  or `-Users-issamqadan-chessAI` if launched one level up.
+- **On a new Mac, first seed local memory FROM the repo:** `mkdir -p` that dir, then
+  `cp docs/agent-memory/*.md ~/.claude/projects/<project-dir>/memory/`. If `git push` asks for a
+  username, the remote is HTTPS — switch: `git remote set-url origin git@github.com:issamqadan/glassboard.git`.
 - Commit both with the code so a clone on another Mac has the full context.
