@@ -150,6 +150,66 @@
     return `<div class="gs-row">${phase}${bits.join("")}<span class="gs-more">Plans ›</span></div>`;
   }
 
+  // ---- The PRIORITY LADDER (what the Glass Lens headlines this turn) -----------
+  // Shared so Play-AI and human games prioritise identically. The RECOMMENDED MOVE is
+  // injected by the caller (Play-AI feeds Stockfish at full strength; human games feed
+  // the server-validated Rust engine's pick) — this module never chooses an engine.
+  //
+  // Order: analyzing → stop mate → save a threatened piece → your picked plan →
+  //        follow the book → play for a draw → best available.
+  // Rule that must not be broken: a plan/book move is only headlined when it EQUALS
+  // the recommended move, so assistance can never talk you into a worse move.
+  //
+  // ctx: { assistData, recommended, picked, followBook, opening, history, lastEval,
+  //        pieceNameAt, sqName, flavor, repeats }
+  function pickPriority(ctx) {
+    ctx = ctx || {};
+    const a = ctx.assistData;
+    if (!a || a.level === "off" || !(a.candidates || []).length) return null;
+    const rec = ctx.recommended;
+    if (!rec) return { analyzing: true }; // say so honestly rather than show a weak move
+    const recUci = rec.uci || "";
+    const nameAt = ctx.pieceNameAt || (() => "piece");
+    const sqn = ctx.sqName || ((i) => String(i));
+
+    if (a.mateThreat) return { move: rec, label: "Stop the checkmate", why: "Mate is threatened — this is the engine's strongest defence.", tag: "Urgent", kind: "urgent" };
+
+    const big = (a.threats || []).filter((t) => t.loss >= 200)[0];
+    if (big) {
+      const nm = nameAt(big.sq);
+      const saves = rec.from === big.sq;
+      return { move: rec, tag: "Urgent", kind: "urgent",
+        label: saves ? `Move your ${nm} to safety` : `Your ${nm} is attacked`,
+        why: `Your ${nm} on ${sqn(big.sq)} is under attack — ${saves ? "this gets it out of danger" : "the engine's strongest response"}.` };
+    }
+
+    const picked = ctx.picked;
+    if (picked && picked.moveUci && picked.moveUci.slice(0, 4) === recUci.slice(0, 4)) {
+      return { move: rec, label: `Continue your ${picked.verb || "plan"}`, why: picked.moveNote || rec.note || "Both your plan and the engine agree here.", tag: "Fits plan · best", kind: "strategy" };
+    }
+
+    if (ctx.followBook) {
+      const bn = bookNextMove({ opening: ctx.opening, history: ctx.history });
+      if (bn && ctx.opening && bn.uci.slice(0, 4) === recUci.slice(0, 4)) {
+        return { move: rec, label: `Book: ${ctx.opening.name}`, why: ctx.opening.idea || "Following your opening's main line.", tag: "Book · best", kind: "strategy" };
+      }
+    }
+
+    if (ctx.lastEval != null && ctx.lastEval <= -180 && ctx.lastEval > -800) {
+      const rep = typeof ctx.repeats === "function" ? ctx.repeats(rec) : false;
+      return { move: rec, kind: "draw",
+        tag: rep ? "Draw · repeat" : "Draw try",
+        label: rep ? "Repeat for a draw" : "Play for a draw",
+        why: rep
+          ? "You're worse here, so a draw is a great result. This repeats an earlier position — do it three times and it's a draw by repetition. ♻"
+          : "You're worse here, so aim for a draw, not a win. Keep it solid, trade into a drawish endgame, and look for a repetition or perpetual check. This is the soundest way to hold." };
+    }
+
+    const fl = ctx.flavor ? ctx.flavor(rec) : null;
+    const byFlavor = { aggr: "Press the attack", simp: "Simplify the position", sneak: "A sneaky move", safe: "Build your position" };
+    return { move: rec, label: (fl && byFlavor[fl.key]) || "Best move", why: rec.note || "The engine's strongest move here.", tag: "Best move", kind: "best" };
+  }
+
   // The NEXT move in a chosen opening's book line, if the game is still following it.
   // ctx: { opening, history } — returns {uci,from,to} or null.
   function bookNextMove(ctx) {
@@ -161,5 +221,5 @@
     return { uci: u, from: (u.charCodeAt(0) - 97) + (u.charCodeAt(1) - 49) * 8, to: (u.charCodeAt(2) - 97) + (u.charCodeAt(3) - 49) * 8 };
   }
 
-  global.GBAssistUI = { PVAL, PIECE_WORD, pieceAttacks, moveMeaning, identity, identityRowHTML, stripHTML, bookNextMove, esc };
+  global.GBAssistUI = { PVAL, PIECE_WORD, pieceAttacks, moveMeaning, identity, identityRowHTML, stripHTML, pickPriority, bookNextMove, esc };
 })(window);

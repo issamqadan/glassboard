@@ -2381,61 +2381,15 @@ function approxSan(uci) {
 // The single most-relevant piece of advice right now, from EXISTING analysis only.
 // Returns { move, label, why, tag, kind, altBest }. null if no help on offer.
 function pickPriority() {
-  const a = assistData;
-  if (!a || a.level === "off" || !(a.candidates || []).length) return null;
-  // ROOT FIX: the recommended move ALWAYS comes from Stockfish at full strength —
-  // never the weaker Rust engine (which could suggest a move that loses material).
-  // If Stockfish's answer isn't in yet, we say "Analyzing…" rather than show a weak
-  // move. Rust still supplies threat AWARENESS + the plan, but never the move.
-  if (!sfBest) return { analyzing: true };
-  const rec = sfBest;         // {from,to,uci,san,note} — genuinely best, ~2500+ strength
-  const recUci = rec.uci;
-  // Whether SF's move already moves the threatened piece (so we can phrase it right).
-  const movesPiece = (sq) => uciToSquares(recUci).from === sq;
-  // 1 — Mate threat: SF's move is the strongest defence.
-  if (a.mateThreat) return { move: rec, label: "Stop the checkmate", why: "Mate is threatened — this is the engine's strongest defence.", tag: "Urgent", kind: "urgent" };
-  // 2 — A piece is hanging: SF's move IS the correct response (it may move the piece,
-  // capture the attacker, or find compensation — whatever's objectively best).
-  const big = (a.threats || []).filter((t) => t.loss >= 200)[0];
-  if (big) {
-    const nm = pieceNameAt(big.sq);
-    const saves = movesPiece(big.sq);
-    return { move: rec, tag: "Urgent", kind: "urgent",
-      label: saves ? `Move your ${nm} to safety` : `Your ${nm} is attacked`,
-      why: `Your ${nm} on ${sqName(big.sq)} is under attack — ${saves ? "this gets it out of danger" : "the engine's strongest response"}.` };
-  }
-  // 3 — Your chosen plan, but ONLY when it coincides with the engine's best move
-  // (so we never recommend a plan move that's objectively worse / losing).
-  const sr = a.strategy, picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
-  if (picked && picked.moveUci && picked.moveUci.slice(0, 4) === recUci.slice(0, 4)) {
-    return { move: rec, label: `Continue your ${STRAT_VERB[picked.id] || "plan"}`, why: picked.moveNote || rec.note || "Both your plan and the engine agree here.", tag: "Fits plan · best", kind: "strategy" };
-  }
-  // 3b — Follow the book: while you're still in your chosen opening's line, surface
-  // the book move — but ONLY when it's also the engine's best (sound), never a blunder.
-  if (followBook) {
-    const bn = bookNextMove();
-    const op = currentOpening();
-    if (bn && op && bn.uci.slice(0, 4) === recUci.slice(0, 4)) {
-      return { move: rec, label: `Book: ${op.name}`, why: op.idea || "Following your opening's main line.", tag: "Book · best", kind: "strategy" };
-    }
-  }
-  // 3.5 — When you're clearly worse, a DRAW is the good result — so surface it as
-  // an explicit, player-facing strategy (not a silent top move). The engine's best
-  // try in a worse position IS the holding / drawing attempt; we name it and explain
-  // the goal so the player CHOOSES it, and flag when it literally repeats the position.
-  if (lastEval != null && lastEval <= -180 && lastEval > -800) {
-    const repeats = leadsToRepetition(rec);
-    return { move: rec, kind: "draw",
-      tag: repeats ? "Draw · repeat" : "Draw try",
-      label: repeats ? "Repeat for a draw" : "Play for a draw",
-      why: repeats
-        ? "You're worse here, so a draw is a great result. This repeats an earlier position — do it three times and it's a draw by repetition. ♻"
-        : "You're worse here, so aim for a draw, not a win. Keep it solid, trade into a drawish endgame, and look for a repetition or perpetual check. This is the soundest way to hold." };
-  }
-  // 4 — Best available.
-  const fl = moveFlavor(rec);
-  const byFlavor = { aggr: "Press the attack", simp: "Simplify the position", sneak: "A sneaky move", safe: "Build your position" };
-  return { move: rec, label: byFlavor[fl.key] || "Best move", why: rec.note || "The engine's strongest move here.", tag: "Best move", kind: "best" };
+  if (!window.GBAssistUI) return null;
+  const sr = assistData && assistData.strategy;
+  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  return GBAssistUI.pickPriority({
+    assistData, recommended: sfBest,            // Play-AI feeds Stockfish at full strength
+    picked: picked ? Object.assign({ verb: STRAT_VERB[picked.id] || "plan" }, picked) : null,
+    followBook, opening: currentOpening(), history: uciHistory, lastEval,
+    pieceNameAt, sqName, flavor: moveFlavor, repeats: leadsToRepetition,
+  });
 }
 
 // Preview a move on the board (distinct from a real move): select its piece so the
