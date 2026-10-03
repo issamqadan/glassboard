@@ -1392,38 +1392,62 @@ function levelName(elo) {
   const e = parseInt(elo, 10);
   return e <= 700 ? "Beginner" : e <= 1100 ? "Casual" : e <= 1500 ? "Intermediate" : e <= 1900 ? "Club" : e <= 2300 ? "Expert" : "Master";
 }
+// ---- THE COCKPIT -----------------------------------------------------------
+// Each player's information lives on THEIR side of the board (opponent above, you
+// below) — name · rating · captured pieces · material lead · lifelines · clock ·
+// whose turn. Spatial mapping: you look where the information belongs.
+// Both strips are FIXED HEIGHT so the board never moves (board sovereignty).
+function stripHTML_player(o) {
+  return `<span class="ps-id">${o.icon} <b>${o.name}</b>${o.rating ? `<span class="ps-rating">${o.rating}</span>` : ""}</span>` +
+    (o.pips ? `<span class="ps-pips" title="${escapeHtml(o.pipsTitle || "")}">${o.pips}</span>` : "") +
+    `<span class="ps-caps">${o.caps || ""}</span>` +
+    (o.lead > 0 ? `<span class="ps-lead">+${o.lead}</span>` : "") +
+    (o.clock ? `<span class="ps-clock${o.low ? " low" : ""}">${o.clock}</span>` : "") +
+    (o.turn ? `<span class="ps-turn">${o.turnText}</span>` : "");
+}
 function renderPlayers() {
   updateSetupSum();
-  const el = document.getElementById("players");
-  if (!el) return;
-  el.hidden = false;
-  const over = resigned || game.status() !== "ongoing";
+  const legacy = document.getElementById("players"); // retired: the cockpit replaces it
+  if (legacy) { legacy.hidden = true; legacy.innerHTML = ""; }
+  const oppEl = document.getElementById("oppStrip"), youEl = document.getElementById("youStrip");
+  if (!oppEl || !youEl) return;
+  const over = resigned || aiResigned || flagged || game.status() !== "ongoing";
   const turn = over ? null : game.sideToMove();
-  // Captured pieces + material lead sit right beside each name (top chess-app style),
-  // so nothing clutters the space above the board.
   const cap = capturedSummary();
   const youCap = humanColor === "white" ? cap.whiteCap : cap.blackCap;
   const aiCap = humanColor === "white" ? cap.blackCap : cap.whiteCap;
   const youLead = humanColor === "white" ? cap.lead : -cap.lead; // >0 → you're up material
-  const lead = (n) => n > 0 ? `<span class="mat-lead">+${n}</span>` : "";
-  // Compact: whose-move stays on one row. The 🤖 chip shows the AI LEVEL and is
-  // tappable to change it — that's where you look for "who am I playing".
-  el.innerHTML =
-    `<span class="pl"><span class="dot ${humanColor}"></span> <b>You</b> <span class="tnum">${humanEloEl.value}</span>` +
-      (firstGame || aiAssistOverride === "off" ? "" : `<span class="name-pips" title="your help remaining">${pipRow(playerTokens, PLAYER_TOKENS_MAX)}</span>`) +
-      `<span class="caps caps-${engineColor()}">${capGlyphs(youCap)}</span>${lead(youLead)}</span>` +
-    `<span class="vs">·</span>` +
-    `<button class="pl ai-chip" id="aiChip" title="Change AI level"><span class="dot ${engineColor()}"></span> <b>🤖 ${levelName(engineEloEl.value)}</b> <span class="ai-rating">${ratingFor(engineEloEl.value)}</span>` +
-      (firstGame || parseInt(engineEloEl.value, 10) >= 3000 ? "" : `<span class="name-pips" title="opponent lifelines">${pipRow(aiTokens, AI_TOKENS_MAX)}</span>`) +
-      `<span class="caps caps-${humanColor}">${capGlyphs(aiCap)}</span>${lead(-youLead)} <span class="ai-caret">▾</span></button>` +
-    (turn ? (turn === humanColor
-      ? `<span class="turn you">💡 Your move</span>`
-      : `<span class="turn wait">Engine…</span>`) : "");
-  const ac = document.getElementById("aiChip");
-  if (ac) ac.onclick = () => {
-    const f = document.getElementById("setupFold"); if (f) f.open = true;
-    const s = document.getElementById("aiLevel"); if (s) { try { s.focus(); } catch {} }
-  };
+  const showClock = timedGame;
+  const aiLevel = parseInt(engineEloEl.value, 10);
+
+  const opp = stripHTML_player({
+    icon: `<span class="dot ${engineColor()}"></span>🤖`,
+    name: levelName(aiLevel), rating: ratingFor(aiLevel),
+    pips: (firstGame || aiLevel >= 3000) ? "" : pipRow(aiTokens, AI_TOKENS_MAX),
+    pipsTitle: "opponent's lifelines remaining — its help, in the open",
+    caps: capGlyphs(aiCap), lead: -youLead,
+    clock: showClock ? fmtClock(engineMs) : "", low: showClock && engineMs <= 10000,
+    turn: turn === engineColor(), turnText: "thinking…",
+  });
+  const you = stripHTML_player({
+    icon: `<span class="dot ${humanColor}"></span>👤`,
+    // Your EARNED rating when you have one (it's the honest number, and the one the
+    // handicap uses); otherwise the working estimate.
+    name: "You", rating: (() => { const g = window.GBRating ? GBRating.get() : null;
+      return g && g.r != null ? `${g.tier ? g.tier.ic + " " : ""}${g.r}${g.provisional ? "?" : ""}` : humanEloEl.value; })(),
+    pips: (firstGame || aiAssistOverride === "off") ? "" : pipRow(playerTokens, PLAYER_TOKENS_MAX),
+    pipsTitle: "your help remaining",
+    caps: capGlyphs(youCap), lead: youLead,
+    clock: showClock ? fmtClock(humanMs) : "", low: showClock && humanMs <= 10000,
+    turn: turn === humanColor, turnText: "your move",
+  });
+  oppEl.hidden = false; youEl.hidden = false;
+  if (oppEl._h !== opp) { oppEl.innerHTML = opp; oppEl._h = opp; }
+  if (youEl._h !== you) { youEl.innerHTML = you; youEl._h = you; }
+  oppEl.classList.toggle("active", turn === engineColor());
+  youEl.classList.toggle("active", turn === humanColor);
+  oppEl.onclick = () => { const f = document.getElementById("setupFold"); if (f) f.open = true;
+    const sel = document.getElementById("aiLevel"); if (sel) { try { sel.focus(); } catch {} } };
 }
 
 // The Opponent's-assistance panel — the symmetric glass-box. Always visible in a
@@ -1587,10 +1611,14 @@ function tickClock() {
   renderClocks();
 }
 function renderClocks() {
+  // Clocks now live on each player's cockpit strip (on their own side of the board),
+  // so this standalone row is retired — but keep the function: the clock tick calls
+  // it, and it refreshes the strips.
   const box = document.getElementById("clocks");
+  if (box) { box.hidden = true; }
+  if (timedGame) renderPlayers();
   if (!box) return;
-  if (!timedGame) { box.hidden = true; return; }
-  box.hidden = false;
+  if (true) return;
   const you = document.getElementById("clkYou"), ai = document.getElementById("clkAi");
   const over = flagged || resigned || game.status() !== "ongoing";
   const active = over ? null : game.sideToMove();

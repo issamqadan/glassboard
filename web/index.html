@@ -113,17 +113,20 @@
       <div class="gamebar">
         <div id="players" class="players" hidden></div>
         <div id="clocks" class="clocks" hidden><span id="clkYou" class="clk"></span><span id="clkAi" class="clk"></span></div>
+        <!-- Only what you glance at EVERY move stays out here. Everything you touch
+             once a game lives in ⚙ — that's why the bar can't overflow any more. -->
         <div class="gb-actions">
           <span id="evalPill" class="pill eval-pill" title="Engine's read of your position (live)" hidden></span>
           <span id="ratingChip" class="rating-chip-slot"></span>
           <span id="level" class="pill" title="Assistance level">—</span>
-          <span id="offlinePill" class="pill offline-pill" title="Saved on this device and playable offline — no wifi needed" hidden>✈️ Offline</span>
-          <button id="undoBtn" class="gb-btn" title="Take back your last move" type="button" hidden>↩ Undo</button>
-          <button id="new" class="gb-btn" title="New game" type="button">＋ New</button>
-          <button id="resignBtn" class="gb-btn danger" title="Resign" type="button" hidden>Resign</button>
           <details class="opts gb-opts" id="setupFold">
             <summary title="Settings">⚙</summary>
             <div class="opts-body">
+              <button id="undoBtn" class="menu-item menu-act" title="Take back your last move" type="button" hidden>↩ Take back a move</button>
+              <button id="new" class="menu-item menu-act" title="New game" type="button">＋ New game</button>
+              <button id="resignBtn" class="menu-item menu-act danger" title="Resign" type="button" hidden>🏳 Resign</button>
+              <div class="menu-sep"></div>
+              <span id="offlinePill" class="menu-item offline-pill" title="Saved on this device and playable offline — no wifi needed" hidden>✈️ Works offline</span>
               <a id="newHereLink" class="menu-item" href="./index.html?first=1" title="A guided game teaches you as you play">👋 New to chess?</a>
               <div class="menu-sep"></div>
               <label>You (White) <input id="humanElo" type="number" value="1200" min="100" max="3200" /></label>
@@ -154,11 +157,16 @@
           <div id="firstGame" class="first-game" hidden></div>
           <!-- Opening book: names the professional strategy in play (both sides). Tap for the plan. -->
           <div id="openingLine" class="opening-line" hidden></div>
+          <!-- COCKPIT: each player's information sits on THEIR side of the board —
+               name · rating · captured pieces · material lead · lifelines · clock ·
+               whose turn. Fixed height, so the board never moves. -->
+          <div id="oppStrip" class="pstrip opp" hidden></div>
           <div id="materialBar" class="matbar" aria-label="material — captured pieces and who leads"></div>
           <div class="board-wrap">
             <div id="board" class="board" aria-label="chess board"></div>
             <svg id="planOverlay" class="plan-overlay" viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg>
           </div>
+          <div id="youStrip" class="pstrip you" hidden></div>
           <div id="planDock" class="plan-dock" hidden></div>
         </div>
         <aside class="panels">
