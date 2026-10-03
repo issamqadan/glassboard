@@ -119,10 +119,13 @@
           <span id="evalPill" class="pill eval-pill" title="Engine's read of your position (live)" hidden></span>
           <span id="ratingChip" class="rating-chip-slot"></span>
           <span id="level" class="pill" title="Assistance level">—</span>
+          <!-- Undo is a MID-GAME action (you reach for it right after a move you
+               regret), so it stays on the bar — not buried in settings. Safe: the bar
+               is nowrap + fixed height, so showing/hiding it changes width, not height. -->
+          <button id="undoBtn" class="gb-btn" title="Take back your last move" type="button" hidden>↩</button>
           <details class="opts gb-opts" id="setupFold">
             <summary title="Settings">⚙</summary>
             <div class="opts-body">
-              <button id="undoBtn" class="menu-item menu-act" title="Take back your last move" type="button" hidden>↩ Take back a move</button>
               <button id="new" class="menu-item menu-act" title="New game" type="button">＋ New game</button>
               <button id="resignBtn" class="menu-item menu-act danger" title="Resign" type="button" hidden>🏳 Resign</button>
               <div class="menu-sep"></div>
