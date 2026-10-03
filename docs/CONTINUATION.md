@@ -108,6 +108,19 @@ The POC "beginner journey + fun" phase is deep in. Recently shipped (all live):
   intensity; capture/castle/snap-back/lift variants; tap-to-move now has sound. Needs on-device tuning.
 - **Git remote is SSH** (`git@github.com:issamqadan/glassboard.git`) — HTTPS has no stored creds.
 
+- **AI↔HUMAN PARITY (2026-10-03) — the new priority.** Audit found 12 of 14 gameplay features were
+  Play-AI-only (`main.js`) and MISSING from human games (`multiplayer.js`): Glass Lens, identity strip,
+  proactive strategy rec, Plans picker, follow-the-book, move explanations, Recap, play score, drag,
+  sounds, board advice arrow, provenance move list. Since the POC proves a game between **two humans
+  far apart in skill**, this gap blocks the exit gate. Decision: **extract-as-you-port into shared
+  `web/gb-*.js` modules — never copy.** First module shipped: **`web/gb-assist-ui.js`**
+  (moveMeaning / identity / identityRowHTML / bookNextMove, pure, takes an explicit ctx). main.js now
+  delegates to it; multiplayer.js uses it for the identity strip + per-candidate "💡 what this does".
+  See `docs/agent-memory/ai-human-parity-doctrine.md`.
+- **POC priority stack:** P1 assistance surface in human games (criterion #2, in progress) → P2 recap+score,
+  then drag+sounds in human games (criteria #1/#6) → P3 **run the unequal-pair playtest** (the gate).
+  NOTE: calibrating rating/levels is **explicitly out of scope this phase** (POC.md says P4).
+
 **Postponed (user's call), not built:** #1 social login (Apple/Google OAuth — needs their dev
 accounts + Render secrets), #6 Web Push notifications (needs VAPID keys + Render + install).
 

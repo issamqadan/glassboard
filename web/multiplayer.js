@@ -997,6 +997,19 @@ function resign() {
   ws.send(JSON.stringify({ t: "resign" }));
 }
 
+// The move history, rebuilt from the server-relayed provenance log — so both
+// players derive the same opening identification from the same shared record.
+function mpHistory() { return glassList.map(parseProv).filter(Boolean).map((p) => p.uci); }
+function mpOpening() { return window.GBStrategies ? GBStrategies.identify(mpHistory()) : null; }
+// Plain-language "what this move does" — the SAME explainer Play-AI uses.
+function mpMeaning(m) {
+  if (!window.GBAssistUI || !assistData) return "";
+  return GBAssistUI.moveMeaning({
+    game, Game, myColor: myColor,
+    threatSquares: (assistData.threats || []).map((t) => t.sq),
+    hanging: assistData.hanging || [], freeCaptures: assistData.freeCaptures || [],
+  }, m);
+}
 function renderAssist() {
   assistEl.innerHTML = "";
   if (!assistData) {
@@ -1005,6 +1018,12 @@ function renderAssist() {
   }
   const a = assistData;
   const add = (h) => assistEl.insertAdjacentHTML("beforeend", h);
+  // Identity strip — names what each side is playing (shared with Play-AI). Pure
+  // awareness, never a move answer, so it shows regardless of the help level.
+  if (window.GBAssistUI) {
+    const row = GBAssistUI.identityRowHTML({ assistData: a, opening: mpOpening(), myColor, oppColor: myColor === "white" ? "black" : "white" });
+    if (row) add(row);
+  }
   if (a.level === "off") add(`<div class="none">You're the higher-rated side — you play unassisted (that's the fair part). <b>Your opponent</b> is getting the help, and every bit of it shows in the <b>Glass-box</b> below.<br><span style="color:#7f92ab">Want to use plans + assistance yourself? Start a <b>Casual</b> game (both sides get it), or <a href="./index.html" style="color:var(--accent)">Play the AI ↗</a>.</span></div>`);
   // Surface the picked strategy's move at the top of the list.
   const sr = a.strategy;
@@ -1042,10 +1061,12 @@ function renderAssist() {
     const saves = c.from === hangSq;
     const div = document.createElement("div");
     div.className = "cand" + (isRec ? " rec" : "") + (saves ? " saves" : "");
+    const why = mpMeaning(c); // what this move actually does — same wording as Play-AI
     div.innerHTML =
       `<div class="cand-main">` +
       (saves ? `<span class="cand-tag saves-tag">🛡 moves your ${pieceNameAt(hangSq)} to safety</span>` : "") +
       `<span class="cand-move">${c.san || c.uci}${isRec ? " ➤" : ""}</span>` +
+      (why ? `<div class="cand-why">💡 ${escapeHtml(why)}</div>` : "") +
       (c.note ? `<div class="cand-note">${escapeHtml(c.note)}</div>` : "") +
       `</div><span class="score">${fmtScore(c.score)}</span>`;
     div.addEventListener("click", () => sendMove(c.from, c.to));

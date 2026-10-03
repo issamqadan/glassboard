@@ -1193,47 +1193,27 @@ function renderOpening() {
 // two-sided read. This is pure AWARENESS (a label, never a move answer), so it is
 // NOT help-gated — it shows in every mode, symmetric glass for both sides.
 function strategyIdentity() {
-  const sr = assistData && assistData.strategy;
-  const op = currentOpening();
-  const meta = window.GBStrategies;
-  const you = {}, opp = {};
-  if (op) {
-    const fam = meta ? meta.familyOf(op.eco) : "";
-    if (op.side === humanColor || op.side === "both") { you.name = op.name; you.family = fam; you.idea = op.idea; you.book = true; }
-    if (op.side === engineColor() || op.side === "both") { opp.name = op.name; opp.family = fam; opp.idea = op.idea; }
-  }
-  if (sr && sr.strategies && sr.strategies.length) {
-    const top = sr.strategies[0];
-    const tm = meta ? meta.themeMeta(top.id) : { cat: "Plan" };
-    if (!you.name) { you.name = top.name; you.cat = tm.cat; you.idea = top.idea; }
-    else if (!you.book || (sr.phase && sr.phase !== "opening")) you.planHint = top.name; // named opening + a live plan underneath
-  }
-  if (sr && sr.opponent && !opp.name) opp.read = sr.opponent;
-  return { you, opp, phase: sr ? sr.phase : null };
+  if (!window.GBAssistUI) return { you: {}, opp: {}, phase: null };
+  return GBAssistUI.identity({ assistData, opening: currentOpening(), myColor: humanColor, oppColor: engineColor() });
 }
 // The NEXT move in your chosen opening's book line, if you're still following it.
 // Returns {uci,from,to} for the side to move (the human, when the Lens is up), or
 // null once the line diverges or the book runs out.
 function bookNextMove() {
-  const op = currentOpening();
-  if (!op || !op.uci || op.uci.length <= uciHistory.length) return null;
-  for (let i = 0; i < uciHistory.length; i++) if (op.uci[i] !== uciHistory[i]) return null; // history must match the line
-  const u = op.uci[uciHistory.length];
-  const q = uciToSquares(u);
-  return q ? { uci: u, from: q.from, to: q.to } : null;
+  if (!window.GBAssistUI) return null;
+  return GBAssistUI.bookNextMove({ opening: currentOpening(), history: uciHistory });
 }
 // The identity strip as HTML — names each side's opening/plan + a phase pill. Pure
 // awareness (a label, not a move answer), so it's rendered in EVERY Lens state
 // (analyzing, awaiting-your-ask, and the full recommendation).
 function glIdentityRow() {
-  const idn = strategyIdentity();
-  const bits = [];
-  if (idn.you.name) bits.push(`<span class="gl-id you" title="${escapeHtml(idn.you.idea || "")}">📖 You · ${escapeHtml(idn.you.name)}${idn.you.planHint ? ` → ${escapeHtml(idn.you.planHint)}` : ""}</span>`);
-  if (idn.opp.name) bits.push(`<span class="gl-id opp" title="${escapeHtml(idn.opp.idea || "")}">🎯 Opp · ${escapeHtml(idn.opp.name)}</span>`);
-  else if (idn.opp.read) bits.push(`<span class="gl-id opp" title="${escapeHtml(idn.opp.read)}">🎯 ${escapeHtml(idn.opp.read)}</span>`);
+  if (!window.GBAssistUI) return "";
+  // Play-AI's own chips ride along as extras — the strip itself is shared with
+  // human games, so both read identically.
+  const extra = [];
   if (!firstGame && aiStyle && aiStyle !== "balanced" && AI_STYLES[aiStyle]) {
     const s = AI_STYLES[aiStyle];
-    bits.push(`<span class="gl-id style" title="${escapeHtml(s.desc)}">${s.ic} ${escapeHtml(s.name)}</span>`);
+    extra.push(`<span class="gl-id style" title="${escapeHtml(s.desc)}">${s.ic} ${escapeHtml(s.name)}</span>`);
   }
   // Symmetric-glass badge: when your leaning on help has pushed the AI above the
   // level you picked, show it — the same help meter drives both sides.
@@ -1241,10 +1221,9 @@ function glIdentityRow() {
   const b = (!firstGame && window.GBEngine) ? aiBoost(baseElo) : null;
   if (b && b.boosted) {
     const pct = Math.round(b.lean * 100);
-    bits.push(`<span class="gl-id boost" title="You've taken the suggested move on ${pct}% of your turns, so the AI is digging deeper to match — assistance is symmetric and always in the open.">⛏ AI matching your help</span>`);
+    extra.push(`<span class="gl-id boost" title="You've taken the suggested move on ${pct}% of your turns, so the AI is digging deeper to match — assistance is symmetric and always in the open.">⛏ AI matching your help</span>`);
   }
-  if (!bits.length && !idn.phase) return "";
-  return `<div class="gl-identity">${idn.phase ? `<span class="gl-phase">${escapeHtml(idn.phase)}</span>` : ""}${bits.join("")}</div>`;
+  return GBAssistUI.identityRowHTML({ assistData, opening: currentOpening(), myColor: humanColor, oppColor: engineColor() }, extra);
 }
 
 // The MOVE LIST — Glassboard's signature: every move shown, and each of YOUR moves
@@ -2196,66 +2175,11 @@ function renderStatus() {
 // a capture that wins material is Aggressive, an even trade is Simplify, a pawn
 // pushing into enemy territory is Sneaky, a quiet improving move is Safe.
 const PVAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-const PIECE_WORD = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
-// Squares a piece on `sq` attacks/guards on a 64-char board string (a1=0 … h8=63),
-// with ray blockers — used to explain a move in plain terms ("protects / attacks").
-function pieceAttacks(board, sq, pc) {
-  if (!pc || pc === ".") return [];
-  const f = sq % 8, r = Math.floor(sq / 8), out = [];
-  const k = pc.toLowerCase(), white = pc === pc.toUpperCase();
-  const on = (ff, rr) => ff >= 0 && ff < 8 && rr >= 0 && rr < 8;
-  const add = (ff, rr) => { if (on(ff, rr)) out.push(rr * 8 + ff); };
-  const ray = (df, dr) => { let ff = f + df, rr = r + dr; while (on(ff, rr)) { const s = rr * 8 + ff; out.push(s); if (board[s] && board[s] !== ".") break; ff += df; rr += dr; } };
-  if (k === "p") { const dr = white ? 1 : -1; add(f - 1, r + dr); add(f + 1, r + dr); }
-  else if (k === "n") { [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]].forEach(([a, b]) => add(f + a, r + b)); }
-  else if (k === "k") { [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([a, b]) => add(f + a, r + b)); }
-  else { if (k === "b" || k === "q") { ray(1, 1); ray(1, -1); ray(-1, 1); ray(-1, -1); } if (k === "r" || k === "q") { ray(1, 0); ray(-1, 0); ray(0, 1); ray(0, -1); } }
-  return out;
-}
-// Plain-language "what does this move DO?" for a beginner — one short clause, in
-// priority order (mate → check → wins/saves material → protects → attacks → develops
-// → castles → centre). Computed from the real post-move board (clone + inCheck), so
-// it's honest. Returns "" when nothing notable stands out.
+// Plain-language "what does this move DO?" — SHARED with human games so the
+// explanation is identical in both (web/gb-assist-ui.js).
 function moveMeaning(m) {
-  if (!m || m.from == null) return "";
-  const pre = game.boardString();
-  const moverPre = pre[m.from] || "";
-  const white = humanColor === "white";
-  const isEnemy = (c) => c && c !== "." && (white ? (c >= "a" && c <= "z") : (c >= "A" && c <= "Z"));
-  const isMine = (c) => c && c !== "." && (white ? (c >= "A" && c <= "Z") : (c >= "a" && c <= "z"));
-  const nameOf = (c) => (c ? PIECE_WORD[c.toLowerCase()] || "piece" : "piece");
-  const capturedPre = pre[m.to];
-  let post = null, gives = false, mate = false;
-  try {
-    const g = Game.fromFen(game.fen());
-    const promo = m.uci && m.uci.length > 4 ? m.uci[4] : undefined;
-    if (g.makeMove(m.from, m.to, promo)) { post = g.boardString(); gives = g.inCheck(); mate = g.status() === "checkmate"; }
-  } catch { /* fall through to what we can say without the clone */ }
-  if (mate) return "Checkmate — this wins the game! 🏆";
-  const dangerSet = new Set([...(threatSquares || []), ...(hanging || [])]);
-  const isCap = isEnemy(capturedPre);
-  if (gives && isCap) return `Captures their ${nameOf(capturedPre)} — with check.`;
-  if (isCap) {
-    const gain = (PVAL[capturedPre.toLowerCase()] || 0) - (PVAL[(moverPre || "p").toLowerCase()] || 0);
-    if (gain > 0 || (freeCaptures || []).includes(m.to)) return `Wins their ${nameOf(capturedPre)} — free material.`;
-    if (gain === 0) return `Trades your ${nameOf(moverPre)} for their ${nameOf(capturedPre)}.`;
-    return `Takes their ${nameOf(capturedPre)}.`;
-  }
-  if (gives) return "Puts the king in check — they must respond.";
-  if (dangerSet.has(m.from)) return `Moves your ${nameOf(moverPre)} out of danger.`;
-  if (post) {
-    const moved = post[m.to];
-    const atk = pieceAttacks(post, m.to, moved);
-    for (const s of atk) { const c = post[s]; if (isMine(c) && dangerSet.has(s)) return `Defends your ${nameOf(c)} — now it's protected.`; }
-    let best = 0, bestSq = -1;
-    for (const s of atk) { const c = post[s]; if (isEnemy(c)) { const v = PVAL[c.toLowerCase()] || 0; if (v > best) { best = v; bestSq = s; } } }
-    if (bestSq >= 0 && best >= 3) return `Attacks their ${nameOf(post[bestSq])}.`;
-  }
-  if ((moverPre === "K" || moverPre === "k") && Math.abs((m.to % 8) - (m.from % 8)) === 2) return "Castles — tucks your king safely away.";
-  const homeRank = white ? 0 : 7;
-  if ("NBnb".includes(moverPre) && Math.floor(m.from / 8) === homeRank) return `Develops your ${nameOf(moverPre)} into the game.`;
-  if ((moverPre === "P" || moverPre === "p") && [27, 28, 35, 36].includes(m.to)) return "Grabs space in the centre.";
-  return "";
+  if (!window.GBAssistUI) return "";
+  return GBAssistUI.moveMeaning({ game, Game, myColor: humanColor, threatSquares, hanging, freeCaptures }, m);
 }
 // ---- Glass Lens: the thumb-first "what matters NOW" control ----------------
 // One prioritised recommendation surfaced every turn (urgent threat → your plan →

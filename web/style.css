@@ -1124,6 +1124,10 @@ main.game #coach { display: none; }
   border-radius: 8px; width: 30px; height: 28px; font-size: 0.9rem; cursor: pointer; flex: 0 0 auto; touch-action: manipulation; }
 .glass-lens .gl-explain.on { background: rgba(242,176,58,0.18); border-color: rgba(242,176,58,0.5); color: #f0c06a; }
 .glass-lens .gl-mean { font-size: 0.84rem; font-weight: 600; color: #f0d190; line-height: 1.4; margin-top: 2px; }
+/* The same "what this move does" line inside a candidate row (human games). */
+.cand .cand-why { font-size: 0.8rem; font-weight: 600; color: #f0d190; line-height: 1.35; margin-top: 2px; }
+/* The shared identity strip sits above the suggestions in human games. */
+.assist > .gl-identity { margin-bottom: 8px; }
 .glass-lens .gl-why { font-size: 0.82rem; color: #c3d0e6; line-height: 1.4; }
 .glass-lens .gl-actions { display: flex; gap: 8px; align-items: center; }
 .glass-lens .gl-playmove { flex: 1; font: inherit; font-weight: 800; font-size: 1.05rem; cursor: pointer; color: #04222d;
