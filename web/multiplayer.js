@@ -39,6 +39,7 @@ const eloEl = el("elo");
 
 let ws = null;
 let myColor = null;
+let followBook = false; // follow the identified opening's line while it stays sound
 let undoPending = false; // you asked for a takeback and are waiting on the opponent
 let sim = false; // same-screen practice: play both sides locally to test the UI
 const orient = () => (sim ? "white" : myColor); // board orientation (fixed white-bottom in sim)
@@ -175,6 +176,11 @@ async function main() {
       paint();
     });
   }
+
+  const plsheet = el("planSheet"), plclose = el("planSheetClose");
+  const closePlan = () => { if (plsheet) plsheet.style.display = "none"; };
+  if (plclose) plclose.addEventListener("click", closePlan);
+  if (plsheet) plsheet.addEventListener("click", (e) => { if (e.target === plsheet) closePlan(); });
 
   const rb = el("resignBtn");
   if (rb) rb.addEventListener("click", resign);
@@ -693,6 +699,7 @@ function paint() {
   renderCoach();
   renderAssist();
   renderStrategy();
+  renderBoardAdvice();
   renderPlanDock();
   renderGlass();
   renderStatus();
@@ -1060,6 +1067,53 @@ function mpRecommended() {
   if (!q) return null;
   return { uci: a.recommended, from: q.from, to: q.to, san: (c && c.san) || a.recommended, note: (c && c.note) || "" };
 }
+// The Strategy picker — plans that FIT this position, filtered by phase. Same shape
+// as Play-AI: follow-the-book in the opening, the engine's live plans by category,
+// and links to the catalog write-ups. Adopting one is visible to your opponent.
+function mpOpenPlanSheet() {
+  const body = el2("planSheetBody"), sh = el2("planSheet");
+  if (!body || !sh) return;
+  const sr = assistData && assistData.strategy;
+  const phase = (sr && sr.phase) || "opening";
+  const S = window.GBStrategies;
+  const strategies = (sr && sr.strategies) || [];
+  let html = `<div class="ps-phase">Phase — <b>${escapeHtml(phase)}</b></div>`;
+  const op = mpOpening(), bn = window.GBAssistUI ? GBAssistUI.bookNextMove({ opening: op, history: mpHistory() }) : null;
+  if (op && bn) {
+    html += `<div class="ps-sec">Opening</div>` +
+      `<button class="ps-item book${followBook ? " on" : ""}" data-act="book"><span class="ps-ic">📖</span>` +
+      `<span class="ps-t"><b>${followBook ? "Following the book" : "Follow the book"} — ${escapeHtml(op.name)}</b>` +
+      `<small>${escapeHtml(op.idea || "Play the opening's main line while it stays sound.")}</small></span></button>`;
+  }
+  if (strategies.length) {
+    const byCat = {};
+    strategies.forEach((x) => { const cat = (S ? S.themeMeta(x.id).cat : "Plan"); (byCat[cat] || (byCat[cat] = [])).push(x); });
+    (S ? S.categories : Object.keys(byCat)).forEach((cat) => {
+      const items = byCat[cat]; if (!items || !items.length) return;
+      html += `<div class="ps-sec">${escapeHtml(cat)}</div>` + items.map((x) =>
+        `<button class="ps-item${x.id === pickedStrategyId ? " on" : ""}" data-id="${x.id}" style="--sc:${STRAT_COLOR[x.id] || "#5cc9ec"}">` +
+        `<span class="ps-ic">${STRAT_ICON[x.id] || "◆"}</span><span class="ps-t"><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.idea || "")}</small></span></button>`).join("");
+    });
+  }
+  const cplans = (S && S.plansByPhase) ? S.plansByPhase(phase) : [];
+  if (cplans.length) {
+    html += `<div class="ps-sec">Learn — ${escapeHtml(phase)} strategies</div>` + cplans.map((pl) => {
+      const cx = pl.cx || (S.complexity ? S.complexity(pl) : "");
+      return `<a class="ps-item learn" href="./strategy.html" target="_blank" rel="noopener"><span class="ps-ic">${STRAT_ICON[pl.id] || "◆"}</span>` +
+        `<span class="ps-t"><b>${escapeHtml(pl.name)}</b><small>${escapeHtml(pl.idea || "")}</small></span>` +
+        (cx ? `<span class="ps-cx cx-${cx}">${cx}</span>` : "") + `</a>`;
+    }).join("");
+  }
+  if (pickedStrategyId || followBook) html += `<button class="ps-clear" data-act="clear" type="button">✕ Clear active plan</button>`;
+  body.innerHTML = html;
+  body.querySelectorAll(".ps-item[data-id]").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; followBook = false; sh.style.display = "none"; paint(); });
+  const bk = body.querySelector('.ps-item[data-act="book"]');
+  if (bk) bk.onclick = () => { followBook = !followBook; if (followBook) pickedStrategyId = null; sh.style.display = "none"; paint(); };
+  const clr = body.querySelector(".ps-clear");
+  if (clr) clr.onclick = () => { pickedStrategyId = null; followBook = false; sh.style.display = "none"; paint(); };
+  sh.style.display = "grid";
+}
+
 function renderGlassLens() {
   const el = el2("glassLens");
   if (!el) return;
@@ -1096,9 +1150,45 @@ function renderGlassLens() {
     `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span></div>` +
     (meaning ? `<div class="gl-mean">💡 ${escapeHtml(meaning)}</div>` : "") +
     (p.why ? `<div class="gl-why">${escapeHtml(p.why)}</div>` : "") +
-    `<div class="gl-actions"><button class="gl-playmove" id="mpLensPlay" type="button">▶ ${escapeHtml(p.move.san || "Play")}</button></div>`;
+    `<div class="gl-actions"><button class="gl-playmove" id="mpLensPlay" type="button">▶ ${escapeHtml(p.move.san || "Play")}</button></div>` +
+    mpPlanRow(sr, picked);
   const pb = el2("mpLensPlay");
   if (pb) pb.onclick = () => sendMove(p.move.from, p.move.to);
+  const pl = el2("mpLensPlan"); if (pl) pl.onclick = () => openStepsSheet(picked);
+  const pls = el2("mpLensPlans"); if (pls) pls.onclick = mpOpenPlanSheet;
+  el.querySelectorAll(".gl-planpick, .gl-planrec").forEach((b) => b.onclick = () => {
+    pickedStrategyId = b.dataset.id; followBook = false; paint();
+  });
+}
+// The plan row: your active plan, or a one-tap PROACTIVE recommendation for this
+// position, plus the full picker — identical to Play-AI.
+function mpPlanRow(sr, picked) {
+  const strategies = (sr && sr.strategies) || [];
+  const plansBtn = `<button class="gl-plansbtn" id="mpLensPlans" type="button" title="Pick a strategy">🧭 Plans</button>`;
+  const op = mpOpening(), bn = window.GBAssistUI ? GBAssistUI.bookNextMove({ opening: op, history: mpHistory() }) : null;
+  if (picked) return `<div class="gl-planrow"><button class="gl-plan" id="mpLensPlan" type="button">🧭 ${escapeHtml(picked.name)} · steps</button>${plansBtn}</div>`;
+  if (followBook && bn && op) return `<div class="gl-planrow"><span class="gl-planlab book">📖 ${escapeHtml(op.name)}</span>${plansBtn}</div>`;
+  if (strategies.length) {
+    const top = strategies[0];
+    const rec = `<button class="gl-planrec" data-id="${top.id}" type="button" title="${escapeHtml(top.idea || "")}">💡 Try: ${STRAT_ICON[top.id] || "◆"} ${escapeHtml(top.name)}</button>`;
+    const next = strategies[1] ? `<button class="gl-planpick" data-id="${strategies[1].id}" type="button">${STRAT_ICON[strategies[1].id] || "◆"} ${escapeHtml(strategies[1].name)}</button>` : "";
+    return `<div class="gl-planrow">${rec}${next}${plansBtn}</div>`;
+  }
+  return `<div class="gl-planrow">${plansBtn}</div>`;
+}
+// The board thinks out loud: the recommended move as an arrow ON the board. ADDITIVE —
+// it is appended after drawPlan() so the picked plan's own arrows are never clobbered.
+function renderBoardAdvice() {
+  const ov = document.getElementById("planOverlay");
+  if (!ov || !window.GBAssistUI) return;
+  const myTurn = state && state.status === "ongoing" && state.turn === myColor;
+  const revealed = casualMode() || revealedBest || revealedSugg;
+  if (!myTurn || !revealed || !assistData) return;
+  const rec = mpRecommended();
+  if (!rec) return;
+  ov.insertAdjacentHTML("beforeend", GBAssistUI.adviceSVG(rec.from, rec.to, "best", planCxy));
+  const g = ov.querySelector(".adv-arrow");
+  if (g) { ov.style.pointerEvents = "none"; g.style.pointerEvents = "auto"; g.style.cursor = "pointer"; g.onclick = () => sendMove(rec.from, rec.to); }
 }
 
 function renderAssist() {

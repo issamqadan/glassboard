@@ -2518,24 +2518,13 @@ function openPlanSheet() {
 // ---- The board thinks out loud: assistance rendered AS living board intelligence.
 // The recommended move is a BREATHING ARROW on the board (tap it to play); threats
 // pulse (CSS on .sq.threat). This is the assistance-first, board-native surface.
-function advArrow(fromSq, toSq, color) {
-  const A = planCxy(fromSq), B = planCxy(toSq);
-  let dx = B.x - A.x, dy = B.y - A.y; const len = Math.hypot(dx, dy) || 1; const ux = dx / len, uy = dy / len;
-  const sx = A.x + ux * 34, sy = A.y + uy * 34, tx = B.x - ux * 28, ty = B.y - uy * 28;
-  const h = 34, w = 25, bx = tx - ux * h, by = ty - uy * h, px = -uy, py = ux;
-  return `<g class="adv-arrow"><line x1="${sx}" y1="${sy}" x2="${bx}" y2="${by}" stroke="${color}" stroke-width="18" stroke-linecap="round"/>` +
-    `<polygon points="${tx},${ty} ${bx + px * w},${by + py * w} ${bx - px * w},${by - py * w}" fill="${color}"/></g>`;
-}
 function renderBoardAdvice() {
   const ov = document.getElementById("planOverlay");
   if (!ov) return;
   const active = !firstGame && game.status() === "ongoing" && game.sideToMove() === humanColor && assistData && mateKingSq < 0;
   const p = active && showAnswer() ? pickPriority() : null;
   if (!p || p.analyzing || !p.move) { if (ov.innerHTML) ov.innerHTML = ""; ov.style.pointerEvents = "none"; ov.onclick = null; return; }
-  const color = p.kind === "urgent" ? "#f2707e" : p.kind === "draw" ? "#8aa0ff" : "#7ee0d6";
-  const C = planCxy(p.move.to);
-  ov.innerHTML = `<circle class="adv-ring" cx="${C.x}" cy="${C.y}" r="46" fill="none" stroke="${color}" stroke-width="7"/>` +
-    advArrow(p.move.from, p.move.to, color);
+  ov.innerHTML = GBAssistUI.adviceSVG(p.move.from, p.move.to, p.kind, planCxy);
   // The arrow itself is tappable — play the shown move straight off the board.
   ov.style.pointerEvents = "none";
   const g = ov.querySelector(".adv-arrow"); if (g) { g.style.pointerEvents = "auto"; g.style.cursor = "pointer"; g.onclick = () => playMove(p.move.from, p.move.to, true); }

@@ -218,6 +218,20 @@
     return { move: rec, label: (fl && byFlavor[fl.key]) || "Best move", why: rec.note || "The engine's strongest move here.", tag: "Best move", kind: "best" };
   }
 
+  // The board "thinks out loud": the recommended move as a breathing arrow + ring.
+  // Pure SVG; the caller passes its own orientation-aware square→centre mapper, so
+  // the same arrow works on a flipped board in either game.
+  function adviceSVG(from, to, kind, cxy) {
+    const color = kind === "urgent" ? "#f2707e" : kind === "draw" ? "#8aa0ff" : "#7ee0d6";
+    const A = cxy(from), B = cxy(to);
+    let dx = B.x - A.x, dy = B.y - A.y; const len = Math.hypot(dx, dy) || 1; const ux = dx / len, uy = dy / len;
+    const sx = A.x + ux * 34, sy = A.y + uy * 34, tx = B.x - ux * 28, ty = B.y - uy * 28;
+    const h = 34, w = 25, bx = tx - ux * h, by = ty - uy * h, px = -uy, py = ux;
+    return `<circle class="adv-ring" cx="${B.x}" cy="${B.y}" r="46" fill="none" stroke="${color}" stroke-width="7"/>` +
+      `<g class="adv-arrow"><line x1="${sx}" y1="${sy}" x2="${bx}" y2="${by}" stroke="${color}" stroke-width="18" stroke-linecap="round"/>` +
+      `<polygon points="${tx},${ty} ${bx + px * w},${by + py * w} ${bx - px * w},${by - py * w}" fill="${color}"/></g>`;
+  }
+
   // The NEXT move in a chosen opening's book line, if the game is still following it.
   // ctx: { opening, history } — returns {uci,from,to} or null.
   function bookNextMove(ctx) {
@@ -229,5 +243,5 @@
     return { uci: u, from: (u.charCodeAt(0) - 97) + (u.charCodeAt(1) - 49) * 8, to: (u.charCodeAt(2) - 97) + (u.charCodeAt(3) - 49) * 8 };
   }
 
-  global.GBAssistUI = { PVAL, PIECE_WORD, STRAT_VERB, verbFor, pieceAttacks, moveMeaning, identity, identityRowHTML, stripHTML, pickPriority, bookNextMove, esc };
+  global.GBAssistUI = { PVAL, PIECE_WORD, STRAT_VERB, verbFor, pieceAttacks, moveMeaning, identity, identityRowHTML, stripHTML, pickPriority, adviceSVG, bookNextMove, esc };
 })(window);
