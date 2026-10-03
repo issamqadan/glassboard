@@ -136,6 +136,14 @@ button {
   70%  { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35)); }
   100% { filter: none; }
 }
+/* Touch: a press-and-drag on the board must never turn into page text selection,
+   the iOS long-press callout/magnifier, or a grey tap flash. While a drag is live
+   the whole page is locked (the finger often leaves the board mid-drag). */
+.board, .board * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent; }
+.piece .pc-svg { pointer-events: none; -webkit-user-drag: none; }
+body.gb-dragging, body.gb-dragging * { -webkit-user-select: none !important; user-select: none !important;
+  -webkit-touch-callout: none !important; cursor: grabbing; }
 .board {
   touch-action: none;
   display: grid;

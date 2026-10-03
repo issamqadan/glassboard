@@ -2641,6 +2641,7 @@ function startDrag(i, e) {
   ghost.style.left = "0px"; ghost.style.top = "0px";
   document.body.appendChild(ghost);
   pieceEl.classList.add("dragging-src");
+  document.body.classList.add("gb-dragging"); clearPageSelection();
   press.dragging = true; press.ghost = ghost; press.pieceEl = pieceEl; press.w = gw = rect.width; press.h = gh = rect.height;
   // Start exactly where the piece sits and let the spring carry it to the pointer —
   // picking it up, not teleporting it.
@@ -2650,7 +2651,8 @@ function startDrag(i, e) {
   if (!dragRAF) dragRAF = requestAnimationFrame(dragTick);
   playSound("lift");
 }
-function endDragVisual() { if (dragRAF) { cancelAnimationFrame(dragRAF); dragRAF = null; } }
+function endDragVisual() { if (dragRAF) { cancelAnimationFrame(dragRAF); dragRAF = null; } document.body.classList.remove("gb-dragging"); }
+function clearPageSelection() { try { const sel = window.getSelection && window.getSelection(); if (sel && sel.rangeCount) sel.removeAllRanges(); } catch {} }
 // The ghost's on-screen pose (centre, scale, tilt) so the real piece can FLIP from it.
 function ghostPose() { return { x: gx + gw / 2, y: gy + gh / 2, scale: 1 + 0.2 * glift, rot: grot }; }
 // Land a rendered piece from a screen pose into its square: a soft overshoot as it
@@ -2711,6 +2713,12 @@ function onBoardPointerUp(e) {
 function setupBoardInput() {
   if (!boardEl) return;
   boardEl.addEventListener("pointerdown", onBoardPointerDown);
+  // Belt-and-braces for mobile: no selection / long-press menu / native image drag
+  // may start from the board, or anywhere while a piece is in hand.
+  const blockIfBoard = (e) => { if (press || (e.target && e.target.closest && e.target.closest(".board"))) e.preventDefault(); };
+  document.addEventListener("selectstart", blockIfBoard);
+  boardEl.addEventListener("contextmenu", (e) => e.preventDefault());
+  boardEl.addEventListener("dragstart", (e) => e.preventDefault());
   window.addEventListener("pointermove", onBoardPointerMove, { passive: false });
   window.addEventListener("pointerup", onBoardPointerUp);
   window.addEventListener("pointercancel", () => {
