@@ -2133,20 +2133,27 @@ function renderBoard() {
 // with a lift-and-settle, instead of just appearing. Runs once per move (guarded
 // so repaints — selection, etc. — don't re-animate). White is at the bottom.
 let animMoveKey = null;
+let moveSound = null; // { capture, intensity } — set when a move is made, played as the piece lands
 function animateLastMove() {
   if (!lastMove) return;
   const key = lastMove.from + "-" + lastMove.to;
   if (key === animMoveKey) return;
   animMoveKey = key;
+  const snd = moveSound; moveSound = null;
+  const landSound = (delayMs) => { if (!snd) return;
+    const pc = (game.boardString()[lastMove.to] || "").toLowerCase();
+    const castle = pc === "k" && Math.abs((lastMove.to % 8) - (lastMove.from % 8)) === 2;
+    playSound(snd.capture ? "capture" : castle ? "castle" : "move", snd.intensity, delayMs); };
   const rIdx = (sq) => { const p = rc(sq); return p.row * 8 + p.col; }; // square → rendered cell (orientation-aware)
   const toEl = boardEl.children[rIdx(lastMove.to)];
   const piece = toEl && toEl.querySelector(".piece");
-  if (!piece) return;
-  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (!piece) { landSound(0); return; }
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) { landSound(0); return; }
   const drop = dropFlip; dropFlip = null; // a dragged move lands from where it was dropped
-  if (drop && drop.key === key && performance.now() - drop.t < 1500) { flipPieceFrom(piece, drop); return; }
+  if (drop && drop.key === key && performance.now() - drop.t < 1500) { landSound(flipPieceFrom(piece, drop) * 0.45); return; }
   const cell = toEl.getBoundingClientRect().width || 0;
-  if (!cell) return;
+  if (!cell) { landSound(0); return; }
+  landSound(115); // the glide's eased curve reaches the square at ~45% of its .26s
   const from = rc(lastMove.from), to = rc(lastMove.to);
   const dCol = from.col - to.col; // start offset in rendered space, then glide to 0
   const dRow = from.row - to.row;
@@ -2635,6 +2642,7 @@ const DRAG_THRESH = 6; // px before a press becomes a drag (so a tap stays a tap
 // (a FLIP into the square) — or swings back home if the drop wasn't legal.
 const SPRING_K = 520, SPRING_C = 34; // stiffness / damping (ζ≈0.75 → a tiny overshoot)
 let gx = 0, gy = 0, vx = 0, vy = 0, tx = 0, ty = 0, grot = 0, glift = 0, gLast = 0, gw = 0, gh = 0, dragRAF = null;
+let dropIntensity = null; // set by a drag-drop; consumed by the next human move's sound
 let dropFlip = null; // { key, x, y, scale, rot, t } — the ghost's pose at the moment of the drop
 const reduceMotion = () => !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 function sqElFromPoint(x, y) { const el = document.elementFromPoint(x, y); const s = el && el.closest && el.closest(".sq"); return s || null; }
@@ -2696,8 +2704,8 @@ function ghostPose() { return { x: gx + gw / 2, y: gy + gh / 2, scale: 1 + 0.2 *
 // Land a rendered piece from a screen pose into its square: a soft overshoot as it
 // settles, shadow shrinking as it touches down.
 function flipPieceFrom(pieceEl, pose) {
-  if (!pieceEl || !pose || reduceMotion()) return;
-  const r = pieceEl.getBoundingClientRect(); if (!r.width) return;
+  if (!pieceEl || !pose || reduceMotion()) return 0;
+  const r = pieceEl.getBoundingClientRect(); if (!r.width) return 0;
   const dx = pose.x - (r.left + r.width / 2), dy = pose.y - (r.top + r.height / 2);
   pieceEl.classList.add("moving", "landing");
   pieceEl.style.transition = "none";
@@ -2708,6 +2716,7 @@ function flipPieceFrom(pieceEl, pose) {
     pieceEl.style.transform = "translate(0, 0)";
     setTimeout(() => { pieceEl.classList.remove("moving", "landing"); pieceEl.style.transition = ""; pieceEl.style.transform = ""; }, ms + 20);
   }));
+  return ms;
 }
 function onBoardPointerDown(e) {
   if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -2737,12 +2746,13 @@ function onBoardPointerUp(e) {
     const se = sqElFromPoint(e.clientX, e.clientY);
     const to = se ? +se.dataset.sq : -1;
     if (to >= 0 && to !== p.from && legalTargets.includes(to)) {
-      if (game.boardString()[to] !== ".") playSound("capture"); else playSound("move");
+      dropIntensity = Math.max(0.45, Math.min(1, 0.45 + Math.hypot(vx, vy) / 2600)); // a slammed piece sounds heavier
       dropFlip = { key: p.from + "-" + to, t: performance.now(), ...pose }; // land from the hand, not the old square
       playMove(p.from, to, false);
     } else {
       clearSelection(); // dropped off a legal square → swing it back home
-      flipPieceFrom(boardEl.querySelector(`.sq[data-sq="${p.from}"] .piece`), pose);
+      const back = flipPieceFrom(boardEl.querySelector(`.sq[data-sq="${p.from}"] .piece`), pose);
+      playSound("move", 0.3, back * 0.45); // a soft tok as it settles back
     }
   } else {
     onSquareClick(p.from); // a tap — run the normal select/move logic
@@ -2772,19 +2782,67 @@ function setupBoardInput() {
 // ---- Optional move sounds (Web Audio — synthesized, netless/offline) -----------
 let soundOn = (() => { try { return localStorage.getItem("gb_sound") === "1"; } catch { return false; } })();
 let audioCtx = null;
-function playSound(kind) {
+// Physical sounds, synthesized (offline, no files): a wooden piece on a wooden
+// board = a bright contact CLICK (band-passed noise) + the piece's hollow BODY
+// (a falling sine) + the board's low THUMP. `intensity` (0..1) scales loudness
+// and fullness — a hard, fast drop sounds heavier than a gentle placement.
+let noiseBuf = null, sndBus = null;
+function sndCtx() {
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  if (!noiseBuf) {
+    noiseBuf = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * 0.25), audioCtx.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  if (!sndBus) { // gentle glue so stacked taps never clip
+    sndBus = audioCtx.createDynamicsCompressor();
+    sndBus.threshold.value = -14; sndBus.ratio.value = 4; sndBus.connect(audioCtx.destination);
+  }
+  return audioCtx;
+}
+function env(ctx, at, peak, attack, decay) {
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), at + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + attack + decay);
+  g.connect(sndBus);
+  return g;
+}
+function noiseBurst(ctx, at, type, freq, q, peak, attack, decay) {
+  const n = ctx.createBufferSource(); n.buffer = noiseBuf;
+  const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+  n.connect(f); f.connect(env(ctx, at, peak, attack, decay));
+  n.start(at, Math.random() * 0.15); n.stop(at + attack + decay + 0.02);
+}
+function woodTok(ctx, at, intensity, pitch) {
+  const k = Math.max(0.15, Math.min(1, intensity)), p = pitch * (0.96 + Math.random() * 0.08); // no two taps identical
+  noiseBurst(ctx, at, "bandpass", 2600 * p, 1.1, 0.55 * k, 0.001, 0.018);       // contact click
+  noiseBurst(ctx, at, "bandpass", 850 * p, 5, 0.3 * k, 0.002, 0.05);            // hollow knock
+  const o = ctx.createOscillator(); o.type = "sine";                              // piece body
+  o.frequency.setValueAtTime(230 * p, at); o.frequency.exponentialRampToValueAtTime(150 * p, at + 0.07);
+  o.connect(env(ctx, at, 0.32 * k, 0.003, 0.08)); o.start(at); o.stop(at + 0.1);
+  const th = ctx.createOscillator(); th.type = "sine"; th.frequency.value = 85;    // board thump (heavier drops)
+  th.connect(env(ctx, at, 0.22 * k * k, 0.004, 0.13)); th.start(at); th.stop(at + 0.15);
+}
+// kind: "lift" | "move" | "capture" | "castle". delayMs lets the sound land WITH
+// the piece's animation instead of when the finger lifts.
+function playSound(kind, intensity, delayMs) {
   if (!soundOn) return;
   try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") audioCtx.resume();
-    const t = audioCtx.currentTime, o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.connect(g); g.connect(audioCtx.destination);
-    let f = 180, dur = 0.09, type = "triangle", vol = 0.09;
-    if (kind === "lift") { f = 320; dur = 0.045; type = "sine"; vol = 0.04; }
-    else if (kind === "capture") { f = 95; dur = 0.15; type = "sawtooth"; vol = 0.12; }
-    o.type = type; o.frequency.setValueAtTime(f, t);
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.start(t); o.stop(t + dur);
+    const ctx = sndCtx(), at = ctx.currentTime + Math.max(0, delayMs || 0) / 1000 + 0.005;
+    const k = intensity == null ? 0.7 : intensity;
+    if (kind === "lift") {          // a soft brush as the piece leaves the felt
+      noiseBurst(ctx, at, "highpass", 2800, 0.7, 0.05, 0.006, 0.045);
+      woodTok(ctx, at, 0.12, 1.35);
+    } else if (kind === "capture") { // the two pieces knock, then the capturer lands
+      woodTok(ctx, at, Math.min(1, k * 0.85), 1.3);
+      woodTok(ctx, at + 0.045, Math.min(1, k + 0.1), 1);
+    } else if (kind === "castle") {  // king, then rook
+      woodTok(ctx, at, k, 1);
+      woodTok(ctx, at + 0.11, k * 0.8, 1.06);
+    } else {
+      woodTok(ctx, at, k, 1);
+    }
   } catch {}
 }
 function toggleSound() { soundOn = !soundOn; try { localStorage.setItem("gb_sound", soundOn ? "1" : "0"); } catch {} if (soundOn) playSound("move"); paint(); }
@@ -2912,11 +2970,14 @@ function doPlay(from, to, promo, viaHelp) {
       .then((played) => { if (played > -1000000) { entry.cp = Math.max(0, bestScore - played); maybeBlunderCoach(entry, bestSan); } })
       .catch(() => {});
   }
+  const bs = game.boardString(), mover = (bs[from] || "").toLowerCase();
+  const isCapture = bs[to] !== "." || (mover === "p" && (from % 8) !== (to % 8)); // incl. en passant
+  moveSound = { capture: isCapture, intensity: dropIntensity != null ? dropIntensity : 0.7 }; dropIntensity = null;
   const ok = game.makeMove(from, to, promo);
   selected = null;
   legalTargets = [];
   renderPieceTip(null);
-  if (!ok) { history.pop(); paint(); return; } // illegal → undo the snapshot we pushed
+  if (!ok) { moveSound = null; history.pop(); paint(); return; } // illegal → undo the snapshot we pushed
   lastMove = { from, to };
   uciHistory.push(sqName(from) + sqName(to) + (promo || "")); // for opening identification
   recordPosition(); // threefold check
@@ -2990,7 +3051,7 @@ function engineReply() {
         uciHistory.push(uci); // for opening identification
         recordPosition(); // threefold check
         lastMoveLifeline = usedLifeline; // mark the assisted move on the board
-        playSound(capturedByEngine ? "capture" : "move"); // the opponent's move clicks too
+        moveSound = { capture: capturedByEngine || (/p/i.test(game.boardString()[sq.to] || "") && (sq.from % 8) !== (sq.to % 8)), intensity: 0.62 }; // lands with its glide
       }
       busy = false;
       maybeEngineResign(); // a real opponent resigns when hopelessly lost
