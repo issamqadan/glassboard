@@ -1191,10 +1191,13 @@ function currentOpening() {
 function renderOpening() {
   const el = document.getElementById("openingLine");
   if (!el || !window.GBAssistUI) return;
-  if (firstGame || game.status() !== "ongoing") { el.hidden = true; el.innerHTML = ""; el._h = ""; return; }
-  const html = GBAssistUI.stripHTML({ opening: currentOpening(), assistData, myColor: humanColor, oppColor: engineColor() });
-  if (!html) { el.hidden = true; if (el._h) { el.innerHTML = ""; el._h = ""; } return; }
+  // BOARD SOVEREIGNTY: never toggle this element's presence mid-game — showing or
+  // hiding it would move the board. During a game it always occupies its fixed
+  // 34px row; only the CONTENT swaps (and only when it actually changed).
+  const inGame = !firstGame && game.status() === "ongoing";
+  if (!inGame) { el.hidden = true; el.innerHTML = ""; el._h = ""; return; }
   el.hidden = false;
+  const html = GBAssistUI.stripHTML({ opening: currentOpening(), assistData, myColor: humanColor, oppColor: engineColor() }) || "<div class='gs-row gs-empty'></div>";
   if (html !== el._h) { el.innerHTML = html; el._h = html; el.onclick = openPlanSheet; }
 }
 

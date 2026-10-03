@@ -676,10 +676,11 @@ const oppElo = () => (myColor === "white" ? state.black_elo : state.white_elo);
 function renderOpening() {
   const box = el("openingLine");
   if (!box || !window.GBAssistUI || !game || !state) return;
+  // BOARD SOVEREIGNTY: keep the fixed-height row present for the whole game so the
+  // board never shifts; only swap the content when it actually changed.
   if (state.status !== "ongoing") { box.hidden = true; box.innerHTML = ""; box._h = ""; return; }
-  const html = GBAssistUI.stripHTML({ opening: mpOpening(), assistData, myColor, oppColor: myColor === "white" ? "black" : "white" });
-  if (!html) { box.hidden = true; if (box._h) { box.innerHTML = ""; box._h = ""; } return; }
   box.hidden = false;
+  const html = GBAssistUI.stripHTML({ opening: mpOpening(), assistData, myColor, oppColor: myColor === "white" ? "black" : "white" }) || "<div class='gs-row gs-empty'></div>";
   if (html !== box._h) { box.innerHTML = html; box._h = html; }
 }
 function paint() {

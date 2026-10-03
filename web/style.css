@@ -1124,19 +1124,26 @@ main.game #coach { display: none; }
   border-radius: 8px; width: 30px; height: 28px; font-size: 0.9rem; cursor: pointer; flex: 0 0 auto; touch-action: manipulation; }
 .glass-lens .gl-explain.on { background: rgba(242,176,58,0.18); border-color: rgba(242,176,58,0.5); color: #f0c06a; }
 .glass-lens .gl-mean { font-size: 0.84rem; font-weight: 600; color: #f0d190; line-height: 1.4; margin-top: 2px; }
-/* ALWAYS-ON strategy strip above the board (both games, every help level). */
-.opening-line { cursor: pointer; }
-.gs-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 7px 11px; border-radius: 10px;
+/* ALWAYS-ON strategy strip above the board (both games, every help level).
+   BOARD SOVEREIGNTY: this sits above the board, so its height must NEVER change —
+   otherwise the board jumps on every repaint. It is therefore a fixed-height,
+   SINGLE-LINE row (no wrapping, ellipsis on overflow) and the element reserves its
+   space even when empty. Nothing above the board may resize. */
+.opening-line { cursor: pointer; height: 34px; flex: 0 0 34px; overflow: hidden; }
+.gs-row { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; white-space: nowrap;
+  height: 34px; padding: 0 11px; border-radius: 10px; overflow: hidden;
   background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.1);
-  font-size: 0.78rem; color: #c3d0e6; line-height: 1.3; }
+  font-size: 0.78rem; color: #c3d0e6; }
 .gs-row:hover { border-color: rgba(126,224,214,0.45); }
 .gs-row b { color: #eef4fb; font-weight: 700; }
-.gs-phase { font-size: 0.58rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+.gs-phase { flex: 0 0 auto; font-size: 0.58rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
   padding: 2px 7px; border-radius: 999px; background: rgba(147,162,192,0.18); color: #aab8cf; }
-.gs-op { color: #a7e6dd; }
-.gs-plan { color: #f0c06a; }
-.gs-opp { color: #f2a6ae; max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gs-more { margin-left: auto; font-weight: 800; font-size: 0.72rem; color: #7ee0d6; white-space: nowrap; }
+.gs-op, .gs-plan, .gs-opp { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gs-op { color: #a7e6dd; flex: 0 1 auto; }
+.gs-plan { color: #f0c06a; flex: 0 1 auto; }
+.gs-opp { color: #f2a6ae; flex: 0 1 auto; }
+.gs-row.gs-empty { background: none; border-color: transparent; }
+.gs-more { flex: 0 0 auto; margin-left: auto; font-weight: 800; font-size: 0.72rem; color: #7ee0d6; }
 /* The same "what this move does" line inside a candidate row (human games). */
 .cand .cand-why { font-size: 0.8rem; font-weight: 600; color: #f0d190; line-height: 1.35; margin-top: 2px; }
 /* The shared identity strip sits above the suggestions in human games. */
@@ -1708,8 +1715,9 @@ main.game .strat-panel { display: none; }
   main.game .board-wrap { width: min(100%, calc(100vw - 28px)); margin-inline: auto; }
   /* Every flex row inside the game may wrap and may shrink. */
   main.game .gamebar, main.game .gb-actions, main.game .players,
-  main.game .gl-identity, main.game .gl-r1, main.game .gl-actions, main.game .gl-planrow,
-  main.game .gs-row { flex-wrap: wrap; min-width: 0; }
+  main.game .gl-identity, main.game .gl-r1, main.game .gl-actions, main.game .gl-planrow { flex-wrap: wrap; min-width: 0; }
+  /* NOT .gs-row — it sits above the board and must stay exactly one fixed-height line. */
+  main.game .gs-row { min-width: 0; }
   main.game .gb-actions > *, main.game .gl-r1 > *, main.game .players > * { min-width: 0; max-width: 100%; }
   main.game .gb-actions { gap: 6px; row-gap: 6px; }
   /* Let the bar's own controls shrink gracefully instead of overflowing. */
