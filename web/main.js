@@ -729,6 +729,29 @@ async function main() {
   const nh = document.getElementById("newHereLink");
   if (nh) nh.hidden = firstGame; // hidden while the guided game is running
   const closeMenu = () => { const f = document.getElementById("setupFold"); if (f) f.removeAttribute("open"); };
+  // The ⚙ panel lives inside the game bar, which is now a fixed-height, clipped row
+  // (so it can never move the board). An absolutely-positioned dropdown would be
+  // clipped away by that — so when it opens we pin it with position:FIXED, anchored
+  // under the gear. Fixed elements escape every ancestor's overflow.
+  const fold = document.getElementById("setupFold");
+  if (fold) {
+    const place = () => {
+      const body = fold.querySelector(".opts-body"), sum = fold.querySelector("summary");
+      if (!body || !sum) return;
+      const r = sum.getBoundingClientRect();
+      body.style.position = "fixed";
+      body.style.top = Math.round(r.bottom + 6) + "px";
+      body.style.right = Math.max(8, Math.round(window.innerWidth - r.right)) + "px";
+      body.style.maxHeight = Math.max(160, Math.round(window.innerHeight - r.bottom - 24)) + "px";
+      body.style.overflowY = "auto";
+    };
+    fold.addEventListener("toggle", () => { if (fold.open) place(); });
+    window.addEventListener("resize", () => { if (fold.open) place(); });
+    // Tapping outside closes it (it's a popover now, not part of the bar's flow).
+    document.addEventListener("pointerdown", (e) => {
+      if (fold.open && !fold.contains(e.target)) fold.removeAttribute("open");
+    });
+  }
   // AI-level chooser → sets the opponent's rating (drives its strength + the
   // handicap). Applies live to the running game.
   const aiLevelEl = document.getElementById("aiLevel");
