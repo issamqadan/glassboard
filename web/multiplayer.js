@@ -68,6 +68,8 @@ let gameMode = "match"; // "match" (declared handicap) | "casual" (free, both si
 let prevMyTurn = false, seenState = false, wasOver = false;
 const baseTitle = "Glassboard — Online";
 let lastMove = null;
+let lastMoveCapture = false; // was the last move a capture? (drives the capture sound)
+let prevPieceCount = null;  // piece count of the previous position, to detect it
 let mateKingSq = -1; // the mated king's square, ringed when the game ends
 let lastGlassFen = null;
 let hostName = null;
@@ -176,6 +178,14 @@ async function main() {
 
   const rb = el("resignBtn");
   if (rb) rb.addEventListener("click", resign);
+
+  // Move sounds — same shared engine and same saved preference as Play-AI.
+  const sb = el("soundBtn");
+  if (sb) {
+    const paintSnd = () => { const on = window.GBSound && GBSound.isOn(); sb.textContent = on ? "🔊" : "🔈"; sb.title = on ? "Move sounds on" : "Move sounds off"; };
+    paintSnd();
+    sb.addEventListener("click", () => { if (window.GBSound) GBSound.toggle(); paintSnd(); });
+  }
 
   // Casual takeback: request → the opponent allows or declines.
   const ub = el("undoBtn");
@@ -371,6 +381,13 @@ function onState(msg) {
   game = Game.fromFen(msg.fen);
   game.setRatings(myElo(), oppElo());
   lastMove = msg.last ? uciToSquares(msg.last) : null;
+  // A capture = the board lost a piece since the previous state (the server sends
+  // positions, not move metadata), so the sound can match what happened.
+  try {
+    const n = (game.boardString().match(/[^.]/g) || []).length;
+    lastMoveCapture = prevPieceCount != null && n < prevPieceCount;
+    prevPieceCount = n;
+  } catch { lastMoveCapture = false; }
   selected = null;
   legalTargets = [];
 
@@ -929,6 +946,12 @@ function animateLastMove() {
   const key = lastMove.from + "-" + lastMove.to;
   if (key === animMoveKey) return;
   animMoveKey = key;
+  // Wooden move sound, timed to land WITH the piece — the same shared engine
+  // Play-AI uses (web/gb-sound.js), so a move sounds identical in both games.
+  if (window.GBSound) {
+    const dist = Math.max(Math.abs((lastMove.to % 8) - (lastMove.from % 8)), Math.abs(Math.floor(lastMove.to / 8) - Math.floor(lastMove.from / 8)));
+    GBSound.play(lastMoveCapture ? "capture" : "move", Math.min(1, 0.45 + dist * 0.09), 200);
+  }
   if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const to = renderedRC(lastMove.to), from = renderedRC(lastMove.from);
   const toEl = boardEl.children[to.row * 8 + to.col];
