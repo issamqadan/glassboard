@@ -1693,11 +1693,24 @@ main.game .strat-panel { display: none; }
   main.game .panels > #thinkWindow, main.game .panels > #aiAssist { display: none; }
   main.game #glassLens { margin: 0 auto 8px; width: 100%; }
   main.game .players { margin: 0 0 6px; padding: 7px 10px; gap: 8px; }
-  /* Belt-and-braces: nothing may push the page sideways on a phone. Without this a
-     single over-wide row scrolls the whole document and clips the board. (Safe here
-     because the sticky right-rail only exists at >=861px.) */
+  /* NOTHING may be wider than the phone. An over-wide row used to stretch
+     main.game, and since the board is width:100% OF THAT CONTAINER it grew too and
+     got clipped (left) while the bar's last button was clipped (right). So:
+     1) hard-cap every game container to the viewport, 2) size the BOARD off the
+     viewport so it is whole even if something else misbehaves, 3) make every row
+     in the game wrap and shrink so none of them can force width in the first place.
+     (Safe here — the sticky right rail only exists at >=861px.) */
   html, body { max-width: 100%; overflow-x: hidden; }
-  main.game, main.game .layout, main.game .board-col, main.game .gamebar { max-width: 100%; min-width: 0; }
+  main.game { width: 100%; max-width: 100vw; overflow-x: clip; }
+  main.game .layout, main.game .board-col, main.game .gamebar, main.game .panels { max-width: 100%; min-width: 0; }
+  /* The board is measured against the VIEWPORT, never its container. */
+  main.game .board-wrap, main.game .board-col > * { max-width: calc(100vw - 28px); }
+  main.game .board-wrap { width: min(100%, calc(100vw - 28px)); margin-inline: auto; }
+  /* Every flex row inside the game may wrap and may shrink. */
+  main.game .gamebar, main.game .gb-actions, main.game .players,
+  main.game .gl-identity, main.game .gl-r1, main.game .gl-actions, main.game .gl-planrow,
+  main.game .gs-row { flex-wrap: wrap; min-width: 0; }
+  main.game .gb-actions > *, main.game .gl-r1 > *, main.game .players > * { min-width: 0; max-width: 100%; }
   main.game .gb-actions { gap: 6px; row-gap: 6px; }
   /* Let the bar's own controls shrink gracefully instead of overflowing. */
   main.game .gb-actions .gb-btn, main.game .gb-actions .gb-chip, main.game .gb-actions .pill {
