@@ -100,6 +100,7 @@ function persistAiGame(over) {
     aiTokens: aiTokens,
     humanColor: humanColor,
     aiStyle: aiStyle,
+    aiPersona: aiPersona,
     helpDelivery: helpDelivery,
     helpReceived: helpReceived,
     minutes: setupMinutes,
@@ -134,6 +135,7 @@ async function resumeAiGame(id) {
   game.setAssistOverride(aiAssistOverride); // restore the chosen assistance
   humanColor = rec.humanColor === "black" ? "black" : "white"; // restore your side + orientation
   aiStyle = (rec.aiStyle && AI_STYLES[rec.aiStyle]) ? rec.aiStyle : "balanced";
+  aiPersona = (rec.aiPersona && rec.aiPersona.n) ? rec.aiPersona : pickPersona(aiStyle);
   setupMinutes = typeof rec.minutes === "number" ? rec.minutes : 0;
   timedGame = !!rec.timedGame;
   humanMs = typeof rec.humanMs === "number" ? rec.humanMs : setupMinutes * 60000;
@@ -170,7 +172,7 @@ const AI_LEVELS = [
   { elo: 1500, ic: "♞", name: "Intermediate", desc: "Knows the basics", rating: "≈1500", skill: 6, movetime: 300 },
   { elo: 1900, ic: "⚔", name: "Club", desc: "Solid, purposeful", rating: "≈1800", skill: 9, movetime: 500 },
   { elo: 2300, ic: "★", name: "Expert", desc: "Sharp & strong", rating: "≈2100", skill: 12, movetime: 800 },
-  { elo: 3000, ic: "👑", name: "Master", desc: "The toughest test", rating: "≈2400", skill: 16, movetime: 1000 },
+  { elo: 3000, ic: "👑", name: "Master", desc: "The toughest test", rating: "≈2500+", skill: 20, movetime: 1400 },
 ];
 // Stockfish parameters (and the ≈rating) for an engine rating from the ladder.
 function sfLevelFor(elo) { return AI_LEVELS.reduce((a, l) => (elo <= l.elo && !a ? l : a), null) || AI_LEVELS[AI_LEVELS.length - 1]; }
@@ -188,16 +190,24 @@ function aiLean() {
 // The opponent gets tougher as you lean on help — but is ALWAYS kept below the
 // full-strength assist (skill 20 @ 1400ms), so following the top move reliably WINS
 // (with more effort at the higher levels). Ceiling is 16 (~4 skill below the assist).
-const AI_SKILL_CEIL = 16;
+// Opponents below Master stay under the full-strength assist, so following the help
+// wins there. MASTER IS DELIBERATELY NOT CAPPED — it plays at full strength (skill 20),
+// so it is a genuine wall: with perfect help you hold/draw, you don't steamroll it.
+const AI_SKILL_CEIL = 16;        // the cap for every level EXCEPT Master
+const AI_SKILL_CEIL_MASTER = 20; // Master plays its real strength
 function aiBoost(baseElo) {
   const lvl = sfLevelFor(baseElo);
   const lean = aiLean();
-  const ceil = Math.min(AI_SKILL_CEIL, lvl.skill + 4); // lean can add up to +4, never past 16
+  const hardCeil = lvl.skill >= 20 ? AI_SKILL_CEIL_MASTER : AI_SKILL_CEIL;
+  const ceil = Math.min(hardCeil, Math.max(lvl.skill, lvl.skill + 4)); // lean adds up to +4, never past the cap
   const skill = Math.min(ceil, Math.round(lvl.skill + lean * (ceil - lvl.skill)));
   const baseMt = lvl.movetime || (lvl.depth ? 300 : 500);
   // Think-time capped below the assist's (1400ms) so the recommendation is never
   // out-searched — following it out-calculates the opponent instead of losing ground.
-  const movetime = Math.min(1100, Math.round(baseMt + lean * (1100 - baseMt)));
+  // Sub-Master opponents stay under the assist's think-time (so following help wins);
+  // Master gets its full time — it's meant to be a real fight, not a handicapped one.
+  const mtCeil = lvl.skill >= 20 ? 1400 : 1100;
+  const movetime = Math.min(mtCeil, Math.round(baseMt + lean * (mtCeil - baseMt)));
   const depth = lean > 0.15 ? undefined : lvl.depth;
   return { lean, skill, movetime, depth, base: lvl.skill, boosted: skill > lvl.skill };
 }
@@ -211,7 +221,47 @@ const AI_STYLES = {
   defensive:  { ic: "🛡", name: "Defensive",  desc: "Rock-solid — trades, simplifies, and keeps its king safe." },
   wildcard:   { ic: "🎲", name: "Wildcard",   desc: "Unpredictable — mixes it up among sound moves." },
 };
-let setupStyle = "balanced";
+let setupStyle = (() => { try { return (JSON.parse(localStorage.getItem("gb_setup")) || {}).style || "balanced"; } catch { return "balanced"; } })();
+
+// ---- Your opponent has a NAME and a personality ----------------------------
+// "Glassboard AI" is a product, not an opponent. A named character with a voice
+// makes a game feel like a match against someone — and makes beating them mean
+// something. The roster is picked by STYLE so the name matches how they play.
+const AI_CAST = {
+  aggressive: [
+    { n: "Blitz Kowalski", e: "⚡", t: "never met a sacrifice they didn't like" },
+    { n: "Vera Storm", e: "🌩", t: "comes straight at your king" },
+    { n: "Rook Malone", e: "🔥", t: "attacks first, counts material later" },
+  ],
+  positional: [
+    { n: "Professor Olen", e: "🧠", t: "squeezes you one square at a time" },
+    { n: "Mira Vance", e: "♟", t: "quiet moves, slow suffocation" },
+    { n: "Anatoly Quill", e: "📐", t: "believes in structure above all" },
+  ],
+  defensive: [
+    { n: "The Wall", e: "🛡", t: "would rather trade than tango" },
+    { n: "Greta Stone", e: "🧱", t: "patient, solid, impossible to rush" },
+    { n: "Tariq Shield", e: "⚓", t: "digs in and dares you to break through" },
+  ],
+  wildcard: [
+    { n: "Jester Nox", e: "🎲", t: "unpredictable — and enjoying it" },
+    { n: "Luna Flip", e: "🃏", t: "plays whatever amuses her today" },
+    { n: "Chaos Theory", e: "🌀", t: "you will not see it coming" },
+  ],
+  balanced: [
+    { n: "Sam Steady", e: "⚖", t: "plays the best move, every time" },
+    { n: "Nadia Clark", e: "♞", t: "no weaknesses, no theatrics" },
+    { n: "Felix Orr", e: "🎯", t: "correct, calm, relentless" },
+  ],
+};
+let aiPersona = null; // { n, e, t } — this game's opponent
+function pickPersona(style) {
+  const list = AI_CAST[style] || AI_CAST.balanced;
+  return list[Math.floor(Math.random() * list.length)];
+}
+// Display name for the opponent: their character name, with the level as their rank.
+function aiName() { return aiPersona ? aiPersona.n : "Glassboard AI"; }
+function aiEmoji() { return aiPersona ? aiPersona.e : "🤖"; }
 let aiStyle = "balanced"; // the live game's opponent personality
 
 function givesCheck(uci) {
@@ -285,12 +335,24 @@ const RUNGS = [
   { id: "guided", name: "Assist", desc: "Shows the single best move" },
   { id: "autopilot", name: "Autopilot", desc: "Can play the move for you" },
 ];
-let setupElo = 1500;            // chosen opponent rating
-let setupMode = "full";        // "off" | "full" | "custom"
-let setupRung = "suggestion";  // chosen rung when custom
-let setupColor = "white";      // "white" | "black" | "random" — the side YOU play
-let setupMinutes = 0;          // 0 = untimed; else per-side minutes for the clock
-let setupDelivery = "open";    // how help arrives: "open" | "oncall" | "gentleman"
+// Your last match setup is REMEMBERED, so starting another game is one tap — the
+// defaults below only apply on a first-ever visit.
+const SETUP_KEY = "gb_setup";
+const savedSetup = (() => { try { return JSON.parse(localStorage.getItem(SETUP_KEY)) || {}; } catch { return {}; } })();
+function rememberSetup() {
+  try {
+    localStorage.setItem(SETUP_KEY, JSON.stringify({
+      elo: setupElo, mode: setupMode, rung: setupRung, color: setupColor,
+      minutes: setupMinutes, delivery: setupDelivery, style: setupStyle,
+    }));
+  } catch {}
+}
+let setupElo = typeof savedSetup.elo === "number" ? savedSetup.elo : 1500;   // chosen opponent rating
+let setupMode = savedSetup.mode || "full";        // "off" | "full" | "custom"
+let setupRung = savedSetup.rung || "suggestion";  // chosen rung when custom
+let setupColor = savedSetup.color || "white";     // "white" | "black" | "random" — the side YOU play
+let setupMinutes = typeof savedSetup.minutes === "number" ? savedSetup.minutes : 0; // 0 = untimed
+let setupDelivery = savedSetup.delivery || "open"; // how help arrives: "open" | "oncall" | "gentleman"
 let aiAssistOverride = "guided"; // the override applied to the live game
 const assistOverrideFor = () => setupMode === "off" ? "off" : setupMode === "full" ? "guided" : setupRung;
 
@@ -664,6 +726,7 @@ function renderRungPicker() {
 function startFromSetup() {
   const sc = document.getElementById("setupScreen");
   if (sc) sc.hidden = true;
+  rememberSetup(); // next time, your choices are already made
   engineEloEl.value = setupElo;
   syncAiLevel();
   aiAssistOverride = assistOverrideFor();
@@ -674,6 +737,7 @@ function startFromSetup() {
   // not the engine — Math.random is fine here (no reproducibility requirement).
   humanColor = setupColor === "black" ? "black" : setupColor === "white" ? "white" : (Math.random() < 0.5 ? "white" : "black");
   aiStyle = setupStyle === "random" ? (["aggressive", "positional", "defensive", "wildcard"][Math.floor(Math.random() * 4)]) : setupStyle;
+  aiPersona = pickPersona(aiStyle); // this game's named opponent
   firstGame = false;
   newGame();
 }
@@ -1470,8 +1534,8 @@ function renderPlayers() {
   const aiLevel = parseInt(engineEloEl.value, 10);
 
   const opp = stripHTML_player({
-    icon: `<span class="dot ${engineColor()}"></span>🤖`,
-    name: levelName(aiLevel), rating: ratingFor(aiLevel),
+    icon: `<span class="dot ${engineColor()}"></span>${aiEmoji()}`,
+    name: aiName(), rating: `${levelName(aiLevel)} ${ratingFor(aiLevel)}`,
     pips: (firstGame || aiLevel >= 3000) ? "" : pipRow(aiTokens, AI_TOKENS_MAX),
     pipsTitle: "opponent's lifelines remaining — its help, in the open",
     caps: capGlyphs(aiCap), lead: -youLead,
@@ -1843,6 +1907,7 @@ function buildRecap() {
   const indepPct = Math.round((indepOwn / totalHelpable) * 100);
   const lvl = levelName(engineEloEl.value);
   const style = AI_STYLES[aiStyle] ? AI_STYLES[aiStyle].name : "Balanced";
+  const foe = aiName(), foeTag = aiPersona ? `${aiEmoji()} ${foe}` : "the AI";
   const op = currentOpening();
   const cps = evalTrail.map((e) => e.cp);
   const lowest = cps.length ? Math.min(...cps) : 0;
@@ -1871,7 +1936,7 @@ function buildRecap() {
   if (R.draw) persona = { emoji: "🛡", title: "Held the Line", line: "A hard-fought draw — you didn't crack." };
   else if (!R.won) persona = { emoji: "📚", title: "Learning Round", line: "Not this time — but every loss teaches. See the turning point below." };
   else if (comeback) persona = { emoji: "🔥", title: "Comeback Kid", line: "You were on the ropes — and turned it around." };
-  else if (/Master|Expert/.test(lvl)) persona = { emoji: "🐉", title: "Giant Slayer", line: `You took down a ${style} ${lvl}.` };
+  else if (/Master|Expert/.test(lvl)) persona = { emoji: "🐉", title: "Giant Slayer", line: `You took down ${foeTag} — a ${style} ${lvl}.` };
   else if (accuracy != null && accuracy >= 90 && indepPct >= 60) persona = { emoji: "🎩", title: "The Maestro", line: "Precise — and mostly on your own." };
   else if (helpWasAvailable && indepPct >= 75) persona = { emoji: "💪", title: "Solo Act", line: "You found the moves yourself." };
   else if (helpWasAvailable && indepFollowed > indepOwn) persona = { emoji: "🤝", title: "Well-Guided", line: "You leaned on the help and it paid off — next time, try needing it less." };
@@ -1888,8 +1953,8 @@ function buildRecap() {
   if (bestCount >= 5) badges.push({ ic: "⭐", label: `${bestCount} best moves` });
   if (comeback) badges.push({ ic: "🔥", label: "Comeback" });
   const verb = R.draw ? "drew with" : R.won ? "beat" : "battled";
-  const share = `I just ${verb} a ${style} ${lvl}${accuracy != null ? ` with ${accuracy}% accuracy` : ""} on Glassboard ♟️ — chess, in the open.`;
-  return { R, persona, accuracy, indepPct, bestCount, fullMoves, lvl, style, op, turning, bestSan, best, worst: worst2, aiLifelines, badges, share, helpable: helpWasAvailable };
+  const share = `I just ${verb} ${foe} (${style} ${lvl})${accuracy != null ? ` with ${accuracy}% accuracy` : ""} on Glassboard ♟️ — chess, in the open.`;
+  return { R, persona, accuracy, indepPct, bestCount, fullMoves, lvl, style, foe, op, turning, bestSan, best, worst: worst2, aiLifelines, badges, share, helpable: helpWasAvailable };
 }
 // The game's momentum as a tiny SVG sparkline — your-relative eval over your turns
 // (up = you're ahead, down = behind), teal above the line, red below.
@@ -1928,7 +1993,7 @@ function openRecap() {
   const stat = (n, l) => `<div class="rc-stat"><div class="rc-num">${n}</div><div class="rc-lbl">${l}</div></div>`;
   body.innerHTML =
     `<div class="rc-hero"><div class="rc-emoji">${r.persona.emoji}</div><div class="rc-title">${escapeHtml(r.persona.title)}</div><div class="rc-line">${escapeHtml(r.persona.line)}</div></div>` +
-    `<div class="rc-story">You played ${r.op ? `the <b>${escapeHtml(r.op.name)}</b>` : "a game"} against ${/^[AEIOU]/.test(r.style) ? "an" : "a"} <b>${escapeHtml(r.style)} ${escapeHtml(r.lvl)}</b>${r.R.reason ? ` — ${escapeHtml(r.R.won ? "won" : r.R.draw ? "drawn" : "lost")} by ${escapeHtml(r.R.reason)}` : ""} in ${r.fullMoves} moves.</div>` +
+    `<div class="rc-story">You played ${r.op ? `the <b>${escapeHtml(r.op.name)}</b>` : "a game"} against <b>${escapeHtml(r.foe || "the AI")}</b> <span class="rc-foe">(${escapeHtml(r.style)} ${escapeHtml(r.lvl)})</span>${r.R.reason ? ` — ${escapeHtml(r.R.won ? "won" : r.R.draw ? "drawn" : "lost")} by ${escapeHtml(r.R.reason)}` : ""} in ${r.fullMoves} moves.</div>` +
     `<div class="rc-stats">${r.accuracy != null ? stat(r.accuracy + "%", "accuracy") : ""}${r.helpable ? stat(r.indepPct + "%", "your own") : ""}${stat(r.fullMoves, "moves")}</div>` +
     (lastScore ? `<div class="rc-score"><div class="rc-score-top"><span class="rc-score-pts">+${lastScore.total}</span><span class="rc-score-lbl">points this game</span>` +
       (window.GBRating ? `<span class="rc-rating">${GBRating.chipHTML(lastRating && lastRating.rated && lastRating.before != null ? lastRating.after - lastRating.before : 0)}</span>` : "") + `</div>` +
@@ -1959,8 +2024,18 @@ function agencySummaryHtml() {
   try { prev = JSON.parse(localStorage.getItem("gb_lasthelp")); } catch {}
   localStorage.setItem("gb_lasthelp", JSON.stringify(pct));
   let body;
-  if (budgetSpent === 0) {
+  // "On your own" must account for EVERY way help was taken — budget spends, On-Call
+  // pulls, and playing the suggested move. (It used to check budgetSpent only, so an
+  // On-Call game with 27 pulls still claimed "entirely on your own" — a glass-box
+  // contradiction, and the glass-box has to be honest above all.)
+  const tookHelp = budgetSpent > 0 || helpReceived > 0 || indepFollowed > 0;
+  if (!tookHelp) {
     body = "You played this one <b>entirely on your own</b> — no help spent. 🎉";
+  } else if (budgetSpent === 0) {
+    const bits = [];
+    if (helpReceived > 0) bits.push(`asked <b>${helpReceived}</b> time${helpReceived === 1 ? "" : "s"}`);
+    if (indepFollowed > 0) bits.push(`played the suggested move <b>${indepFollowed}</b> time${indepFollowed === 1 ? "" : "s"}`);
+    body = `You ${bits.join(" and ")}. Needing it less is the whole idea.`;
   } else {
     let trend = "";
     if (prev != null && isFinite(prev)) {
