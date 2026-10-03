@@ -1379,13 +1379,17 @@ main.game .first-game .fg-dot.on { background: #7ee0d6; }
 .players .rivalry.even { color:#b9c6da; background:rgba(147,162,192,0.12); border:1px solid rgba(255,255,255,0.1); }
 
 /* ---- Game Mode: one slim glanceable bar (players · turn · level + actions) ---- */
-main.game .gamebar { display: flex; align-items: center; gap: 12px; padding: 4px 0 8px; flex-wrap: wrap; }
+/* ABOVE THE BOARD → MUST NEVER CHANGE HEIGHT. Fixed height, single line, clipped.
+   (It used to wrap, so a changing button set made the bar taller/shorter and shoved
+   the board up and down between moves.) Its actions now live in the ⚙ menu. */
+main.game .gamebar { display: flex; align-items: center; gap: 10px; padding: 0 0 8px;
+  height: 44px; box-sizing: content-box; flex-wrap: nowrap; overflow: hidden; }
 main.game .gamebar .players { flex: 1 1 auto; margin: 0; border: 0; background: none; padding: 0; min-width: 0; }
 /* The action row must never be wider than the screen: it WRAPS and may shrink.
    (It used to be flex-shrink:0 with no wrap, so a full bar pushed the whole page
    sideways on a phone — the board got clipped and buttons ran off-screen.) */
-main.game .gamebar .gb-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  justify-content: flex-end; flex: 0 1 auto; min-width: 0; margin-left: auto; }
+main.game .gamebar .gb-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;
+  justify-content: flex-end; flex: 0 1 auto; min-width: 0; margin-left: auto; overflow: hidden; }
 .gb-btn { background: var(--glass-card, rgba(255,255,255,0.035)); border: 1px solid var(--glass-line, rgba(255,255,255,0.08)); color: #cdd8e8;
   border-radius: 10px; padding: 8px 13px; font-size: 0.85rem; font-weight: 620; cursor: pointer; white-space: nowrap; }
 .gb-btn:hover { border-color: #5cc9ec; color: #eaf0fb; }
@@ -1750,8 +1754,10 @@ main.game .strat-panel { display: none; }
   main.game .board-wrap, main.game .board-col > * { max-width: calc(100vw - 28px); }
   main.game .board-wrap { width: min(100%, calc(100vw - 28px)); margin-inline: auto; }
   /* Every flex row inside the game may wrap and may shrink. */
-  main.game .gamebar, main.game .gb-actions, main.game .players,
+  /* The Lens sits BELOW the board, so it may wrap freely. The gamebar and the
+     cockpit strips sit ABOVE it and must stay exactly one fixed-height line. */
   main.game .gl-identity, main.game .gl-r1, main.game .gl-actions, main.game .gl-planrow { flex-wrap: wrap; min-width: 0; }
+  main.game .gamebar, main.game .gb-actions { flex-wrap: nowrap; min-width: 0; }
   /* NOT .gs-row — it sits above the board and must stay exactly one fixed-height line. */
   main.game .gs-row { min-width: 0; }
   main.game .gb-actions > *, main.game .gl-r1 > *, main.game .players > * { min-width: 0; max-width: 100%; }
