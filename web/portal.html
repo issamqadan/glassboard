@@ -862,7 +862,13 @@
       if (me) {
         try {
           const remote = await (await fetch(SERVER_HTTP + '/ai-games?player=' + encodeURIComponent(me.id))).json();
-          (remote || []).forEach(r => { byId[r.id] = { id: r.id, fen: r.fen, humanElo: r.human_elo, engineElo: r.engine_elo, updated: (r.updated || 0) * 1000 }; });
+          // MERGE, don't replace: the server only stores the position + ratings, so
+          // overwriting would drop local-only fields like the opponent's persona.
+          (remote || []).forEach(r => {
+            byId[r.id] = Object.assign({}, byId[r.id] || {}, {
+              id: r.id, fen: r.fen, humanElo: r.human_elo, engineElo: r.engine_elo, updated: (r.updated || 0) * 1000,
+            });
+          });
         } catch {}
       }
       const merged = Object.values(byId);
@@ -893,7 +899,7 @@
           <div class="g-row">
             <div class="g-preview" onclick="location.href='./index.html?g=${g.id}'" title="Resume game" role="button">${miniBoard(g.fen, 'white', boardThemeFor(g.id))}</div>
             <div class="g-main">
-              <div class="g-name">🤖 Glassboard AI <span class="g-elo">${g.engineElo || ''}</span> <span class="mode-chip">vs AI</span>${offlineReady() ? ' <span class="off-chip" title="Saved on this device — resume with no wifi">✈️ Offline</span>' : ''}</div>
+              <div class="g-name">${aiFoe(g)} <span class="g-elo">${aiRank(g)}</span> <span class="mode-chip">vs AI</span>${offlineReady() ? ' <span class="off-chip" title="Saved on this device — resume with no wifi">✈️ Offline</span>' : ''}</div>
               <div class="g-sub">You ${g.humanElo || ''} · solo game on this device</div>
               ${statusHtml}
               ${meta.length ? `<div class="g-meta">${meta.join(' · ')}</div>` : ''}
@@ -911,6 +917,19 @@
       const colors = ['var(--line-2)','#5c6f8c','#6f86ac','var(--accent)','#8fd0e0','var(--gold)'];
       document.getElementById('ladder').innerHTML = TIERS.map((t, i) =>
         `<div class="rung" style="--rc:${colors[i]}"><div class="lvl">Level ${i}</div><div class="rn">${t.name}</div><div class="rd">${SHORT[i]}</div></div>`).join('');
+    }
+
+    // Your AI opponent has a NAME (a persona chosen when the game started). Fall back
+    // to the product name only for games created before personas existed.
+    const AI_RANKS = [[700,'🌱 Beginner'],[1100,'♟ Casual'],[1500,'♞ Intermediate'],[1900,'⚔ Club'],[2300,'★ Expert'],[1e9,'👑 Master']];
+    function aiFoe(g) {
+      const p = g && g.aiPersona;
+      return p && p.n ? `${escapeHtml(p.e || '🤖')} ${escapeHtml(p.n)}` : '🤖 Glassboard AI';
+    }
+    function aiRank(g) {
+      const elo = parseInt(g && g.engineElo, 10) || 0;
+      const row = AI_RANKS.find(r => elo <= r[0]);
+      return row ? row[1] : '';
     }
 
     // ---- your play score (local, playful) — Self + Assist = Total ----
