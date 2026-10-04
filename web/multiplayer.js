@@ -46,6 +46,8 @@ const orient = () => (sim ? "white" : myColor); // board orientation (fixed whit
 let game = null;
 let state = null;
 let glassList = [];
+let rateMoves = [];        // [{cp, own}] — the earned rating's evidence for this game
+let ratedThisGame = false; // tally each finished game exactly once
 let selected = null;
 let legalTargets = [];
 let hanging = [];
@@ -365,6 +367,7 @@ function onMessage(msg) {
       myColor = msg.color;
       game = Game.fromFen(msg.fen);
       budgetSpent = 0; helpWasAvailable = false; lastRevealFen = ""; animMoveKey = null; // fresh agency budget
+      rateMoves = []; ratedThisGame = false; // fresh rating evidence for the new game
       const mc = document.getElementById("matchCard");
       if (mc) mc.style.display = "none"; // context card done its job — focus the board
       statusEl.textContent = `Joined as ${myColor}. Waiting for the other player…`;
@@ -518,7 +521,27 @@ function showGameOver(rez) {
       (draw ? "Draw" : won ? "You win! 🎉" : "You lose");
     res.className = "over-result " + (draw ? "draw" : won ? "win" : "loss");
   }
-  if (rea) rea.innerHTML = `<div class="over-how">${escapeHtml(how)}</div>` + independenceHtml();
+  // EARNED RATING — human games now feed it too (they never did, because nothing
+  // measured your moves here). Same rules as Play-AI: own moves only, >= MIN_MOVES.
+  let ratingHtml = "";
+  if (!ratedThisGame) {
+    ratedThisGame = true;
+    const actual = draw ? 0.5 : won ? 1 : 0;
+    const oppElo3 = (myColor === "white" ? state && state.black_elo : state && state.white_elo) || 1200;
+    const rec = window.GBRating ? GBRating.record(rateMoves, actual, oppElo3, { lvl: "human", res: actual }) : null;
+    if (rec && rec.rated) {
+      const d = (rec.after != null && rec.before != null) ? rec.after - rec.before : 0;
+      ratingHtml = `<div class="over-rating"><span class="or-ic">💪</span><span class="or-txt">` +
+        `<b>${rec.after != null ? `Rating ${rec.after}${d ? ` (${d > 0 ? "+" : ""}${d})` : ""}` : `Unrated · ${rec.placementLeft} game${rec.placementLeft === 1 ? "" : "s"} to go`}</b>` +
+        `<small>Earned from the ${rec.game.ownMoves} move${rec.game.ownMoves === 1 ? "" : "s"} you found yourself (${rec.game.acpl} cp/move).</small></span></div>`;
+      const c = GBRating.celebration ? GBRating.celebration(rec, {}) : null;
+      if (c && c.big && GBRating.confetti) { GBRating.confetti(); if (window.GBSound && GBSound.isOn() && GBRating.chime) GBRating.chime(); }
+    } else {
+      ratingHtml = `<div class="over-rating"><span class="or-ic">💪</span><span class="or-txt"><b>Not rated</b>` +
+        `<small>Too few of your own moves to measure this game fairly.</small></span></div>`;
+    }
+  }
+  if (rea) rea.innerHTML = `<div class="over-how">${escapeHtml(how)}</div>` + ratingHtml + independenceHtml() + agencySummaryHtml();
   if (window.gbFeedback) gbFeedback.render(document.getElementById("overFeedback"), { mode: gameMode, gameId: (roomEl && roomEl.value.trim()) || "" });
   ov.style.display = "grid";
 }
@@ -550,6 +573,7 @@ function doRematch() {
   if (!confirm("Start a rematch — a fresh game with the same opponent?")) return;
   const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none";
   budgetSpent = 0; helpWasAvailable = false; lastRevealFen = ""; animMoveKey = null; // fresh agency budget
+      rateMoves = []; ratedThisGame = false; // fresh rating evidence for the new game
   ws.send(JSON.stringify({ t: "reset" }));
 }
 
@@ -1577,8 +1601,28 @@ function moveProvenance(from, to) {
   if (picked && picked.moveUci && picked.moveUci.slice(0, 4) === sqName(from) + sqName(to)) return "followed";
   return "own"; // played something the assistance didn't suggest
 }
+// Measure one of MY moves for the earned rating: centipawn loss vs the best move at
+// a fixed depth, on the PRE-move position. Human games never did this, which is why
+// they couldn't be rated. Already-decided positions (|eval| > 10 pawns) are skipped —
+// every move "loses" nothing there, which would flatter the number.
+// Synchronous (no worker here), but it runs right after you move while the opponent
+// is thinking, so it costs nothing you'd feel.
+const RATING_DEPTH = 4;
+function measureForRating(fen, from, to, own) {
+  const entry = { cp: null, own };
+  rateMoves.push(entry);
+  try {
+    const pre = Game.fromFen(fen);
+    const best = pre.bestScore(RATING_DEPTH);
+    if (best == null || Math.abs(best) > 1000) return;
+    const played = pre.scoreMove(from, to, RATING_DEPTH);
+    if (played > -1000000) entry.cp = Math.max(0, best - played);
+  } catch {}
+}
 function finishMove(from, to, promo) {
   const prov = moveProvenance(from, to);
+  // Rate the move BEFORE the board advances (we need the position you moved from).
+  try { if (game && state && state.status === "ongoing") measureForRating(game.fen(), from, to, prov === "own"); } catch {}
   const uci = sqName(from) + sqName(to) + promo;
   if (sim) { simMove(from, to, promo, prov, uci); return; }
   // Relay provenance (opaque summary, no server change) so BOTH players see it.
@@ -1594,6 +1638,7 @@ function startSim() {
   if (window.GBTheme) GBTheme.setContext("sim");
   game = new Game(); // startpos
   glassList = [];
+  rateMoves = []; ratedThisGame = false;
   lastGlassCount = 0;
   const mc = el("matchCard"); if (mc) mc.style.display = "none";
   if (!document.getElementById("simBadge")) {
