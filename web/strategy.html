@@ -74,6 +74,7 @@
     .how { margin: 0 0 14px; padding-left: 20px; color: var(--text); font-size: 0.88rem; line-height: 1.5; }
     .how:empty { display: none; }
     .how li { margin: 4px 0; }
+    .scard .cat.learned-tag { background: linear-gradient(140deg,#9fc0ff,#6f8fd8); }
     .scard .cat { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
       color: #04222d; background: linear-gradient(140deg, var(--accent), #3a97bd); padding: 2px 7px; border-radius: 999px; }
     .filters.cx { margin-top: -8px; }
@@ -156,10 +157,14 @@
 
   <script src="./pieces.js"></script>
   <script src="./strategies.js"></script>
+  <script src="./gb-capture.js"></script>
   <script>
     const GLY = { k:"♚",q:"♛",r:"♜",b:"♝",n:"♞",p:"♟" };
     const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
     const PIECE_NAME = { p:"pawn", n:"knight", b:"bishop", r:"rook", q:"queen", k:"king" };
+    // Learned strategies (captured from real games) join the catalog as first-class
+    // entries before anything renders.
+    if (window.GBCapture) GBCapture.registerAll();
     const S = window.GBStrategies || {};
     // One combined library: named openings + named middlegame/endgame plans.
     const cxOf = (o) => (S.complexity ? S.complexity(o) : "Intermediate");
@@ -188,6 +193,7 @@
     const CX_FILTERS = ["Any level"].concat(S.complexities || ["Beginner", "Intermediate", "Advanced"]);
     let activeSide = "Both sides";
     const SIDE_FILTERS = ["Both sides", "White", "Black"];
+    const LEARNED = (window.GBCapture ? GBCapture.list() : []).map((e) => e.id);
     function matchesPhase(o, f) {
       if (f === "All") return true;
       if (f === "Openings") return o.kind === "opening";
@@ -268,7 +274,8 @@
     }
     function card(o) {
       const gi = list.indexOf(o);
-      const tag = o.kind === "opening" ? `<span class="eco">${o.eco || ""}</span>` : `<span class="cat">${o.cat || o.phase}</span>`;
+      const learned = o.source === "learned";
+      const tag = learned ? `<span class="cat learned-tag">🧠 Learned</span>` : (o.kind === "opening" ? `<span class="eco">${o.eco || ""}</span>` : `<span class="cat">${o.cat || o.phase}</span>`);
       return `<button class="scard" data-i="${gi}">
         <div class="row1">${tag}<span class="side ${o.side}">${o.side === "both" ? "either" : o.side}</span></div>
         <h3>${o.name}</h3><p>${o.idea}</p>

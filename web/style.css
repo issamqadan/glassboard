@@ -394,6 +394,10 @@ body.gb-dragging, body.gb-dragging * { -webkit-user-select: none !important; use
 .rc-cards { display: flex; flex-direction: column; gap: 8px; }
 .rc-card { display: flex; gap: 11px; align-items: flex-start; padding: 11px 13px; border-radius: 12px;
   background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); }
+.rc-card.learned { border-color: rgba(159,192,255,0.5); background: linear-gradient(150deg, rgba(159,192,255,0.12), rgba(255,255,255,0.03)); }
+.rc-card.learned b { color: #cdd8ff; }
+.rc-learn-who { display: block; margin-top: 4px; font-size: 0.76rem; color: #8ba0bd; }
+.rc-learn-cta { margin-top: 6px !important; font-size: 0.78rem !important; }
 .rc-card.turn { border-color: rgba(126,224,214,0.35); } .rc-card.best { border-color: rgba(224,190,121,0.35); } .rc-card.slip { border-color: rgba(242,112,126,0.3); }
 .rc-card .rc-ic { font-size: 1.2rem; flex: 0 0 auto; }
 .rc-card b { color: #eef4fb; font-size: 0.9rem; } .rc-card p { margin: 2px 0 0; color: #b3c1d8; font-size: 0.84rem; line-height: 1.4; }

@@ -416,6 +416,7 @@ let lastRating = null; // GBRating.record() result for the last game
 let lastEval = null; // engine's read of your position (white-relative cp), for the live pill
 let evalTrail = []; // your-relative eval after each of your turns — the recap's story curve
 let lastResult = null; // { won, draw, reason } of the finished game — for the recap
+let capturedLesson = null; // a strategy learned from this game, if any
 let scored = false;    // guard: count each finished game into the score exactly once
 let lastScore = null;  // { total, self, assist, accuracy, ratingBefore, ratingAfter } of the last game
 let lastTotals = null; // lifetime totals after this game
@@ -951,7 +952,7 @@ function newGame() {
   busy = false;
   resigned = false;
   aiResigned = false; aiHopeless = 0;
-  scored = false; lastScore = null;
+  scored = false; lastScore = null; capturedLesson = null;
   pickedStrategyId = null;
   followBook = false;
   budgetSpent = 0;
@@ -1850,6 +1851,14 @@ function showGameOverIfNeeded() {
   else if (st === "fifty-move") { reason = "fifty-move rule"; }
   const draw = winner === "", won = winner === humanColor;
   lastResult = { won, draw, reason }; // captured for the ✨ Recap
+  // STRATEGY CAPTURE: if something genuinely forcing happened, learn it and keep it.
+  try {
+    if (!capturedLesson && window.GBCapture) {
+      capturedLesson = GBCapture.save(GBCapture.detect({
+        trail: evalTrail, history: uciHistory, Game, myColor: humanColor, opening: currentOpening(),
+      }));
+    }
+  } catch {}
   scoreFinishedGame(); // tally the play score once, now the result is known
   const res = document.getElementById("overResult"), rea = document.getElementById("overReason");
 
@@ -1917,7 +1926,14 @@ function openRecap() {
   const sh = document.getElementById("recapSheet"), body = document.getElementById("recapSheetBody");
   if (!sh || !body || !window.GBRecap) return;
   const r = buildRecap();
-  body.innerHTML = GBRecap.html(r, evalTrail);
+  body.innerHTML = GBRecap.html(r, evalTrail) ;
+  // A freshly learned pattern goes right above the actions.
+  if (capturedLesson && window.GBCapture) {
+    const cards = body.querySelector('.rc-cards');
+    const card = GBCapture.cardHTML(capturedLesson);
+    if (cards) cards.insertAdjacentHTML('afterbegin', card);
+    else body.querySelector('.rc-actions').insertAdjacentHTML('beforebegin', `<div class="rc-cards">${card}</div>`);
+  }
   const shareBtn = document.getElementById("rcShare");
   if (shareBtn) shareBtn.onclick = () => {
     const done = () => { shareBtn.textContent = "✓ Copied"; setTimeout(() => { shareBtn.textContent = "🔗 Share"; }, 1600); };

@@ -511,6 +511,7 @@ function illustrateMate(kingSq, fromSq) {
 // per-turn eval trail and no play score yet, so the module simply omits the momentum
 // graph and the points block rather than inventing them.
 let lastRecapResult = null;
+let capturedLesson = null; // a strategy learned from this game, if any
 function mpSanForPly(ply) {
   const h = mpHistory();
   if (ply == null || ply < 0 || ply >= h.length) return "";
@@ -528,6 +529,12 @@ function openRecapMP() {
     myMovePly: (k) => k * 2, sanForPly: mpSanForPly, score: null,
   });
   body.innerHTML = GBRecap.html(r, []);
+  if (capturedLesson && window.GBCapture) {
+    const cards = body.querySelector('.rc-cards');
+    const card = GBCapture.cardHTML(capturedLesson);
+    if (cards) cards.insertAdjacentHTML('afterbegin', card);
+    else body.querySelector('.rc-actions').insertAdjacentHTML('beforebegin', `<div class="rc-cards">${card}</div>`);
+  }
   const shareBtn = el2("rcShare");
   if (shareBtn) shareBtn.onclick = () => {
     const done = () => { shareBtn.textContent = "✓ Copied"; setTimeout(() => { shareBtn.textContent = "🔗 Share"; }, 1600); };
@@ -544,6 +551,14 @@ function showGameOver(rez) {
   if (!ov) return;
   const draw = rez.winner === "", won = rez.winner === myColor;
   lastRecapResult = { won, draw, reason: rez.reason || "" }; // for the ✨ recap
+  // STRATEGY CAPTURE — identical to Play-AI (shared module).
+  try {
+    if (!capturedLesson && window.GBCapture) {
+      capturedLesson = GBCapture.save(GBCapture.detect({
+        trail: [], history: mpHistory(), Game, myColor, opening: mpOpening(),
+      }));
+    }
+  } catch {}
   const res = el("overResult"), rea = el("overReason");
   let how = "by " + rez.reason;
   if (rez.reason === "checkmate") {

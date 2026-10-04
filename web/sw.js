@@ -11,7 +11,7 @@ const CACHE = "gb-" + VERSION;
 const CORE = [
   "./", "./index.html", "./portal.html",
   "./main.js", "./style.css", "./nav.js", "./sf.js", "./theme.js",
-  "./pieces.js", "./pieceinfo.js", "./rating.js", "./feedback.js", "./strategies.js", "./gb-assist-ui.js", "./gb-sound.js", "./gb-board-input.js", "./gb-recap.js", "./engine-worker.js",
+  "./pieces.js", "./pieceinfo.js", "./rating.js", "./feedback.js", "./strategies.js", "./gb-assist-ui.js", "./gb-sound.js", "./gb-board-input.js", "./gb-recap.js", "./gb-capture.js", "./engine-worker.js",
   "./pkg/glassboard_wasm.js", "./pkg/glassboard_wasm_bg.wasm",
   "./vendor/stockfish/stockfish.js", "./vendor/stockfish/stockfish.wasm",
   "./manifest.webmanifest", "./icon.svg", "./version.txt",
