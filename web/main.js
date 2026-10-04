@@ -565,6 +565,16 @@ let busy = false;
 let aiResigned = false, aiHopeless = 0; // realism: the engine resigns when it's clearly lost
 let resigned = false;
 
+// How long the full-strength advice may think. It must NEVER be out-searched by the
+// opponent (that's the handicap made real — see [[strength-and-handicap-model]]), so
+// it is always at least their think-time. But a flat 1400ms made every turn cost 1.4s
+// even against Beginner, whose own move takes 300ms — pure latency for no fairness.
+// So: match-or-beat the opponent, floor 500ms, ceiling the old 1400ms (Master, where
+// it stays an even fight).
+function adviceMovetime() {
+  const oppMt = aiBoost(parseInt(engineEloEl.value, 10)).movetime || 500;
+  return Math.max(500, Math.min(1400, Math.round(oppMt * 1.25)));
+}
 // Assistance search depth — a notch deeper than the opponent's, so following the
 // help lifts you above it (the handicap made real). Derived from the AI level.
 const depth = () => Game.assistDepthFor(parseInt(engineEloEl.value, 10));
@@ -748,6 +758,12 @@ function initEngineWorker() {
 }
 // Ask the worker to run `op`; falls back to a synchronous main-thread search if
 // the worker is unavailable (older browser / load failure) so play never breaks.
+// NOTE (measured 2026-10-04): this worker is serial, and each of your moves queues
+// four searches — but prioritising the advice over the rating/review measurements
+// buys nothing, because they fire at DIFFERENT times (measurements on your move,
+// `analyze` only after the engine replies) and finish during the engine's own
+// think-time. Rust search is also cheap: depth 4 = 14ms, depth 5 = 35ms mean
+// (core/engine/src/bin/searchbench.rs). The per-move lag is Stockfish, not this.
 function askEngine(op, args) {
   if (!engineWorker) return Promise.resolve(syncEngine(op, args));
   return new Promise((resolve, reject) => {
@@ -756,6 +772,7 @@ function askEngine(op, args) {
     engineWorker.postMessage({ id, op, args });
   }).catch(() => syncEngine(op, args));
 }
+
 // Synchronous fallback on the main thread's own Game (freezes briefly, but works).
 function syncEngine(op, args) {
   const g = Game.fromFen(args.fen);
@@ -983,6 +1000,10 @@ function onPositionChanged() {
   previewedMove = null; // a new position — clear any lens preview
   sfBest = null; // full-strength advice, fetched fresh each turn
   const token = ++positionToken;
+  // The advice search for the position we just LEFT is now worthless, but `go`
+  // requests are serialized — leaving it running would delay the next search (often
+  // the opponent's own move) by its full movetime. Free the channel immediately.
+  if (window.GBEngine && GBEngine.cancel) GBEngine.cancel("advice");
   clockLast = Date.now(); // the side to move just changed — don't charge them the gap
   paint(); // instant: board, players, captured, material — before any deep search
 
@@ -992,7 +1013,7 @@ function onPositionChanged() {
     // Strong advice: the recommended move comes from Stockfish at FULL strength, so
     // following it genuinely holds up against the (skill-limited) Stockfish opponent.
     if (!firstGame && window.GBEngine && ov !== "off") {
-      const sfOpts = { skill: 20, movetime: 1400 };
+      const sfOpts = { skill: 20, movetime: adviceMovetime(), kind: "advice" };
       if (uciHistory.length) sfOpts.moves = uciHistory.slice(); // repetition-aware advice
       GBEngine.bestMove(fen, sfOpts).then((uci) => {
         if (token !== positionToken || !uci || uci.length < 4) return;

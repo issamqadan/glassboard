@@ -7,6 +7,7 @@
   let readyP = null;
   let pendingResolve = null; // callback for the in-flight `go`
   let pvBuf = null;          // when set, we're collecting MultiPV candidates
+  let inflightKind = null;   // "move" | "advice" — what the running `go` is for
 
   function ensure() {
     if (readyP) return readyP;
@@ -35,6 +36,7 @@
           }
         }
         if (line.indexOf("bestmove") === 0) {
+          inflightKind = null;
           const mv = line.split(/\s+/)[1] || null;
           const cb = pendingResolve; pendingResolve = null;
           const collected = pvBuf; pvBuf = null;
@@ -70,7 +72,7 @@
   let chain = Promise.resolve();
   function runBestMove(fen, opts) {
     return ensure().then(() => new Promise((resolve) => {
-      pendingResolve = resolve; pvBuf = null;
+      pendingResolve = resolve; pvBuf = null; inflightKind = opts.kind || "move";
       worker.postMessage("setoption name MultiPV value 1");
       worker.postMessage("setoption name Skill Level value " + clampSkill(opts.skill));
       position(opts, fen);
@@ -82,7 +84,7 @@
   // for giving the opponent a playing STYLE (pick among the near-best by personality).
   function runCandidates(fen, opts) {
     return ensure().then(() => new Promise((resolve) => {
-      pendingResolve = resolve; pvBuf = {};
+      pendingResolve = resolve; pvBuf = {}; inflightKind = opts.kind || "move";
       const n = Math.max(1, Math.min(6, opts.multipv || 4));
       worker.postMessage("setoption name MultiPV value " + n);
       worker.postMessage("setoption name Skill Level value " + clampSkill(opts.skill));
@@ -105,5 +107,19 @@
 
   function newGame() { if (worker) worker.postMessage("ucinewgame"); }
 
-  global.GBEngine = { init: ensure, bestMove, bestMoves, newGame };
+  // Abandon a search whose answer we no longer want. Because `go` requests are
+  // SERIALIZED on one UCI channel, a search nobody is waiting for still blocks the
+  // next one for its whole movetime — so the moment you move, the advice search for
+  // the position you just left would delay your opponent's reply by up to 1.4s.
+  // "stop" makes Stockfish emit `bestmove` immediately, which frees the channel;
+  // the stale result is already discarded by the caller's position token.
+  // Pass a kind to cancel only that kind — never kill the opponent's own move search.
+  function cancel(kind) {
+    if (!worker || !inflightKind) return false;
+    if (kind && inflightKind !== kind) return false;
+    worker.postMessage("stop");
+    return true;
+  }
+
+  global.GBEngine = { init: ensure, bestMove, bestMoves, newGame, cancel };
 })(window);
