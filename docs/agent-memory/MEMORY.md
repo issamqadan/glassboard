@@ -13,3 +13,4 @@
 - [Portable session context](portable-session-context.md) — keep docs/CONTINUATION.md + docs/agent-memory synced so Claude continues on another Mac
 - [Earned rating doctrine](earned-rating-doctrine.md) — 💪 rating earned from own moves only, never typed; drives handicaps once placed
 - [Ship-live workflow](ship-live-workflow.md) — he tests on the live site/phone; commit+push+confirm deploy; say what wasn't verified
+- [Strategy capture doctrine](strategy-capture-doctrine.md) — auto-learned strategies: detection stays deterministic/verified; an LLM may only re-word facts
