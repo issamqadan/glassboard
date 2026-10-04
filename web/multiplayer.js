@@ -204,6 +204,13 @@ async function main() {
     });
   }
 
+  const orc = el("overRecap");
+  if (orc) orc.addEventListener("click", openRecapMP);
+  const rcs = el("recapSheet"), rcc = el("recapSheetClose");
+  const closeRecap = () => { if (rcs) rcs.style.display = "none"; };
+  if (rcc) rcc.addEventListener("click", closeRecap);
+  if (rcs) rcs.addEventListener("click", (e) => { if (e.target === rcs) closeRecap(); });
+
   const rb = el("resignBtn");
   if (rb) rb.addEventListener("click", resign);
 
@@ -500,10 +507,43 @@ function illustrateMate(kingSq, fromSq) {
       `<circle class="mate-ring" cx="${planCxy(kingSq).x}" cy="${planCxy(kingSq).y}" r="46" fill="none" stroke="#ff5666" stroke-width="6"/>`;
   }
 }
+// The ✨ recap for human games — same shared module as Play-AI. Human games have no
+// per-turn eval trail and no play score yet, so the module simply omits the momentum
+// graph and the points block rather than inventing them.
+let lastRecapResult = null;
+function mpSanForPly(ply) {
+  const h = mpHistory();
+  if (ply == null || ply < 0 || ply >= h.length) return "";
+  return h[ply]; // UCI — honest, if less pretty than SAN
+}
+function openRecapMP() {
+  const sh = el2("recapSheet"), body = el2("recapSheetBody");
+  if (!sh || !body || !window.GBRecap || !lastRecapResult) return;
+  const oppName = (myColor === "white" ? state.black_name : state.white_name) || "your opponent";
+  const myMoves = rateMoves.map((m) => ({ cp: m.cp, own: m.own, wasBest: false }));
+  const r = GBRecap.build({
+    result: lastRecapResult, moves: myMoves, evalTrail: [], plies: mpHistory().length,
+    opponent: { name: oppName, rank: "", style: "", tag: oppName },
+    opening: mpOpening(), helpable: helpWasAvailable, lifelines: 0,
+    myMovePly: (k) => k * 2, sanForPly: mpSanForPly, score: null,
+  });
+  body.innerHTML = GBRecap.html(r, []);
+  const shareBtn = el2("rcShare");
+  if (shareBtn) shareBtn.onclick = () => {
+    const done = () => { shareBtn.textContent = "✓ Copied"; setTimeout(() => { shareBtn.textContent = "🔗 Share"; }, 1600); };
+    if (navigator.share) navigator.share({ text: r.share }).catch(() => {});
+    else if (navigator.clipboard) navigator.clipboard.writeText(r.share).then(done).catch(done);
+    else done();
+  };
+  const again = el2("rcAgain");
+  if (again) again.onclick = () => { sh.style.display = "none"; const rm = el2("overRematch"); if (rm) rm.click(); };
+  sh.style.display = "grid";
+}
 function showGameOver(rez) {
   const ov = document.getElementById("overOverlay");
   if (!ov) return;
   const draw = rez.winner === "", won = rez.winner === myColor;
+  lastRecapResult = { won, draw, reason: rez.reason || "" }; // for the ✨ recap
   const res = el("overResult"), rea = el("overReason");
   let how = "by " + rez.reason;
   if (rez.reason === "checkmate") {

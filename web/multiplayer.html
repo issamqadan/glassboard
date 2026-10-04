@@ -117,6 +117,12 @@
           <div id="glass" class="glass"></div>
         </div>
       </div>
+      <div id="recapSheet" class="sheet-overlay" style="display:none">
+        <div class="sheet">
+          <div class="sheet-head"><span>✨ Game recap</span><span class="sheet-sub">your highlights, in the open</span><button class="sheet-close" id="recapSheetClose">✕</button></div>
+          <div id="recapSheetBody" class="recap-sheet-body"></div>
+        </div>
+      </div>
       <div id="planSheet" class="sheet-overlay" style="display:none">
         <div class="sheet">
           <div class="sheet-head"><span>Strategies</span><span class="sheet-sub">pick a plan for this position — your opponent sees it too</span><button class="sheet-close" id="planSheetClose">✕</button></div>
@@ -136,6 +142,7 @@
         <div class="over-box">
           <div class="over-result" id="overResult">—</div>
           <div class="over-reason" id="overReason"></div>
+          <button class="over-recap-btn" id="overRecap" title="Your game highlights">✨ See your game recap</button>
           <div id="overFeedback" class="over-feedback" hidden></div>
           <div class="over-actions">
             <button class="over-btn primary" id="overRematch">Rematch ↻</button>
@@ -153,6 +160,7 @@
     <script src="./gb-assist-ui.js"></script>
     <script src="./gb-sound.js"></script>
     <script src="./gb-board-input.js"></script>
+    <script src="./gb-recap.js"></script>
     <script src="./feedback.js"></script>
     <script src="./social.js"></script>
     <script src="./rating.js"></script>

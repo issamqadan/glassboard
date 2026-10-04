@@ -1894,128 +1894,42 @@ function sanForPly(ply) {
   for (let i = 0; i < ply; i++) applyUciArr(arr, uciHistory[i]);
   try { return sanFromArr(arr, uciHistory[ply]); } catch { return ""; }
 }
+// The recap is SHARED (web/gb-recap.js) so human games get the identical payoff.
+// Play-AI supplies everything it measures; the module omits anything it isn't given.
 function buildRecap() {
   const R = lastResult || { won: false, draw: false, reason: "" };
-  const rev = moveReview.filter((m) => m.cp != null && m.cp >= 0);
-  const yourMoveCount = moveReview.length;
-  const fullMoves = Math.ceil(uciHistory.length / 2);
-  let accuracy = null;
-  if (rev.length >= 3) {
-    const avg = rev.reduce((s, m) => s + m.cp, 0) / rev.length;
-    accuracy = Math.round(Math.max(12, Math.min(99, 100 * Math.exp(-avg / 300))));
-  }
-  const bestCount = moveReview.filter((m) => m.wasBest).length;
-  const totalHelpable = Math.max(1, indepOwn + indepFollowed);
-  const indepPct = Math.round((indepOwn / totalHelpable) * 100);
-  const lvl = levelName(engineEloEl.value);
-  const style = AI_STYLES[aiStyle] ? AI_STYLES[aiStyle].name : "Balanced";
-  const foe = aiName(), foeTag = aiPersona ? `${aiEmoji()} ${foe}` : "the AI";
-  const op = currentOpening();
-  const cps = evalTrail.map((e) => e.cp);
-  const lowest = cps.length ? Math.min(...cps) : 0;
-  const comeback = R.won && lowest <= -180;
-  // Turning point: the biggest swing your way between consecutive turns, attributed
-  // to YOUR move that started it (evalTrail[i-1].ply is a real played move → valid SAN).
-  let tpI = -1, tpSwing = 0;
-  for (let i = 1; i < evalTrail.length; i++) { const d = evalTrail[i].cp - evalTrail[i - 1].cp; if (d > tpSwing) { tpSwing = d; tpI = i; } }
-  let turning = null;
-  if (tpI > 0 && tpSwing >= 150) {
-    const ply = evalTrail[tpI - 1].ply;
-    turning = { san: sanForPly(ply), swing: tpSwing, move: Math.floor(ply / 2) + 1 };
-  }
-  // Best (a top move — prefer one you found yourself) and biggest slip.
-  let best = null, worst = null;
-  moveReview.forEach((m, k) => {
-    if (m.cp == null) return;
-    if (m.wasBest && (!best || (m.prov === "own" && best.prov !== "own"))) best = { k, prov: m.prov };
-    if (!worst || m.cp > worst.cp) worst = { k, cp: m.cp };
+  return GBRecap.build({
+    result: R,
+    moves: moveReview.map((m) => ({ cp: m.cp, own: m.prov === "own", wasBest: m.wasBest })),
+    evalTrail, plies: uciHistory.length,
+    opponent: { name: aiName(), rank: levelName(engineEloEl.value),
+                style: AI_STYLES[aiStyle] ? AI_STYLES[aiStyle].name : "Balanced",
+                tag: aiPersona ? `${aiEmoji()} ${aiName()}` : "the AI" },
+    opening: currentOpening(), helpable: helpWasAvailable,
+    lifelines: AI_TOKENS_MAX - aiTokens,
+    myMovePly: yourMovePly, sanForPly,
+    score: lastScore ? { total: lastScore.total, self: lastScore.self, assist: lastScore.assist,
+                         ratingAfter: lastTotals ? lastTotals.rating : null,
+                         lifetime: lastTotals ? lastTotals.total : null } : null,
   });
-  const bestSan = best ? sanForPly(yourMovePly(best.k)) : "";
-  const worst2 = worst && worst.cp >= 120 ? { san: sanForPly(yourMovePly(worst.k)), cp: worst.cp, move: worst.k + 1 } : null;
-  const aiLifelines = AI_TOKENS_MAX - aiTokens;
-  // Persona — the fun headline.
-  let persona;
-  if (R.draw) persona = { emoji: "🛡", title: "Held the Line", line: "A hard-fought draw — you didn't crack." };
-  else if (!R.won) persona = { emoji: "📚", title: "Learning Round", line: "Not this time — but every loss teaches. See the turning point below." };
-  else if (comeback) persona = { emoji: "🔥", title: "Comeback Kid", line: "You were on the ropes — and turned it around." };
-  else if (/Master|Expert/.test(lvl)) persona = { emoji: "🐉", title: "Giant Slayer", line: `You took down ${foeTag} — a ${style} ${lvl}.` };
-  else if (accuracy != null && accuracy >= 90 && indepPct >= 60) persona = { emoji: "🎩", title: "The Maestro", line: "Precise — and mostly on your own." };
-  else if (helpWasAvailable && indepPct >= 75) persona = { emoji: "💪", title: "Solo Act", line: "You found the moves yourself." };
-  else if (helpWasAvailable && indepFollowed > indepOwn) persona = { emoji: "🤝", title: "Well-Guided", line: "You leaned on the help and it paid off — next time, try needing it less." };
-  else if (R.reason === "checkmate") persona = { emoji: "⚔", title: "The Finisher", line: "Closed it out with checkmate." };
-  else persona = { emoji: "🏆", title: "Winner", line: "A solid win." };
-  // Badges.
-  const badges = [];
-  if (accuracy != null && accuracy >= 85) badges.push({ ic: "🎯", label: `${accuracy}% accuracy` });
-  if (R.reason === "checkmate" && R.won) badges.push({ ic: "♚", label: "Checkmate" });
-  if (helpWasAvailable && indepPct >= 70) badges.push({ ic: "💪", label: `${indepPct}% your own` });
-  if (aiLifelines > 0) badges.push({ ic: "🛟", label: `AI dug deep ×${aiLifelines}` });
-  if (op) badges.push({ ic: "📖", label: op.name });
-  if (fullMoves >= 40) badges.push({ ic: "🐢", label: `${fullMoves}-move epic` });
-  if (bestCount >= 5) badges.push({ ic: "⭐", label: `${bestCount} best moves` });
-  if (comeback) badges.push({ ic: "🔥", label: "Comeback" });
-  const verb = R.draw ? "drew with" : R.won ? "beat" : "battled";
-  const share = `I just ${verb} ${foe} (${style} ${lvl})${accuracy != null ? ` with ${accuracy}% accuracy` : ""} on Glassboard ♟️ — chess, in the open.`;
-  return { R, persona, accuracy, indepPct, bestCount, fullMoves, lvl, style, foe, op, turning, bestSan, best, worst: worst2, aiLifelines, badges, share, helpable: helpWasAvailable };
-}
-// The game's momentum as a tiny SVG sparkline — your-relative eval over your turns
-// (up = you're ahead, down = behind), teal above the line, red below.
-function recapSparkline(trail) {
-  const vals = trail.map((e) => (typeof e === "number" ? e : e.cp));
-  const n = vals.length;
-  if (n < 3) return "";
-  const W = 300, H = 64, pad = 5, cap = 800;
-  const clamp = (v) => Math.max(-cap, Math.min(cap, v));
-  const x = (i) => pad + (i / (n - 1)) * (W - 2 * pad);
-  const y = (v) => H / 2 - (clamp(v) / cap) * (H / 2 - pad);
-  const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
-  const line = "M" + pts.join(" L");
-  const area = `M${x(0).toFixed(1)},${(H / 2).toFixed(1)} L` + pts.join(" L") + ` L${x(n - 1).toFixed(1)},${(H / 2).toFixed(1)} Z`;
-  const endV = vals[n - 1];
-  const endColor = endV > 30 ? "#7ee0d6" : endV < -30 ? "#f2707e" : "#93a2c0";
-  return `<svg class="rc-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" width="100%" height="${H}" aria-hidden="true">` +
-    `<defs><linearGradient id="rcg" x1="0" y1="0" x2="0" y2="1">` +
-      `<stop offset="0" stop-color="#7ee0d6" stop-opacity="0.35"/><stop offset="0.5" stop-color="#7ee0d6" stop-opacity="0.04"/>` +
-      `<stop offset="0.5" stop-color="#f2707e" stop-opacity="0.04"/><stop offset="1" stop-color="#f2707e" stop-opacity="0.32"/></linearGradient></defs>` +
-    `<line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="rgba(255,255,255,0.18)" stroke-width="1" stroke-dasharray="4 4"/>` +
-    `<path d="${area}" fill="url(#rcg)"/>` +
-    `<path d="${line}" fill="none" stroke="#dbe6f4" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` +
-    `<circle cx="${x(n - 1).toFixed(1)}" cy="${y(endV).toFixed(1)}" r="3.5" fill="${endColor}"/></svg>`;
 }
 function openRecap() {
   const sh = document.getElementById("recapSheet"), body = document.getElementById("recapSheetBody");
-  if (!sh || !body) return;
+  if (!sh || !body || !window.GBRecap) return;
   const r = buildRecap();
-  const spark = recapSparkline(evalTrail);
-  const cards = [];
-  if (r.turning) cards.push(`<div class="rc-card turn"><span class="rc-ic">🔀</span><div><b>Turning point</b><p>Move ${r.turning.move}${r.turning.san ? ` — <b>${escapeHtml(r.turning.san)}</b>` : ""} swung it your way (+${(r.turning.swing / 100).toFixed(1)}).</p></div></div>`);
-  if (r.bestSan) cards.push(`<div class="rc-card best"><span class="rc-ic">⭐</span><div><b>Your best move</b><p><b>${escapeHtml(r.bestSan)}</b> — the engine's top choice${r.best && r.best.prov === "own" ? ", and you found it on your own 💪" : "."}</p></div></div>`);
-  if (r.worst) cards.push(`<div class="rc-card slip"><span class="rc-ic">😅</span><div><b>The one that got away</b><p>Move ${r.worst.move}${r.worst.san ? ` — <b>${escapeHtml(r.worst.san)}</b>` : ""} cost about ${(r.worst.cp / 100).toFixed(1)}. One to learn from.</p></div></div>`);
-  if (r.aiLifelines > 0) cards.push(`<div class="rc-card"><span class="rc-ic">🛟</span><div><b>You had it sweating</b><p>The AI spent ${r.aiLifelines} lifeline${r.aiLifelines === 1 ? "" : "s"} — moments it dug deep because you were pushing it.</p></div></div>`);
-  const stat = (n, l) => `<div class="rc-stat"><div class="rc-num">${n}</div><div class="rc-lbl">${l}</div></div>`;
-  body.innerHTML =
-    `<div class="rc-hero"><div class="rc-emoji">${r.persona.emoji}</div><div class="rc-title">${escapeHtml(r.persona.title)}</div><div class="rc-line">${escapeHtml(r.persona.line)}</div></div>` +
-    `<div class="rc-story">You played ${r.op ? `the <b>${escapeHtml(r.op.name)}</b>` : "a game"} against <b>${escapeHtml(r.foe || "the AI")}</b> <span class="rc-foe">(${escapeHtml(r.style)} ${escapeHtml(r.lvl)})</span>${r.R.reason ? ` — ${escapeHtml(r.R.won ? "won" : r.R.draw ? "drawn" : "lost")} by ${escapeHtml(r.R.reason)}` : ""} in ${r.fullMoves} moves.</div>` +
-    `<div class="rc-stats">${r.accuracy != null ? stat(r.accuracy + "%", "accuracy") : ""}${r.helpable ? stat(r.indepPct + "%", "your own") : ""}${stat(r.fullMoves, "moves")}</div>` +
-    (lastScore ? `<div class="rc-score"><div class="rc-score-top"><span class="rc-score-pts">+${lastScore.total}</span><span class="rc-score-lbl">points this game</span>` +
-      (window.GBRating ? `<span class="rc-rating">${GBRating.chipHTML(lastRating && lastRating.rated && lastRating.before != null ? lastRating.after - lastRating.before : 0)}</span>` : "") + `</div>` +
-      `<div class="rc-score-split"><span class="rc-self">💪 ${lastScore.self} you</span><span class="rc-assist">🤝 ${lastScore.assist} help</span></div>` +
-      (lastTotals ? `<div class="rc-score-total">Total play score: <b>${lastTotals.total.toLocaleString()}</b> over ${lastTotals.games} game${lastTotals.games === 1 ? "" : "s"}</div>` : "") + `</div>` : "") +
-    (spark ? `<div class="rc-spark-wrap"><div class="rc-spark-head">📈 Momentum</div>${spark}<div class="rc-spark-cap"><span style="color:#7ee0d6">▲ you ahead</span> · <span style="color:#f2707e">▼ behind</span></div></div>` : "") +
-    (r.badges.length ? `<div class="rc-badges">${r.badges.map((b) => `<span class="rc-badge">${b.ic} ${escapeHtml(b.label)}</span>`).join("")}</div>` : "") +
-    (cards.length ? `<div class="rc-cards">${cards.join("")}</div>` : "") +
-    `<div class="rc-actions"><button class="rc-share" id="rcShare">🔗 Share</button><button class="rc-again" id="rcAgain">↻ Play again</button></div>`;
+  body.innerHTML = GBRecap.html(r, evalTrail);
   const shareBtn = document.getElementById("rcShare");
   if (shareBtn) shareBtn.onclick = () => {
     const done = () => { shareBtn.textContent = "✓ Copied"; setTimeout(() => { shareBtn.textContent = "🔗 Share"; }, 1600); };
-    if (navigator.share) { navigator.share({ text: r.share }).catch(() => {}); }
-    else if (navigator.clipboard) { navigator.clipboard.writeText(r.share).then(done).catch(done); }
+    if (navigator.share) navigator.share({ text: r.share }).catch(() => {});
+    else if (navigator.clipboard) navigator.clipboard.writeText(r.share).then(done).catch(done);
     else done();
   };
   const again = document.getElementById("rcAgain");
   if (again) again.onclick = () => { sh.style.display = "none"; hideOver(); newGame(); };
   sh.style.display = "grid";
 }
+
 
 // End-of-game agency read: how much help you leaned on, and the trend. The
 // point of the whole system — needing less over time.
