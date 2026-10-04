@@ -357,3 +357,17 @@ A **conversational-LLM coaching layer** (explain a move, narrate the opponent's
 plan, adapt to the player) is a candidate — but server-side only, non-deterministic,
 outside the offline WASM core, and gated so fair/measurable defaults never depend
 on it.
+
+## Strategy auto-capture (shipped 2026-10-04)
+
+Glassboard learns a strategy from the game you just played, names it, and files it
+under its own **🧠 Learned** shelf — turning a loss into a pattern you own. Runs
+automatically at game end in Play-AI *and* human games.
+
+Detection is deterministic and key-move-centric: the moment a move left the opponent
+with ≤3 legal replies, counted on the board. **Only motifs we can verify are claimed**
+(forced / defended / wins-material) — a lesson is evidence, not flavour. Today it
+recognises one motif family (forcing checks); widening it means **more rule-based
+detectors**, not an LLM. Per the AI/LLM clarification above, detection stays
+deterministic so it works offline and stays measurable; an LLM could only ever
+re-word already-verified facts.

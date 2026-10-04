@@ -74,7 +74,7 @@ Claude-Session: https://claude.ai/code/session_<current>
 3. Strength is **measured, not assumed** (perft, tests, self-play) — no unmeasured strength claims.
 4. Assistance is a ladder down (help players need less over time).
 
-## 6. Current state (2026-10-02) — what's live
+## 6. Current state (2026-10-04) — what's live
 The POC "beginner journey + fun" phase is deep in. Recently shipped (all live):
 - **Play-AI strength model:** following the top move **wins at every level** (opponent capped
   below the skill-20 assist; see `docs/agent-memory/strength-and-handicap-model.md`). Opponent
@@ -124,9 +124,10 @@ The POC "beginner journey + fun" phase is deep in. Recently shipped (all live):
   explanations, identity strip, opening awareness, sounds, strategy strip, Glass Lens,
   board arrow, "💡 Try" rec, Plans picker, follow-the-book, the COCKPIT (player strips
   with captured pieces), and drag-to-move.
-  **STILL Play-AI only: Game Recap, play score, provenance move list.** Note: a
-  full-fidelity Recap in human games needs PER-MOVE SCORING there (multiplayer never
-  computes cp-loss) — adding it would also unlock the earned rating for human games.
+  **PARITY COMPLETE (2026-10-04): 16 of 16.** `gb-recap.js` gave human games the
+  ✨ Game Recap, and multiplayer now does per-move cp-loss scoring (`measureForRating`
+  / `rateMoves`), which also unlocked the **earned rating in human games**. Recap rule
+  (enforced by test): anything we did not measure is OMITTED, never invented.
 - **POC priority stack:** P1 assistance surface in human games (criterion #2, in progress) → P2 recap+score,
   then drag+sounds in human games (criteria #1/#6) → P3 **run the unequal-pair playtest** (the gate).
   NOTE: calibrating rating/levels is **explicitly out of scope this phase** (POC.md says P4).
@@ -134,10 +135,36 @@ The POC "beginner journey + fun" phase is deep in. Recently shipped (all live):
 **Postponed (user's call), not built:** #1 social login (Apple/Google OAuth — needs their dev
 accounts + Render secrets), #6 Web Push notifications (needs VAPID keys + Render + install).
 
-**Next up (proposed, user to pick):** (a) feed human-vs-human games into the earned rating
-(multiplayer per-move scoring), (b) end-of-game "fun/fair?" playtest card → admin panel (POC gate data),
-(c) multiplayer polish (rematch, promotion picker, reconnect), (d) rotate the Neon DB password.
-Awaiting Issam's on-phone feedback on drag feel + sounds + rating chip.
+- **STRATEGY AUTO-CAPTURE (2026-10-04, `web/gb-capture.js`).** Issam's idea: when something
+  genuinely clever happens, Glassboard should NOTICE it, name it, and teach it back. Runs
+  automatically at game end in **both** Play-AI and human games; saves to `localStorage gb_learned`
+  (device-local, max 50) and registers via `GBStrategies.add()`. Detection is **key-move-centric**:
+  it finds the moment a move left the opponent with ≤3 legal replies (counted with `countLegal`,
+  not guessed) — NOT "biggest eval drop", which just finds whoever blundered hardest.
+  **HONESTY RULE: only motifs verifiable on the board are claimed** (forced / defended /
+  wins-material). Browsable under its own **🧠 Learned** chip + section on `strategy.html`,
+  listed first; the demo replays from `demoFen` (the position it happened in), not move 1.
+  *Known limitation:* one motif family only (forcing checks). Forks/pins/skewers/squeezes are
+  invisible — **more rule-based detectors is the high-value next step, not an LLM.** Decided
+  2026-10-04: detection must stay deterministic (guardrail #3 + offline play); if an LLM is ever
+  added it may only re-word VERIFIED facts, never add a claim, with the template as fallback.
+- **THE AI OPPONENT HAS A STABLE NAME (2026-10-04, `web/gb-ai-cast.js`).** The roster is shared
+  by the board and the lobby, with `personaFor(id, style)` a **pure function of the game id** —
+  same game, same opponent, every screen, after any reload. Two bugs this fixed: (1) `fetchAiGames`
+  REPLACED instead of merged, wiping local-only `aiPersona`; (2) resume called `pickPersona()`
+  (random), so pre-persona games were renamed on every load and the lobby could never agree with
+  the board. There is no "Glassboard AI" fallback any more — a product is not an opponent.
+  **Gotcha:** `GBStrategies.add()` used to push learned patterns into `OPENINGS`, but `identify()`
+  assumes every entry has a `uci` line (learned entries carry `demoUci`) — that threw a TypeError
+  on every identify() call. Learned entries now live in their own list and identify() skips
+  line-less entries.
+
+**Next up (proposed, user to pick):** (a) **P3 run the unequal-pair playtest — the POC exit gate**
+(server has 3 verdicts but the only "match" row is a `u_probe` test; no real unequal pair yet),
+(b) more capture detectors (fork/pin/skewer/sacrifice), (c) make the learned library follow the
+ACCOUNT not the device (`gb_learned` is localStorage, so a capture on the phone is invisible on
+the Mac), (d) multiplayer polish (rematch, promotion picker, reconnect), (e) rotate the Neon DB
+password. Awaiting Issam's on-phone feedback on drag feel + sounds + rating chip.
 
 **The POC exit gate** is still a real unequal-pair playtest (beginner + stronger, both say
 fun+fair) — see `docs/POC.md`. The family playtests are that gate in motion.
