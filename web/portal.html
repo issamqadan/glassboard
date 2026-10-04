@@ -346,6 +346,7 @@
 
   <div class="toasts" id="toasts"></div>
 
+  <script src="./gb-ai-cast.js"></script>
   <script src="./pieces.js"></script>
   <script src="./theme.js"></script>
   <script src="./social.js"></script>
@@ -923,8 +924,10 @@
     // to the product name only for games created before personas existed.
     const AI_RANKS = [[700,'🌱 Beginner'],[1100,'♟ Casual'],[1500,'♞ Intermediate'],[1900,'⚔ Club'],[2300,'★ Expert'],[1e9,'👑 Master']];
     function aiFoe(g) {
-      const p = g && g.aiPersona;
-      return p && p.n ? `${escapeHtml(p.e || '🤖')} ${escapeHtml(p.n)}` : '🤖 Glassboard AI';
+      // Shared cast: if the record predates personas, derive the name from the game
+      // id so the lobby shows exactly who index.html will show on the board.
+      const p = window.GBAiCast ? window.GBAiCast.forGame(g) : (g && g.aiPersona);
+      return p && p.n ? `${escapeHtml(p.e || '🤖')} ${escapeHtml(p.n)}` : '🤖 Your opponent';
     }
     function aiRank(g) {
       const elo = parseInt(g && g.engineElo, 10) || 0;

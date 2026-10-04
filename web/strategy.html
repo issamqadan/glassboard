@@ -170,7 +170,11 @@
     const cxOf = (o) => (S.complexity ? S.complexity(o) : "Intermediate");
     const openingItems = (S.openings || []).map((o) => Object.assign({ kind: "opening", phase: "opening", cx: cxOf(o) }, o));
     const planItems = (S.plans || []).map((p) => Object.assign({ kind: "plan", cx: cxOf(p) }, p));
-    const list = openingItems.concat(planItems);
+    // Captured from your own games (gb-capture.js). They get their own phase bucket
+    // and their own chip, because "Glassboard noticed this in YOUR game" is a
+    // different kind of thing from a book opening — and it's the whole payoff.
+    const learnedItems = (S.learned || []).map((e) => Object.assign({ cx: "Advanced" }, e, { kind: "learned", phase: "learned" }));
+    const list = openingItems.concat(planItems, learnedItems);
     let demoStart = START; // piece-placement the current demo starts from
 
     const FAMILY = (uci0) => ({
@@ -183,22 +187,22 @@
     };
     // Two filter groups: phase buckets (always shown) and — only while viewing
     // openings — the first-move families.
-    const PHASE_FILTERS = ["All", "Openings", "Middlegame", "Endgame"];
+    const PHASE_FILTERS = ["All", "Openings", "Middlegame", "Endgame"].concat(learnedItems.length ? ["Learned"] : []);
     const FAM_FILTERS = ["1.e4", "1.d4", "1.c4", "1.Nf3", "1.f4", "1.b3", "Other"];
     const FILTERS = PHASE_FILTERS.concat(FAM_FILTERS);
-    const PHASE_LABEL = { opening: "Openings", middlegame: "Middlegame plans", endgame: "Endgame technique" };
-    const PHASE_ORDER = ["opening", "middlegame", "endgame"];
+    const PHASE_LABEL = { opening: "Openings", middlegame: "Middlegame plans", endgame: "Endgame technique", learned: "🧠 Learned from your games" };
+    const PHASE_ORDER = ["learned", "opening", "middlegame", "endgame"]; // yours first
     let active = "All";
     let activeCx = "Any level";
     const CX_FILTERS = ["Any level"].concat(S.complexities || ["Beginner", "Intermediate", "Advanced"]);
     let activeSide = "Both sides";
     const SIDE_FILTERS = ["Both sides", "White", "Black"];
-    const LEARNED = (window.GBCapture ? GBCapture.list() : []).map((e) => e.id);
     function matchesPhase(o, f) {
       if (f === "All") return true;
       if (f === "Openings") return o.kind === "opening";
       if (f === "Middlegame") return o.phase === "middlegame";
       if (f === "Endgame") return o.phase === "endgame";
+      if (f === "Learned") return o.kind === "learned";
       return o.kind === "opening" && FAMILY(o.uci[0]) === f; // an opening-family chip
     }
     function matchesSide(o) {
@@ -257,7 +261,7 @@
         chips = chips.concat(FAM_FILTERS.filter((f) => present.has(f)));
       }
       document.getElementById("filters").innerHTML = chips.map((f) => {
-        const label = FAM_LABEL[f] || f;
+        const label = f === "Learned" ? `🧠 Learned (${learnedItems.length})` : (FAM_LABEL[f] || f);
         return `<button class="filter ${f === active ? "on" : ""}" data-f="${f}">${label}${f === "All" ? ` (${list.length})` : ""}</button>`;
       }).join("");
       document.querySelectorAll("#filters .filter").forEach((b) => b.onclick = () => { active = b.dataset.f; renderFilters(); renderGrid(); });
@@ -302,7 +306,9 @@
     function openDemo(o) {
       // Openings play from the start; plans start from an illustrative position and
       // list their concrete how-to steps (with an animated line when one is given).
-      demoStart = (o.kind === "plan" && o.demoFen) ? o.demoFen.split(" ")[0] : START;
+      // Any entry carrying its own position starts there (plans AND learned
+      // patterns); only book openings replay from move 1.
+      demoStart = o.demoFen ? o.demoFen.split(" ")[0] : START;
       demoMoves = o.uci || o.demoUci || [];
       demoStep = 0;
       document.getElementById("dEco").textContent = o.kind === "opening" ? (o.eco || "") : (o.cat || o.phase || "").toUpperCase();

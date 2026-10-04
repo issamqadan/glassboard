@@ -437,8 +437,14 @@
     return len >= 10 ? "Advanced" : len <= 3 ? "Beginner" : "Intermediate";
   }
 
+  // Strategies LEARNED from real games (captured by gb-capture.js). They are
+  // patterns, not opening lines, so they live in their own list — putting them in
+  // OPENINGS broke identify(), which assumes every entry has a `uci` move line.
+  const LEARNED = [];
+
   window.GBStrategies = {
     openings: OPENINGS,
+    learned: LEARNED,
     plans: PLANS,
     themes: THEMES,
     categories: CATS,
@@ -463,12 +469,22 @@
       let best = null;
       for (const o of OPENINGS) {
         if (!o.unlocked && o.unlocked !== undefined) continue; // reserved for purchasable
+        if (!o.uci || !o.uci.length) continue; // not an opening line (e.g. a learned pattern)
         if (isPrefix(o.uci, uciHist) && (!best || o.uci.length > best.uci.length)) best = o;
       }
       return best;
     },
     // Room for the roadmap: register a strategy at runtime (e.g. an LLM-learned skill).
-    add(entry) { OPENINGS.push(Object.assign({ source: "learned", unlocked: true }, entry)); },
+    // Register a strategy at runtime (a captured pattern, or later an LLM-learned
+    // skill). Entries with a real opening line join the book; patterns go to LEARNED.
+    add(entry) {
+      if (!entry) return null;
+      const e = Object.assign({ source: "learned", unlocked: true }, entry);
+      const list = (e.uci && e.uci.length) ? OPENINGS : LEARNED;
+      if (list.some((x) => x.id && x.id === e.id)) return null; // already registered
+      list.push(e);
+      return e;
+    },
   };
   // Default every built-in entry to a free, owned, built-in strategy.
   OPENINGS.forEach((o) => { if (o.source === undefined) o.source = "builtin"; if (o.unlocked === undefined) o.unlocked = true; });

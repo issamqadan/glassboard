@@ -135,7 +135,9 @@ async function resumeAiGame(id) {
   game.setAssistOverride(aiAssistOverride); // restore the chosen assistance
   humanColor = rec.humanColor === "black" ? "black" : "white"; // restore your side + orientation
   aiStyle = (rec.aiStyle && AI_STYLES[rec.aiStyle]) ? rec.aiStyle : "balanced";
-  aiPersona = (rec.aiPersona && rec.aiPersona.n) ? rec.aiPersona : pickPersona(aiStyle);
+  // Derived from the game id, not re-rolled: a game saved before personas
+  // existed still gets ONE stable opponent, and the lobby agrees with us.
+  aiPersona = window.GBAiCast.forGame(Object.assign({}, rec, { aiStyle: aiStyle }));
   setupMinutes = typeof rec.minutes === "number" ? rec.minutes : 0;
   timedGame = !!rec.timedGame;
   humanMs = typeof rec.humanMs === "number" ? rec.humanMs : setupMinutes * 60000;
@@ -227,40 +229,13 @@ let setupStyle = (() => { try { return (JSON.parse(localStorage.getItem("gb_setu
 // "Glassboard AI" is a product, not an opponent. A named character with a voice
 // makes a game feel like a match against someone — and makes beating them mean
 // something. The roster is picked by STYLE so the name matches how they play.
-const AI_CAST = {
-  aggressive: [
-    { n: "Blitz Kowalski", e: "⚡", t: "never met a sacrifice they didn't like" },
-    { n: "Vera Storm", e: "🌩", t: "comes straight at your king" },
-    { n: "Rook Malone", e: "🔥", t: "attacks first, counts material later" },
-  ],
-  positional: [
-    { n: "Professor Olen", e: "🧠", t: "squeezes you one square at a time" },
-    { n: "Mira Vance", e: "♟", t: "quiet moves, slow suffocation" },
-    { n: "Anatoly Quill", e: "📐", t: "believes in structure above all" },
-  ],
-  defensive: [
-    { n: "The Wall", e: "🛡", t: "would rather trade than tango" },
-    { n: "Greta Stone", e: "🧱", t: "patient, solid, impossible to rush" },
-    { n: "Tariq Shield", e: "⚓", t: "digs in and dares you to break through" },
-  ],
-  wildcard: [
-    { n: "Jester Nox", e: "🎲", t: "unpredictable — and enjoying it" },
-    { n: "Luna Flip", e: "🃏", t: "plays whatever amuses her today" },
-    { n: "Chaos Theory", e: "🌀", t: "you will not see it coming" },
-  ],
-  balanced: [
-    { n: "Sam Steady", e: "⚖", t: "plays the best move, every time" },
-    { n: "Nadia Clark", e: "♞", t: "no weaknesses, no theatrics" },
-    { n: "Felix Orr", e: "🎯", t: "correct, calm, relentless" },
-  ],
-};
+// The roster itself now lives in gb-ai-cast.js so the lobby names the SAME
+// opponent you faced on the board. See that file for why.
+const AI_CAST = (window.GBAiCast && window.GBAiCast.CAST) || {};
 let aiPersona = null; // { n, e, t } — this game's opponent
-function pickPersona(style) {
-  const list = AI_CAST[style] || AI_CAST.balanced;
-  return list[Math.floor(Math.random() * list.length)];
-}
+function pickPersona(style) { return window.GBAiCast.pick(style); }
 // Display name for the opponent: their character name, with the level as their rank.
-function aiName() { return aiPersona ? aiPersona.n : "Glassboard AI"; }
+function aiName() { return aiPersona ? aiPersona.n : "Your opponent"; }
 function aiEmoji() { return aiPersona ? aiPersona.e : "🤖"; }
 let aiStyle = "balanced"; // the live game's opponent personality
 
@@ -1604,7 +1579,7 @@ function openGlassSheet() {
   const ev = glassEvents();
   body.innerHTML = ev.length
     ? ev.map((e) => `<div class="gl-row ${e.side}"><span class="gl-mv">move ${e.mv}</span>` +
-        `<span class="gl-who">${e.side === "you" ? "🧑 You" : "🤖 " + levelName(engineEloEl.value)}</span>` +
+        `<span class="gl-who">${e.side === "you" ? "🧑 You" : aiEmoji() + " " + aiName()}</span>` +
         `<span class="gl-txt">${e.tag ? `<b>${e.tag}</b> — ` : ""}${e.txt}</span></div>`).join("")
     : `<div class="gl-empty">No help taken yet — every time either side takes help, it lands here, in the open.</div>`;
   const sh = document.getElementById("glassSheet"); if (sh) sh.style.display = "grid";
@@ -1743,7 +1718,7 @@ function renderClocks() {
     you.className = "clk" + (active === humanColor ? " active" : "") + (humanMs <= 10000 ? " low" : "");
   }
   if (ai) {
-    ai.textContent = "🤖 " + fmtClock(engineMs);
+    ai.textContent = aiEmoji() + " " + fmtClock(engineMs);
     ai.className = "clk" + (active === engineColor() ? " active" : "") + (engineMs <= 10000 ? " low" : "");
   }
 }
@@ -1988,8 +1963,8 @@ function aiLifelineHtml() {
   if (firstGame || parseInt(engineEloEl.value, 10) >= 3000) return "";
   const used = AI_TOKENS_MAX - aiTokens;
   const line = used === 0
-    ? `🤖 ${levelName(engineEloEl.value)} never reached for a lifeline — it held its own all game.`
-    : `🤖 ${levelName(engineEloEl.value)} spent <b>${used}</b> of ${AI_TOKENS_MAX} lifeline${used === 1 ? "" : "s"} — moments it was in trouble and dug deep. You had it on the ropes ${used === 1 ? "once" : used + " times"}.`;
+    ? `${aiEmoji()} ${aiName()} never reached for a lifeline — it held its own all game.`
+    : `${aiEmoji()} ${aiName()} spent <b>${used}</b> of ${AI_TOKENS_MAX} lifeline${used === 1 ? "" : "s"} — moments it was in trouble and dug deep. You had it on the ropes ${used === 1 ? "once" : used + " times"}.`;
   return `<div class="over-lifeline">${line}</div>`;
 }
 function independenceHtml() {
