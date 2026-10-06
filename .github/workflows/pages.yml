@@ -21,7 +21,12 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  # Newest commit wins. This was `false`, which queues runs strictly — and on
+  # 2026-10-06 a run sat in `waiting` for ~40 minutes and blocked the two deploys
+  # behind it, so finished work sat undeployed with no way to drain the queue.
+  # A static site has no partial-deploy problem worth protecting: whatever is on
+  # main is what should be live, so superseding an older queued run is correct.
+  cancel-in-progress: true
 
 jobs:
   build:
