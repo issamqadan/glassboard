@@ -176,6 +176,20 @@ async function main() {
     });
   }
 
+  // Arrived by taking a challenge from the board? You already chose — seat yourself
+  // instead of making you fill in the join form a second time. Needs a saved
+  // identity; without one we fall through to the form as before.
+  if (params.get("take")) {
+    let hasId = false;
+    try { const m = JSON.parse(localStorage.getItem("gb_me")); hasId = !!(m && m.name); } catch {}
+    if (hasId) {
+      const mc = el("matchCard");
+      if (mc) mc.style.display = "none";
+      statusEl.textContent = "Taking the challenge — joining…";
+      setTimeout(() => { try { connect(); } catch {} }, 0);
+    }
+  }
+
   const plsheet = el("planSheet"), plclose = el("planSheetClose");
   const closePlan = () => { if (plsheet) plsheet.style.display = "none"; };
   if (plclose) plclose.addEventListener("click", closePlan);

@@ -619,6 +619,7 @@
             oppId: r.opp_id || null,
             fen: r.fen, turn: r.turn, started: r.started, mode: r.mode || 'match',
             over: r.over, winner: r.winner, reason: r.reason, notified: true,
+            atTable: r.at_table, want: r.want, minutes: r.minutes,
           };
           games.push(g); byLocal[r.id] = g; changed = true;
           return;
@@ -713,7 +714,11 @@
           const lbl = draw ? 'Draw' : won ? 'You won' : 'You lost';
           statusHtml = `<div class="status g-fin ${rc}"><span class="sd"></span> ${lbl} · ${escapeHtml(g.reason || 'finished')}</div>`;
         } else {
-          statusHtml = active
+          // A game sitting at the table is NOT in progress — the terms aren't
+          // signed yet, so saying "Live" would be the lobby lying about the state.
+          statusHtml = g.atTable && active
+            ? `<div class="status" style="color:#7ee0d6;background:rgba(126,224,214,0.12)"><span class="sd" style="background:#7ee0d6;box-shadow:0 0 8px #7ee0d6"></span> At the table — agree the terms</div>`
+            : active
             ? `<div class="status" style="color:var(--good);background:rgba(69,200,110,0.12)"><span class="sd" style="background:var(--good);box-shadow:0 0 8px var(--good)"></span> Live — opponent joined</div>`
             : `<div class="status waiting"><span class="sd"></span> Waiting to join</div>`;
           const meta = [];
@@ -964,7 +969,7 @@
           <div class="ch-want">${w.ic} wants ${escapeHtml(w.label.toLowerCase())} — ${escapeHtml(w.blurb.toLowerCase())}</div>
           <div class="ch-conseq ${pv.tone}">${escapeHtml(pv.text)}</div>
         </div>
-        <div class="ch-take"><button class="btn btn-primary" onclick="takeChallenge('${c.id}','${escapeHtml(host.name)}')">Take it →</button></div>
+        <div class="ch-take"><button class="btn btn-primary ch-take-btn" data-id="${escapeHtml(c.id)}" data-host="${escapeHtml(host.name)}" data-hr="${c.host_rating || 0}" data-mode="${escapeHtml(c.mode || 'match')}">Take it →</button></div>
       </div>`;
     }
     async function renderOpenGames() {
@@ -977,13 +982,26 @@
       host.innerHTML = list.length
         ? list.map(challengeCard).join('')
         : `<div class="ch-empty">Nobody's waiting right now. <b style="color:var(--text)">Post a challenge</b> and it shows up here for anyone to take — you declare your level and say who you're after.</div>`;
+      // Bound here rather than inlined into onclick: a name with an apostrophe
+      // ("O'Brien") would have broken out of the JS string and killed the button.
+      host.querySelectorAll('.ch-take-btn').forEach(btn => btn.onclick = () => takeChallenge(btn.dataset));
     }
-    // Sit down at someone else's challenge. The WS join seats you as the guest.
-    function takeChallenge(id, hostName) {
+    // Sit down at someone else's challenge. `take=1` makes the game page seat you
+    // straight away instead of showing the join form again — you already decided.
+    //
+    // NOTE on params: `he` is the HOST's rating (the page renders "<host> is rated
+    // <he>" and sizes the handicap preview from it) and `elo` is YOUR own. Passing
+    // your own rating as `he` showed the opponent's level as your number and
+    // computed the preview from the wrong pair.
+    function takeChallenge(d) {
       if (!me) { openIdentity(); return; }
       const base = location.href.replace(/portal\.html.*$/, '').replace(/[^/]*$/, '');
-      location.href = base + 'multiplayer.html?room=' + encodeURIComponent(id) +
-        '&host=' + encodeURIComponent(hostName || 'Host') + '&me=' + encodeURIComponent(me.name) + '&he=' + me.rating;
+      let url = base + 'multiplayer.html?take=1&room=' + encodeURIComponent(d.id) +
+        '&host=' + encodeURIComponent(d.host || 'Host') +
+        '&he=' + (parseInt(d.hr, 10) || 0) +
+        '&elo=' + (me.rating || 1200);
+      if (d.mode === 'casual') url += '&mode=casual';
+      location.href = url;
     }
 
     async function renderAiGames() {

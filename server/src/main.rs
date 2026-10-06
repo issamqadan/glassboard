@@ -532,15 +532,19 @@ impl FromRef<AppState> for Store {
 static NEXT_ANON: AtomicU64 = AtomicU64::new(1);
 
 impl RoomState {
-    /// Are we still at the table? True only before the first move, while both seats
-    /// are filled and at least one player hasn't signed. A game with a move played
-    /// is underway no matter what the ready flags say, which is what keeps games
-    /// that predate the Table (and games reloaded after a restart) playable.
+    /// Are we still at the table? True before the first move until BOTH players
+    /// have signed.
+    ///
+    /// Deliberately does not require the guest seat to be filled. It used to, which
+    /// left a hole: with an empty seat the table counted as closed, so the host
+    /// could play move 1 while waiting — and once a move exists the table never
+    /// opens again, so that game skipped the contract entirely. The host now signs
+    /// and waits, which is the honest order anyway.
+    ///
+    /// `last_uci.is_none()` is what keeps games that predate the Table, and games
+    /// reloaded after a restart, playable rather than stuck waiting for signatures.
     fn table_open(&self) -> bool {
-        self.room.last_uci.is_none()
-            && self.seats.host.is_some()
-            && self.seats.guest.is_some()
-            && !(self.ready_white && self.ready_black)
+        self.room.last_uci.is_none() && !(self.ready_white && self.ready_black)
     }
 }
 
@@ -748,6 +752,8 @@ struct GameSummary {
     /// The terms this game was posted under.
     want: String,
     minutes: i32,
+    /// Waiting on signatures — the lobby shouldn't call this "in progress".
+    at_table: bool,
     /// "match" | "casual".
     mode: String,
 }
@@ -911,6 +917,7 @@ async fn list_games(
             mode: rs.mode.clone(),
             want: rs.want.clone(),
             minutes: rs.minutes,
+            at_table: rs.table_open(),
         });
     }
     Json(out)
@@ -1566,6 +1573,13 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                                             rs.pending_mode = None;
                                             if accept {
                                                 rs.mode = want.clone();
+                                                // The contract changed, so any
+                                                // signature on the old one is void:
+                                                // nobody agreed to THESE terms yet.
+                                                if rs.room.last_uci.is_none() {
+                                                    rs.ready_white = false;
+                                                    rs.ready_black = false;
+                                                }
                                                 let note = if want == "casual" {
                                                     "Both agreed: this is now a CASUAL game — full assistance for both sides, and it no longer counts toward either rating."
                                                 } else {
