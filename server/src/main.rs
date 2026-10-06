@@ -62,6 +62,10 @@ struct RoomState {
     /// They stay meaningful after the seat fills (they're what was agreed to).
     want: String,
     minutes: i32,
+    /// A pending mode change — (who asked, what they asked for). Changing the terms
+    /// mid-game needs the OPPONENT's yes, exactly like a takeback: the handicap is a
+    /// mutual contract, so neither side may rewrite it alone.
+    pending_mode: Option<(Color, String)>,
 }
 type Rooms = Arc<Mutex<HashMap<String, RoomState>>>;
 
@@ -387,6 +391,7 @@ async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
             pending_undo: None,
             want: row.get::<Option<String>, _>("want").unwrap_or_else(|| "any".to_string()),
             minutes: row.get::<Option<i32>, _>("minutes").unwrap_or(0),
+            pending_mode: None,
         };
         out.push((id, rs));
     }
@@ -527,6 +532,7 @@ fn new_room_state() -> RoomState {
         pending_undo: None,
         want: "any".to_string(),
         minutes: 0,
+        pending_mode: None,
     }
 }
 
@@ -554,6 +560,14 @@ enum ClientMsg {
     UndoRequest,
     /// Answer to a takeback request.
     UndoResponse {
+        accept: bool,
+    },
+    /// Propose changing the terms mid-game: "casual" | "match".
+    ModeRequest {
+        mode: String,
+    },
+    /// Answer to a mode proposal.
+    ModeResponse {
         accept: bool,
     },
 }
@@ -594,6 +608,17 @@ enum ServerMsg {
     Undo {
         accepted: bool,
         by: String,
+    },
+    /// `from` ("white"|"black") proposes switching the terms to `mode`.
+    ModeAsk {
+        from: String,
+        mode: String,
+    },
+    /// Result of a mode proposal. On yes, State carries the new mode too.
+    ModeSet {
+        accepted: bool,
+        by: String,
+        mode: String,
     },
 }
 
@@ -1438,6 +1463,71 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                                 }
                             };
                             if did {
+                                broadcast_state(&rooms, &room_code).await;
+                                persist_game(&store, &rooms, &room_code).await;
+                            }
+                        }
+                        // Ask to change the terms mid-game. Relayed, never applied —
+                        // only the opponent's yes can change them.
+                        Ok(ClientMsg::ModeRequest { mode }) => {
+                            let mut map = rooms.lock().await;
+                            if let Some(rs) = map.get_mut(&room_code) {
+                                let valid = mode == "casual" || mode == "match";
+                                if valid && mode != rs.mode && rs.room.resigned.is_none() && rs.pending_mode.is_none() {
+                                    rs.pending_mode = Some((color, mode.clone()));
+                                    let _ = rs.tx.send(json(&ServerMsg::ModeAsk {
+                                        from: color_str.to_string(),
+                                        mode,
+                                    }));
+                                }
+                            }
+                        }
+                        // The opponent's yes/no on the terms. Logged in the glass box
+                        // either way: the terms must never change quietly.
+                        Ok(ClientMsg::ModeResponse { accept }) => {
+                            let changed = {
+                                let mut map = rooms.lock().await;
+                                if let Some(rs) = map.get_mut(&room_code) {
+                                    match rs.pending_mode.clone() {
+                                        Some((req, want)) if req != color => {
+                                            rs.pending_mode = None;
+                                            if accept {
+                                                rs.mode = want.clone();
+                                                let note = if want == "casual" {
+                                                    "Both agreed: this is now a CASUAL game — full assistance for both sides, and it no longer counts toward either rating."
+                                                } else {
+                                                    "Both agreed: this is now a MATCH — the rating-based handicap applies and the result counts."
+                                                };
+                                                rs.room.push_glass(color_str, note);
+                                                // Push AND broadcast: pushing alone only
+                                                // persists it, so neither player would see
+                                                // the terms change until a reload.
+                                                let _ = rs.tx.send(json(&ServerMsg::Glass {
+                                                    side: color_str.to_string(),
+                                                    summary: note.to_string(),
+                                                }));
+                                                let _ = rs.tx.send(json(&ServerMsg::ModeSet {
+                                                    accepted: true,
+                                                    by: color_str.to_string(),
+                                                    mode: want,
+                                                }));
+                                                true
+                                            } else {
+                                                let _ = rs.tx.send(json(&ServerMsg::ModeSet {
+                                                    accepted: false,
+                                                    by: color_str.to_string(),
+                                                    mode: want,
+                                                }));
+                                                false
+                                            }
+                                        }
+                                        _ => false,
+                                    }
+                                } else {
+                                    false
+                                }
+                            };
+                            if changed {
                                 broadcast_state(&rooms, &room_code).await;
                                 persist_game(&store, &rooms, &room_code).await;
                             }

@@ -18,12 +18,19 @@
           <button id="notifyBtn" class="gb-btn" title="Get notified when it's your turn">🔔 Notify</button>
           <button id="rematchBtn" class="gb-btn" hidden>Rematch ↻</button>
           <button id="undoBtn" class="gb-btn" title="Ask your opponent to allow a takeback (casual only)" hidden>↩ Takeback</button>
+          <button id="modeBtn" class="gb-btn" title="Propose changing the terms — your opponent has to agree" hidden></button>
           <button id="resignBtn" class="gb-btn danger" hidden>Resign</button>
         </div>
       </div>
       <div id="undoPrompt" class="undo-prompt" hidden>
         <span id="undoPromptText">Your opponent asks to take back a move.</span>
         <span class="up-actions"><button id="undoYes" class="gb-btn">Allow ↩</button><button id="undoNo" class="gb-btn danger">Decline</button></span>
+      </div>
+      <!-- Changing the terms needs BOTH players. Same shape as the takeback prompt:
+           one side asks, the other decides, and the glass box records it. -->
+      <div id="modePrompt" class="undo-prompt" hidden>
+        <span id="modePromptText"></span>
+        <span class="up-actions"><button id="modeYes" class="gb-btn">Agree ✓</button><button id="modeNo" class="gb-btn danger">Decline</button></span>
       </div>
 
       <div class="match-card" id="matchCard">

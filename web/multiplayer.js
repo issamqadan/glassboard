@@ -228,6 +228,25 @@ async function main() {
     statusEl.textContent = "Takeback requested — waiting for your opponent…";
     renderStatus();
   });
+  // THE TERMS CAN CHANGE MID-GAME — but only by agreement. Either player may
+  // propose it at any point; the opponent decides. Unilateral changes are the one
+  // thing we never allow, because a handicap you didn't agree to isn't a handicap,
+  // it's an excuse.
+  const mb = el("modeBtn");
+  if (mb) mb.addEventListener("click", () => {
+    if (modePending || !ws || ws.readyState !== 1) return;
+    const want = casualMode() ? "match" : "casual";
+    ws.send(JSON.stringify({ t: "moderequest", mode: want }));
+    modePending = true;
+    statusEl.textContent = want === "casual"
+      ? "Asked to make this casual — waiting for your opponent…"
+      : "Asked to make this a rated match — waiting for your opponent…";
+    renderStatus();
+  });
+  const my = el("modeYes"), mn = el("modeNo");
+  if (my) my.addEventListener("click", () => { ws && ws.send(JSON.stringify({ t: "moderesponse", accept: true })); hideModePrompt(); });
+  if (mn) mn.addEventListener("click", () => { ws && ws.send(JSON.stringify({ t: "moderesponse", accept: false })); hideModePrompt(); });
+
   const uy = el("undoYes"), un = el("undoNo");
   if (uy) uy.addEventListener("click", () => { ws && ws.send(JSON.stringify({ t: "undoresponse", accept: true })); hideUndoPrompt(); });
   if (un) un.addEventListener("click", () => { ws && ws.send(JSON.stringify({ t: "undoresponse", accept: false })); hideUndoPrompt(); });
@@ -399,8 +418,34 @@ function onMessage(msg) {
       statusEl.textContent = msg.accepted ? "Takeback allowed — the move was taken back." : "Your opponent declined the takeback.";
       renderStatus();
       break;
+    case "modeask":
+      if (msg.from && msg.from !== myColor) showModePrompt(msg.mode);
+      else statusEl.textContent = "Terms proposed — waiting for your opponent…";
+      break;
+    case "modeset":
+      hideModePrompt();
+      modePending = false;
+      // State carries the new mode, so the whole assistance surface follows along.
+      statusEl.textContent = msg.accepted
+        ? (msg.mode === "casual"
+            ? "Agreed — this is now a casual game: full help for both of you, and it no longer counts toward either rating."
+            : "Agreed — this is now a rated match: the handicap applies and the result counts.")
+        : "Your opponent declined the change — the terms stay as they were.";
+      renderStatus();
+      break;
   }
 }
+let modePending = false;
+function showModePrompt(mode) {
+  const p = el("modePrompt"), t = el("modePromptText");
+  if (!p) return;
+  t.innerHTML = mode === "casual"
+    ? "Your opponent asks to make this a <b>casual game</b> — full assistance for both of you, and it stops counting toward either rating."
+    : "Your opponent asks to make this a <b>rated match</b> — the rating-based handicap applies and the result counts.";
+  p.hidden = false;
+}
+function hideModePrompt() { const p = el("modePrompt"); if (p) p.hidden = true; }
+
 function showUndoPrompt() {
   const p = el("undoPrompt"), t = el("undoPromptText");
   if (t) t.textContent = (oppLabel() || "Your opponent") + " asks to take back a move.";
@@ -576,7 +621,16 @@ function showGameOver(rez) {
   // EARNED RATING — human games now feed it too (they never did, because nothing
   // measured your moves here). Same rules as Play-AI: own moves only, >= MIN_MOVES.
   let ratingHtml = "";
-  if (!ratedThisGame) {
+  // A CASUAL game must not move your rating. The create modal has always promised
+  // "no ratings" for casual, and the mid-game switch repeats that promise — but
+  // this block recorded every finished game regardless, so a casual game quietly
+  // counted. Rating is earned under agreed terms or not at all.
+  if (casualMode()) {
+    ratedThisGame = true;
+    ratingHtml = `<div class="over-rating"><span class="or-ic">🎈</span><span class="or-txt">` +
+      `<b>Casual — not rated</b><small>Both of you had full assistance, so this one doesn't touch your 💪 rating. Play a match when you want it to count.</small>` +
+      `</span></div>`;
+  } else if (!ratedThisGame) {
     ratedThisGame = true;
     const actual = draw ? 0.5 : won ? 1 : 0;
     const oppElo3 = (myColor === "white" ? state && state.black_elo : state && state.white_elo) || 1200;
@@ -1139,6 +1193,13 @@ function renderStatus() {
   // Takeback: casual only, once a move has been played, while the game is live.
   const ub = el("undoBtn");
   if (ub) ub.hidden = undoPending || !(casualMode() && myColor && state.status === "ongoing" && !over && state.last);
+  // The terms button offers the OTHER mode, and only while the game is live.
+  const mbtn = el("modeBtn");
+  if (mbtn) {
+    const canAsk = !modePending && myColor && state.status === "ongoing" && !over;
+    mbtn.hidden = !canAsk;
+    if (canAsk) mbtn.textContent = casualMode() ? "⚔ Make it a match" : "🎈 Make it casual";
+  }
   const rmb = el("rematchBtn");
   if (rmb) rmb.hidden = !(myColor && over);
 
