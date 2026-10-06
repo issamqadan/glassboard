@@ -955,6 +955,16 @@
         return await (await fetch(SERVER_HTTP + '/open?exclude=' + encodeURIComponent(me.id))).json() || [];
       } catch { return []; }
     }
+    // How long it's been waiting. A fresh challenge is far likelier to be answered,
+    // so saying so is useful rather than decorative.
+    function chAge(startedSecs) {
+      if (!startedSecs) return '';
+      const s = Math.max(0, Math.floor(Date.now() / 1000 - startedSecs));
+      if (s < 120) return 'just posted';
+      const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+      const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+      return Math.floor(h / 24) + 'd ago';
+    }
     function challengeCard(c) {
       const w = GBTerms.wantOf(c.want);
       const host = { name: c.host_name || 'A player', rating: c.host_rating || 0 };
@@ -965,7 +975,8 @@
         <div class="ch-who">
           <div class="ch-name">${escapeHtml(host.name)} <span class="ch-lvl">${escapeHtml(String(lvl))}</span>
             <span class="mode-chip">${c.mode === 'casual' ? '🎈 Casual' : '⚔ Match'}</span>
-            <span class="ch-lvl">${GBTerms.fmtTime(c.minutes)}</span></div>
+            <span class="ch-lvl">${GBTerms.fmtTime(c.minutes)}</span>
+            <span class="ch-lvl">${chAge(c.started)}</span></div>
           <div class="ch-want">${w.ic} wants ${escapeHtml(w.label.toLowerCase())} — ${escapeHtml(w.blurb.toLowerCase())}</div>
           <div class="ch-conseq ${pv.tone}">${escapeHtml(pv.text)}</div>
         </div>

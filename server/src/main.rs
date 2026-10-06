@@ -850,12 +850,21 @@ async fn list_open(
     // `exclude` lets the lobby leave the viewer's own challenges out of the board
     // (they're already shown as "waiting" in their own list).
     let exclude = q.get("exclude").cloned().unwrap_or_default();
+    // A challenge nobody took in a week is dead, not open. Without this the board
+    // fills with abandoned rooms and stops meaning anything — the first real /open
+    // response already had two from three weeks earlier. The room itself is left
+    // alone (its host can still resume or delete it); it just stops being offered.
+    const STALE_SECS: u64 = 7 * 24 * 60 * 60;
+    let now = now_secs();
     let map = rooms.lock().await;
     let mut out: Vec<OpenChallenge> = map
         .iter()
         .filter_map(|(id, rs)| {
             // Open = a host is seated, the guest seat is empty, nothing has ended.
             if rs.seats.guest.is_some() || rs.room.outcome().0 {
+                return None;
+            }
+            if now.saturating_sub(rs.started) > STALE_SECS {
                 return None;
             }
             let host = rs.seats.host.as_ref()?;

@@ -178,8 +178,21 @@ accounts + Render secrets), #6 Web Push notifications (needs VAPID keys + Render
      yes applies it.
   All three verified against a real server with hand-written WebSocket clients (there's no
   `websockets` module on this Mac) — see the commits for the exact properties checked.
-  **Gotcha found doing this:** pushing a glass entry only PERSISTS it. To make both players see
-  it live you must also `tx.send(ServerMsg::Glass{..})`, or the change appears only after reload.
+  **Gotchas found doing this (all fixed, all non-obvious):**
+  • Pushing a glass entry only PERSISTS it — you must also `tx.send(ServerMsg::Glass{..})` or the
+    change appears to both players only after a reload.
+  • `table_open()` must NOT require the guest seat to be filled. It did, so with an empty seat the
+    table counted as closed, the host could play move 1 while waiting, and `last_uci.is_some()`
+    then kept the table shut forever — that game skipped the contract entirely.
+  • Changing the terms at the table must VOID both signatures, or you're held to a contract you
+    never read. (A mid-game change must NOT re-open the table; regression tested.)
+  • In the invite/take URL, `he` is the **host's** rating (the page renders "<host> is rated <he>"
+    and sizes the handicap preview from it) and `elo` is **yours**. Passing your own as `he` shows
+    your number as your opponent's level.
+  • `/open` drops challenges older than 7 days. The first real response already had two from three
+    weeks earlier; a board of dead challenges means nothing.
+  • Checked and FINE: multiplayer.js rewriting `gb_me` without its `id` is harmless — `/account`
+    writes the server id into `gb_pid` and portal.html re-derives `me.id = playerId()` on load.
 - **Casual now actually means unrated.** multiplayer.js recorded every finished game into the
   earned rating regardless of mode, while the create modal promised "no ratings" for casual —
   so casual games quietly moved 💪. Gated on `casualMode()`.
