@@ -74,7 +74,7 @@ Claude-Session: https://claude.ai/code/session_<current>
 3. Strength is **measured, not assumed** (perft, tests, self-play) — no unmeasured strength claims.
 4. Assistance is a ladder down (help players need less over time).
 
-## 6. Current state (2026-10-04) — what's live
+## 6. Current state (2026-10-06) — what's live
 The POC "beginner journey + fun" phase is deep in. Recently shipped (all live):
 - **Play-AI strength model:** following the top move **wins at every level** (opponent capped
   below the skill-20 assist; see `docs/agent-memory/strength-and-handicap-model.md`). Opponent
@@ -158,6 +158,52 @@ accounts + Render secrets), #6 Web Push notifications (needs VAPID keys + Render
   assumes every entry has a `uci` line (learned entries carry `demoUci`) — that threw a TypeError
   on every identify() call. Learned entries now live in their own list and identify() skips
   line-less entries.
+
+- **HUMAN-GAME FLOW, built 2026-10-06 (the three pieces Issam asked for).** Human games had
+  no way to *find* an opponent and nothing to *agree* to; Play-AI had a 6-section setup card
+  while humans had one modal. Now:
+  1. **The Challenge Board** (`GET /open`, lobby section). `list_games` returns only games you
+     already sit in, so a posted game was invisible and a personally-sent link was the ONLY way
+     in — "Open invite" was just a default name string. Rooms now carry `want`
+     ("any"|"stronger"|"near"|"teach") and `minutes`, persisted via ADD COLUMN IF NOT EXISTS.
+     Cards state the consequence BEFORE you commit ("You'd be the lower-rated player: you get
+     Guide, they play unassisted").
+  2. **The Table** (`RoomState::table_open`, `web/multiplayer.html#tableCard`). Both players sign
+     the same contract before move 1. **Enforced server-side** — a `move` is dropped while the
+     table is open, so a stale client can't start a game its opponent never agreed to.
+     `table_open()` also requires `last_uci.is_none()`, which is what keeps pre-Table games and
+     post-restart reloads playable; ready flags are deliberately NOT persisted.
+  3. **Mid-game mode change by consent** (ModeRequest→ModeAsk→ModeResponse→ModeSet, modelled on
+     the takeback protocol). Either player may propose casual/match any time; only the opponent's
+     yes applies it.
+  All three verified against a real server with hand-written WebSocket clients (there's no
+  `websockets` module on this Mac) — see the commits for the exact properties checked.
+  **Gotcha found doing this:** pushing a glass entry only PERSISTS it. To make both players see
+  it live you must also `tx.send(ServerMsg::Glass{..})`, or the change appears only after reload.
+- **Casual now actually means unrated.** multiplayer.js recorded every finished game into the
+  earned rating regardless of mode, while the create modal promised "no ratings" for casual —
+  so casual games quietly moved 💪. Gated on `casualMode()`.
+- **One ladder, finally.** The handicap rungs existed FOUR times (×2 in multiplayer.js, once in
+  portal.html, nearly a fifth for the board) → `web/gb-terms.js` is now the only copy
+  (`RUNGS`/`rungForGap`/`contract`/`previewForTaker`). They did agree (16/16 boundaries checked
+  before extracting); the old `rungForGap` had a latent `Math.max(0,g)`-for-`Math.abs(g)` bug.
+- **Capture Tray** (`GBAssistUI.capTrayHTML`). Captured pieces were implemented TWICE and
+  differently (Play-AI emitted `.capg` unicode the cockpit CSS never styled; human games emitted
+  SVG), and were the first thing clipped in the 38px `overflow:hidden` strip. One renderer,
+  grouped with counts ("♟ 3"), name shrinks before trophies do, 340ms pop only when a count
+  actually rises. **It shipped invisible once:** two rules sized `.pc-svg` at equal specificity
+  and the later `width:100%` won — a percentage inside an auto-width parent collapses to zero.
+  `scripts/check-board-stability.sh` now guards both halves of that.
+- **Play-AI latency.** Stockfish `go` requests are serialized on one UCI channel and a superseded
+  advice search was never stopped, so it held the channel for its full 1400ms and the opponent's
+  reply queued behind dead work — moving FAST made the AI slower. `GBEngine.cancel(kind)` posts
+  "stop"; kind-scoped so it can't kill the opponent's own search. Advice movetime now matches-or-
+  beats the opponent instead of a flat 1400ms (fairness invariant tested 18/18; Master unchanged).
+  Rust search is NOT the bottleneck — `core/engine/src/bin/searchbench.rs` measures depth 4 = 14ms,
+  depth 5 = 35ms mean.
+- **CI note:** the **"Deploy web"** workflow (Cloudflare) fails on EVERY push and always has —
+  it's inert until the `CLOUDFLARE_*` secrets exist (documented in deploy-web.yml itself). The
+  real deploy is **"Deploy to GitHub Pages"**. Don't chase the red X.
 
 **Next up (proposed, user to pick):** (a) **P3 run the unequal-pair playtest — the POC exit gate**
 (server has 3 verdicts but the only "match" row is a `u_probe` test; no real unequal pair yet),

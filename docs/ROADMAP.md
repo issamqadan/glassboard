@@ -371,3 +371,23 @@ recognises one motif family (forcing checks); widening it means **more rule-base
 detectors**, not an LLM. Per the AI/LLM clarification above, detection stays
 deterministic so it works offline and stays measurable; an LLM could only ever
 re-word already-verified facts.
+
+## The human-game flow: Challenge Board + The Table (shipped 2026-10-06)
+
+Three pieces that human games were missing while Play-AI had them all along.
+
+**The Challenge Board.** You post a game declaring your level and *who you want* —
+including **someone stronger**, which is the interesting case, because asking to be
+out-rated is how you improve. Anyone can take it. Before this, `list_games` only
+returned games you already sat in, so an open game was invisible to everyone and a
+link the host sent personally was the only way in.
+
+**The Table.** Both players read the same contract and sign it before move 1 — the
+rating gap, who gets which rung, the clock, the mode. Either may propose different
+terms first. Enforced server-side: no move is accepted while the table is open.
+This is the glass box applied to the **terms**, not just the moves — and it's what
+makes the handicap fair, since a handicap nobody agreed to is just an excuse.
+
+**Terms can change mid-game, by consent.** Either player may propose casual or
+match at any point; only the opponent's yes applies it, and the agreement is
+written into the glass box naming its consequence. Casual is genuinely unrated.
