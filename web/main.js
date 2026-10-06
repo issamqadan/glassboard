@@ -151,6 +151,7 @@ async function resumeAiGame(id) {
   helpReceived = typeof rec.helpReceived === "number" ? rec.helpReceived : 0;
   helpRevealed = helpDelivery === "open"; helpRequestPending = false;
   aiGameId = id; aiSaved = true;
+  if (window.GBAssistUI && GBAssistUI.capTrayReset) GBAssistUI.capTrayReset();
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; aiResigned = false; aiHopeless = 0; mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; rateMoves = []; ratePending = []; lastRating = null; lastEval = null; evalTrail = [];
   pickedStrategyId = null; followBook = false; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
@@ -1431,11 +1432,10 @@ function capturedSummary() {
   }
   return { whiteCap, blackCap, lead: wv - bv }; // lead > 0 → White is up material
 }
-function capGlyphs(cap) {
-  let s = "";
-  for (const k of ["q", "r", "b", "n", "p"]) for (let i = 0; i < (cap[k] || 0); i++) s += `<span class="capg">${GLYPH[k]}</span>`;
-  return s;
-}
+// Shared with human games (GBAssistUI.capTrayHTML) so the trophies look identical
+// in both. `color` is the colour of the pieces TAKEN, not of the player who took
+// them — your tray holds your opponent's pieces.
+function capGlyphs(cap, color, key) { return GBAssistUI.capTrayHTML(cap, color, key); }
 
 // The coach: one prominent, concrete piece of advice under the board. This is
 // the primary assistance surface — the abstract strategy layer is secondary.
@@ -1537,7 +1537,7 @@ function renderPlayers() {
     name: aiName(), rating: `${levelName(aiLevel)} ${ratingFor(aiLevel)}`,
     pips: (firstGame || aiLevel >= 3000) ? "" : pipRow(aiTokens, AI_TOKENS_MAX),
     pipsTitle: "opponent's lifelines remaining — its help, in the open",
-    caps: capGlyphs(aiCap), lead: -youLead,
+    caps: capGlyphs(aiCap, humanColor, "opp"), lead: -youLead,
     clock: showClock ? fmtClock(engineMs) : "", low: showClock && engineMs <= 10000,
     turn: turn === engineColor(), turnText: "thinking…",
   });
@@ -1549,7 +1549,7 @@ function renderPlayers() {
       return g && g.r != null ? `${g.tier ? g.tier.ic + " " : ""}${g.r}${g.provisional ? "?" : ""}` : humanEloEl.value; })(),
     pips: (firstGame || aiAssistOverride === "off") ? "" : pipRow(playerTokens, PLAYER_TOKENS_MAX),
     pipsTitle: "your help remaining",
-    caps: capGlyphs(youCap), lead: youLead,
+    caps: capGlyphs(youCap, engineColor(), "you"), lead: youLead,
     clock: showClock ? fmtClock(humanMs) : "", low: showClock && humanMs <= 10000,
     turn: turn === humanColor, turnText: "your move",
   });

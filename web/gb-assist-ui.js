@@ -218,6 +218,61 @@
     return { move: rec, label: (fl && byFlavor[fl.key]) || "Best move", why: rec.note || "The engine's strongest move here.", tag: "Best move", kind: "best" };
   }
 
+  // ---- THE CAPTURE TRAY ------------------------------------------------------
+  // The pieces you've taken are trophies, so they should read like trophies. This
+  // used to be rendered TWICE and differently: Play-AI emitted bare unicode glyphs
+  // (.capg, which the cockpit CSS never styled, so both colours came out the same
+  // grey) while human games emitted SVG pieces. One renderer now serves both.
+  //
+  // Grouped-with-a-count ("♟ 3") instead of one glyph per piece, because a row of
+  // five identical pawns is both wider and harder to read than the number five.
+  // Compact enough to survive on a phone, where the old row was simply clipped away.
+  const CAP_ORDER = ["q", "r", "b", "n", "p"];
+  const CAP_UNI = { white: { q: "♕", r: "♖", b: "♗", n: "♘", p: "♙" },
+                    black: { q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" } };
+  const CAP_NAME = { q: "queen", r: "rook", b: "bishop", n: "knight", p: "pawn" };
+  const trayPrev = {}; // key -> last counts, so a NEW trophy can pop exactly once
+
+  // caps: {q:1,p:3} counts, or an array of piece chars ("Q","p",…).
+  // color: the colour of the captured PIECES (not the captor). Derived from the
+  //   array's letter case when not given.
+  // key: identity for the pop animation ("you" / "opp"). Without it, nothing pops —
+  //   which is what we want for a re-render caused by the clock ticking.
+  function capTrayHTML(caps, color, key) {
+    const counts = {};
+    let col = color;
+    if (Array.isArray(caps)) {
+      caps.forEach((c) => {
+        if (!c) return;
+        const k = String(c).toLowerCase();
+        if (!CAP_NAME[k]) return;
+        counts[k] = (counts[k] || 0) + 1;
+        if (!col) col = c === c.toUpperCase() ? "white" : "black";
+      });
+    } else if (caps) {
+      CAP_ORDER.forEach((k) => { if (caps[k] > 0) counts[k] = caps[k]; });
+    }
+    col = col === "white" ? "white" : "black";
+    const prev = key ? trayPrev[key] : null;
+    if (key) trayPrev[key] = counts;
+    let html = "", total = 0;
+    for (const k of CAP_ORDER) {
+      const n = counts[k] || 0;
+      if (!n) continue;
+      total += n;
+      // Pop only a piece whose count actually went UP since the last tray we built.
+      const grew = prev && n > (prev[k] || 0);
+      const glyph = typeof global.pieceSVG === "function"
+        ? global.pieceSVG(col === "white" ? k.toUpperCase() : k)
+        : CAP_UNI[col][k];
+      html += `<span class="cap-pc ${col}${grew ? " pop" : ""}" title="${n} ${CAP_NAME[k]}${n > 1 ? "s" : ""} taken">` +
+        glyph + (n > 1 ? `<i class="cap-n">${n}</i>` : "") + `</span>`;
+    }
+    return total ? `<span class="cap-tray" aria-label="${total} piece${total > 1 ? "s" : ""} taken">${html}</span>` : "";
+  }
+  // Reset the pop memory — a new game must not pop every trophy on its first paint.
+  function capTrayReset() { Object.keys(trayPrev).forEach((k) => delete trayPrev[k]); }
+
   // One player's cockpit strip — name · rating · captured pieces · lead · pips ·
   // clock · turn. Shared so both games render the identical row. Fixed height and
   // single line is enforced in CSS (.pstrip): nothing above the board may resize.
@@ -257,5 +312,5 @@
     return { uci: u, from: (u.charCodeAt(0) - 97) + (u.charCodeAt(1) - 49) * 8, to: (u.charCodeAt(2) - 97) + (u.charCodeAt(3) - 49) * 8 };
   }
 
-  global.GBAssistUI = { PVAL, PIECE_WORD, STRAT_VERB, verbFor, pieceAttacks, moveMeaning, identity, identityRowHTML, stripHTML, playerStripHTML, pickPriority, adviceSVG, bookNextMove, esc };
+  global.GBAssistUI = { PVAL, PIECE_WORD, STRAT_VERB, verbFor, pieceAttacks, moveMeaning, identity, identityRowHTML, stripHTML, playerStripHTML, capTrayHTML, capTrayReset, pickPriority, adviceSVG, bookNextMove, esc };
 })(window);

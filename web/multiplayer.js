@@ -961,12 +961,9 @@ function renderCoach() {
 
 // THE COCKPIT in human games — each player's info on THEIR side of the board, with
 // captured pieces + material lead. Same shared renderer as Play-AI, so both match.
-function capGlyphsMP(chars) {
-  return (chars || []).map((c) => {
-    const g = typeof pieceSVG === "function" ? pieceSVG(c) : c;
-    return `<span class="cap-pc ${c === c.toUpperCase() ? "white" : "black"}">${g}</span>`;
-  }).join("");
-}
+// Shared with Play-AI (GBAssistUI.capTrayHTML): grouped, counted, identical.
+// The piece letters already carry their colour in their case.
+function capGlyphsMP(chars, key) { return GBAssistUI.capTrayHTML(chars, null, key); }
 function renderPlayers() {
   const legacy = document.getElementById("players"); // retired: the cockpit replaces it
   if (legacy) { legacy.hidden = true; legacy.innerHTML = ""; }
@@ -991,14 +988,14 @@ function renderPlayers() {
   const opp = S.playerStripHTML({
     icon: `<span class="dot ${myColor === "white" ? "black" : "white"}"></span>${oppSeated ? "👤" : "⏳"}`,
     name: oppSeated ? oppName : "Waiting for opponent…", rating: oppSeated ? String(oppElo2 || "") : "",
-    caps: capGlyphsMP(oppCap), lead: -youLead,
+    caps: capGlyphsMP(oppCap, "opp"), lead: -youLead,
     extra: oppSeated ? rivalryChip(oppName) : "", // keep the head-to-head record visible
     turn: turn && turn !== myColor, turnText: "their move",
   });
   const you = S.playerStripHTML({
     icon: `<span class="dot ${myColor}"></span>👤`,
     name: youName, rating: String(youElo || ""),
-    caps: capGlyphsMP(youCap), lead: youLead,
+    caps: capGlyphsMP(youCap, "you"), lead: youLead,
     turn: turn === myColor, turnText: "your move",
   });
   oppEl.hidden = false; youEl.hidden = false;
