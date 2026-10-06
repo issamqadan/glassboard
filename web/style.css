@@ -1163,9 +1163,13 @@ main.game #coach { display: none; }
 @keyframes capPop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.18); opacity: 1; } 100% { transform: scale(1); } }
 .pstrip .ps-caps .cap-pc.pop { animation: capPop 340ms cubic-bezier(.2,1.3,.4,1) both; }
 @media (prefers-reduced-motion: reduce) { .pstrip .ps-caps .cap-pc.pop { animation: none; } }
-.pstrip .ps-caps .cap-pc > svg, .pstrip .ps-caps .cap-pc > .pc-svg { width: 17px; height: 17px; flex: 0 0 auto; }
-.pstrip .ps-caps .cap-pc .pc-svg { width: 100%; height: 100%; display: block; fill: var(--pf); stroke: var(--ps);
-  stroke-width: 1.1; stroke-linejoin: round; stroke-linecap: round; }
+/* ONE rule for the trophy glyph. There used to be two: this explicit 17px sizing
+   and a leftover `width:100%; height:100%`. Equal specificity, the percentage one
+   came later and won — and a percentage width inside an auto-width parent collapses
+   to zero, so every trophy rendered at no size at all. That is why the tray looked
+   empty even though it was being built correctly. */
+.pstrip .ps-caps .cap-pc .pc-svg { width: 17px; height: 17px; flex: 0 0 auto; display: block;
+  fill: var(--pf); stroke: var(--ps); stroke-width: 1.1; stroke-linejoin: round; stroke-linecap: round; }
 .pstrip .ps-caps .cap-pc.white { --pf: var(--pf-w); --ps: var(--ps-w); }
 .pstrip .ps-caps .cap-pc.black { --pf: var(--pf-b); --ps: var(--ps-b); }
 .pstrip .ps-lead { flex: 0 0 auto; font-weight: 800; color: #7ee0d6; font-variant-numeric: tabular-nums; }

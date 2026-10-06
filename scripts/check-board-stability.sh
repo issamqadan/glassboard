@@ -20,6 +20,18 @@ need "strategy strip is fixed height"        "opening-line { cursor: pointer; he
 need "strategy strip is single line"         "gs-row { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap"
 need "cockpit strips are fixed height"       "pstrip { display: flex; align-items: center; gap: 8px; height: 38px"
 need "mobile does NOT re-enable bar wrap"    "main.game .gamebar, main.game .gb-actions { flex-wrap: nowrap"
+
+# The capture tray shipped invisible once: TWO rules sized .pc-svg inside .ps-caps
+# at equal specificity, and the later one used width:100%, which collapses to zero
+# inside an auto-width parent. Guard both halves — exactly one sizing rule, and no
+# percentage sizing anywhere in the tray.
+n=$(grep -c "ps-caps .cap-pc .pc-svg" "$CSS" || true)
+if [ "$n" -eq 1 ]; then printf "  ok   capture trophy has exactly one sizing rule\n";
+else printf "  FAIL capture trophy sized by %s rules — the later one silently wins\n" "$n"; fail=1; fi
+if grep -q "ps-caps .cap-pc .pc-svg { width: 100%" "$CSS"; then
+  printf "  FAIL capture trophy sized in %% inside an auto-width parent -> collapses to 0\n"; fail=1;
+else printf "  ok   capture trophy is sized in px, not %%\n"; fi
+
 if [ "$fail" -eq 0 ]; then printf "All good — nothing above the board can resize.\n"; else
   printf "\nBROKEN: an above-board element can change height → the board will jump.\n"; fi
 exit $fail
