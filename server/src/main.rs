@@ -54,6 +54,14 @@ struct RoomState {
     /// A pending casual takeback request — the colour that asked (awaiting the
     /// opponent's yes/no).
     pending_undo: Option<Color>,
+    /// THE OPEN CHALLENGE. A game used to be reachable only by its invite link, so
+    /// a host with nobody to send it to simply could not find an opponent. These
+    /// describe what the host posted to the Challenge Board:
+    ///   want    — who they're looking for: "any" | "stronger" | "near" | "teach"
+    ///   minutes — clock per side, 0 = untimed
+    /// They stay meaningful after the seat fills (they're what was agreed to).
+    want: String,
+    minutes: i32,
 }
 type Rooms = Arc<Mutex<HashMap<String, RoomState>>>;
 
@@ -167,13 +175,20 @@ async fn build_store() -> Store {
                    host_id TEXT, host_name TEXT, host_rating INT, \
                    guest_id TEXT, guest_name TEXT, guest_rating INT, \
                    glass TEXT NOT NULL DEFAULT '[]', started BIGINT NOT NULL, \
-                   mode TEXT NOT NULL DEFAULT 'match')",
+                   mode TEXT NOT NULL DEFAULT 'match', \
+                   want TEXT NOT NULL DEFAULT 'any', minutes INT NOT NULL DEFAULT 0)",
             )
             .execute(&pool)
             .await
             .expect("create games table");
             // Migrate older tables that predate a column.
             let _ = sqlx::query("ALTER TABLE games ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'match'")
+                .execute(&pool)
+                .await;
+            let _ = sqlx::query("ALTER TABLE games ADD COLUMN IF NOT EXISTS want TEXT NOT NULL DEFAULT 'any'")
+                .execute(&pool)
+                .await;
+            let _ = sqlx::query("ALTER TABLE games ADD COLUMN IF NOT EXISTS minutes INT NOT NULL DEFAULT 0")
                 .execute(&pool)
                 .await;
             // Per-player profile — the Player Model's learning signal.
@@ -261,6 +276,8 @@ struct GameRow {
     glass: String,
     started: i64,
     mode: String,
+    want: String,
+    minutes: i32,
 }
 fn snapshot(id: &str, rs: &RoomState) -> GameRow {
     let resigned = match rs.room.resigned {
@@ -281,6 +298,8 @@ fn snapshot(id: &str, rs: &RoomState) -> GameRow {
         glass: serde_json::to_string(&rs.room.glass).unwrap_or_else(|_| "[]".to_string()),
         started: rs.started as i64,
         mode: rs.mode.clone(),
+        want: rs.want.clone(),
+        minutes: rs.minutes,
     }
 }
 async fn save_snapshot(pool: &sqlx::PgPool, g: GameRow) {
@@ -291,12 +310,13 @@ async fn save_snapshot(pool: &sqlx::PgPool, g: GameRow) {
     let gn = g.guest.as_ref().map(|p| p.name.clone());
     let gr = g.guest.as_ref().map(|p| p.rating);
     let _ = sqlx::query(
-        "INSERT INTO games (id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started,mode) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) \
-         ON CONFLICT (id) DO UPDATE SET fen=$2,last_uci=$3,resigned=$4,white_elo=$5,black_elo=$6,host_id=$7,host_name=$8,host_rating=$9,guest_id=$10,guest_name=$11,guest_rating=$12,glass=$13,mode=$15",
+        "INSERT INTO games (id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started,mode,want,minutes) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) \
+         ON CONFLICT (id) DO UPDATE SET fen=$2,last_uci=$3,resigned=$4,white_elo=$5,black_elo=$6,host_id=$7,host_name=$8,host_rating=$9,guest_id=$10,guest_name=$11,guest_rating=$12,glass=$13,mode=$15,want=$16,minutes=$17",
     )
     .bind(g.id).bind(g.fen).bind(g.last_uci).bind(g.resigned).bind(g.white_elo).bind(g.black_elo)
     .bind(hi).bind(hn).bind(hr).bind(gi).bind(gn).bind(gr).bind(g.glass).bind(g.started).bind(g.mode)
+    .bind(g.want).bind(g.minutes)
     .execute(pool)
     .await;
 }
@@ -319,7 +339,7 @@ async fn delete_game_db(store: &Store, id: &str) {
 /// Reload all saved games into fresh RoomStates on boot (so games survive restarts).
 async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
     let rows = match sqlx::query(
-        "SELECT id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started,mode FROM games",
+        "SELECT id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started,mode,want,minutes FROM games",
     )
     .fetch_all(pool)
     .await
@@ -365,6 +385,8 @@ async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
             started: row.get::<i64, _>("started") as u64,
             mode: row.get::<Option<String>, _>("mode").unwrap_or_else(|| "match".to_string()),
             pending_undo: None,
+            want: row.get::<Option<String>, _>("want").unwrap_or_else(|| "any".to_string()),
+            minutes: row.get::<Option<i32>, _>("minutes").unwrap_or(0),
         };
         out.push((id, rs));
     }
@@ -503,6 +525,8 @@ fn new_room_state() -> RoomState {
         started: now_secs(),
         mode: "match".to_string(),
         pending_undo: None,
+        want: "any".to_string(),
+        minutes: 0,
     }
 }
 
@@ -592,6 +616,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(root))
         .route("/games", get(list_games).post(create_game))
+        .route("/open", get(list_open))
         .route("/games/delete", post(delete_game))
         .route("/ai-games", get(list_ai_games).post(upsert_ai_game))
         .route("/ai-games/delete", post(delete_ai_game))
@@ -631,6 +656,12 @@ struct CreateReq {
     rating: i32,
     #[serde(default)]
     mode: String,
+    /// Who the host wants: "any" | "stronger" | "near" | "teach".
+    #[serde(default)]
+    want: String,
+    /// Clock per side in minutes; 0 = untimed.
+    #[serde(default)]
+    minutes: i32,
 }
 
 #[derive(Serialize)]
@@ -655,6 +686,9 @@ struct GameSummary {
     winner: String,
     /// How it ended, if over.
     reason: String,
+    /// The terms this game was posted under.
+    want: String,
+    minutes: i32,
     /// "match" | "casual".
     mode: String,
 }
@@ -678,6 +712,10 @@ async fn create_game(
             if b.mode == "casual" || b.mode == "match" {
                 rs.mode = b.mode.clone();
             }
+            if matches!(b.want.as_str(), "any" | "stronger" | "near" | "teach") {
+                rs.want = b.want.clone();
+            }
+            rs.minutes = b.minutes.clamp(0, 180);
         }
         rs.seats.status().to_string()
     };
@@ -716,6 +754,67 @@ async fn delete_game(
     Json(serde_json::json!({ "deleted": is_host }))
 }
 
+#[derive(Serialize)]
+struct OpenChallenge {
+    id: String,
+    host_name: String,
+    host_rating: i32,
+    host_id: String,
+    /// "any" | "stronger" | "near" | "teach" — who the host is looking for.
+    want: String,
+    /// "match" | "casual".
+    mode: String,
+    /// Clock per side in minutes; 0 = untimed.
+    minutes: i32,
+    started: u64,
+}
+
+/// THE CHALLENGE BOARD: every game still waiting for a second player.
+///
+/// This is the piece human games never had. `list_games` deliberately returns only
+/// games you already sit in, so a posted game was invisible to everyone and the
+/// sole way in was a link the host had to send you personally. A player with
+/// nobody to text could not get a game at all.
+///
+/// Anyone may read this list — an open challenge is a public invitation by
+/// definition. Finished games and filled seats drop off automatically.
+async fn list_open(
+    State(rooms): State<Rooms>,
+    Query(q): Query<HashMap<String, String>>,
+) -> Json<Vec<OpenChallenge>> {
+    // `exclude` lets the lobby leave the viewer's own challenges out of the board
+    // (they're already shown as "waiting" in their own list).
+    let exclude = q.get("exclude").cloned().unwrap_or_default();
+    let map = rooms.lock().await;
+    let mut out: Vec<OpenChallenge> = map
+        .iter()
+        .filter_map(|(id, rs)| {
+            // Open = a host is seated, the guest seat is empty, nothing has ended.
+            if rs.seats.guest.is_some() || rs.room.outcome().0 {
+                return None;
+            }
+            let host = rs.seats.host.as_ref()?;
+            if !exclude.is_empty() && host.id == exclude {
+                return None;
+            }
+            Some(OpenChallenge {
+                id: id.clone(),
+                host_name: host.name.clone(),
+                host_rating: host.rating,
+                host_id: host.id.clone(),
+                want: rs.want.clone(),
+                mode: rs.mode.clone(),
+                minutes: rs.minutes,
+                started: rs.started,
+            })
+        })
+        .collect();
+    // Freshest first — a challenge posted a minute ago is likelier to be answered
+    // than one from last week.
+    out.sort_by(|a, b| b.started.cmp(&a.started));
+    Json(out)
+}
+
 /// List the games a player is in, with status (for the lobby / notifications).
 async fn list_games(
     State(rooms): State<Rooms>,
@@ -751,6 +850,8 @@ async fn list_games(
             winner: winner.to_string(),
             reason: reason.to_string(),
             mode: rs.mode.clone(),
+            want: rs.want.clone(),
+            minutes: rs.minutes,
         });
     }
     Json(out)

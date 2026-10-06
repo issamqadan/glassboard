@@ -10,15 +10,12 @@ import init, { Game } from "./pkg/glassboard_wasm.js";
 const GLYPH = { p: "♟︎", n: "♞︎", b: "♝︎", r: "♜︎", q: "♛︎", k: "♚︎" };
 const FILES = "abcdefgh";
 const DEPTH = 4; // strong, consistent with Play-AI's assist — the help is a real edge
-const RUNGS = [
-  [100, "Off", "an even match — no assistance"],
-  [300, "Hint", "safety signals — hanging pieces & checks"],
-  [500, "Coach", "threats and the opponent’s plan, explained"],
-  [800, "Guide", "candidate moves + a named strategy to follow"],
-  [1200, "Assist", "the single best move to play, every turn"],
-  [Infinity, "Autopilot", "the co-pilot executes the plan"],
-];
-const tierFor = (gap) => { const g = Math.abs(gap); for (const r of RUNGS) if (g < r[0]) return r; return RUNGS[RUNGS.length - 1]; };
+// The handicap ladder lives in gb-terms.js, shared with the lobby and the
+// Challenge Board. It was declared twice in this file and once more in
+// portal.html; the lobby's promise and the board's behaviour must be the same
+// sentence, so there is now exactly one of them.
+const RUNGS = GBTerms.RUNGS.map((r) => [r.under, r.name, r.desc]);
+const tierFor = (gap) => { const r = GBTerms.rungForGap(gap); return [r.under, r.name, r.desc]; };
 
 const el = (id) => document.getElementById(id);
 const boardEl = el("board");
@@ -1513,10 +1510,7 @@ function parseProv(e) {
 // Match-as-agreement: the assistance terms both players agreed to, stated as a
 // contract at the top of the glass-box. Derived from the shared game state, so
 // both sides see identical wording — the negotiated handicap made explicit.
-function rungForGap(g) {
-  g = Math.max(0, g);
-  return g < 100 ? "Off" : g < 300 ? "Hint" : g < 500 ? "Coach" : g < 800 ? "Guide" : g < 1200 ? "Assist" : "Autopilot";
-}
+function rungForGap(g) { return GBTerms.rungForGap(g).name; }
 function matchContractHtml() {
   if (!state) return "";
   const we = state.white_elo || 0, be = state.black_elo || 0;

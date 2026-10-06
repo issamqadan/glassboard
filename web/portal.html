@@ -85,6 +85,23 @@
     .link-quiet { color:var(--muted); font-size:0.9rem; }
     .link-quiet:hover { color:var(--accent); }
 
+    /* Challenge Board + the post-a-challenge pickers. */
+    .want-pick, .time-pick { display:flex; flex-wrap:wrap; gap:8px; }
+    .want-opt, .time-opt { border:1px solid var(--line-2); background:var(--glass); color:var(--muted);
+      border-radius:999px; padding:9px 14px; font-size:0.88rem; font-weight:600; cursor:pointer; transition:all .15s; }
+    .want-opt:hover, .time-opt:hover { color:var(--text); border-color:var(--accent); }
+    .want-opt.on, .time-opt.on { color:#04222d; background:linear-gradient(140deg,var(--accent),#3a97bd); border-color:transparent; }
+    .want-opt .wo-blurb { display:block; font-size:0.74rem; font-weight:500; opacity:0.8; }
+    .ch-card { display:flex; align-items:center; gap:14px; padding:14px 16px; border:1px solid var(--line);
+      border-radius:14px; background:var(--glass); }
+    .ch-who { flex:1 1 auto; min-width:0; }
+    .ch-name { font-weight:700; color:var(--text); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .ch-lvl { color:var(--faint); font-size:0.82rem; font-variant-numeric:tabular-nums; }
+    .ch-want { font-size:0.84rem; color:#7ee0d6; margin-top:3px; }
+    .ch-conseq { font-size:0.8rem; color:var(--muted); margin-top:5px; }
+    .ch-conseq.you-helped { color:#e0be79; }
+    .ch-take { flex:0 0 auto; }
+    .ch-empty { padding:16px; border:1px dashed var(--line-2); border-radius:14px; color:var(--faint); font-size:0.88rem; }
     .section-head { display:flex; align-items:baseline; justify-content:space-between; margin:0 2px 16px; }
     .section-head h2 { font-size:1.16rem; font-weight:680; letter-spacing:-0.01em; margin:0; }
     .section-head .count { color:var(--faint); font-size:0.86rem; }
@@ -264,6 +281,11 @@
     <div class="section-head" id="aiHead" style="display:none"><h2>Your AI games</h2><span style="display:flex;align-items:center;gap:12px"><span class="count" id="aiCount"></span><a class="link-quiet" href="./index.html">+ New AI game</a></span></div>
     <div class="games" id="aiGames"></div>
 
+    <!-- THE CHALLENGE BOARD: games anyone can take. Before this, a posted game
+         was reachable only by a link the host had to send someone personally. -->
+    <div class="section-head" id="openHead" style="margin-top:44px" hidden><h2>⚔ Open challenges</h2><span style="display:flex;align-items:center;gap:12px"><span class="count" id="openCount"></span><button class="link-quiet" style="background:none;border:0;cursor:pointer" onclick="openCreate()">+ Post one</button></span></div>
+    <div class="games" id="openGames"></div>
+
     <div class="section-head"><h2>Your games</h2><span style="display:flex;align-items:center;gap:12px"><span class="count" id="gamesCount"></span><button class="clear-all" id="clearAll" onclick="clearAllGames()" hidden>Clear all</button></span></div>
     <div class="games" id="games"></div>
 
@@ -320,13 +342,17 @@
         <button type="button" class="mode-opt on" data-mode="match" onclick="setMode('match')"><span class="mo-name">⚔ Match</span><span class="mo-desc">Ratings + a fair handicap — the lower-rated player gets assistance sized to the gap. Competitive &amp; measured.</span></button>
         <button type="button" class="mode-opt" data-mode="casual" onclick="setMode('casual')"><span class="mo-name">🎈 Casual</span><span class="mo-desc">Just play. <b>Both</b> players get unlimited assistance — no ratings. A relaxed sandbox.</span></button>
       </div>
-      <div class="field"><label>Opponent’s name (optional)</label><input id="cOppName" placeholder="e.g. Maya"></div>
+      <div class="field"><label>Opponent’s name <span style="color:var(--faint)">(optional — leave blank to post it openly)</span></label><input id="cOppName" placeholder="e.g. Maya"></div>
+      <!-- WHO you want is the point of posting openly: you can ask to be out-matched. -->
+      <div class="field"><label>Who are you looking for?</label><div class="want-pick" id="wantPick"></div></div>
+      <div class="field"><label>Time per player</label><div class="time-pick" id="timePick"></div></div>
       <div id="matchOnly">
         <div class="field"><label>Your rating</label><input id="cYou" type="number" min="400" max="3000"></div>
         <div class="rung-readout"><span class="rung-badge" style="background:rgba(92,201,236,0.14);color:var(--accent);border-color:rgba(92,201,236,0.35)">Auto</span><span class="txt">Your opponent enters their rating when they join — then Glassboard sets the handicap for whoever's rated lower. <b style="color:var(--text)">You don’t guess their level.</b></span></div>
       </div>
       <div id="casualNote" class="rung-readout" hidden><span class="rung-badge" style="background:rgba(126,224,214,0.14);color:#7ee0d6;border-color:rgba(126,224,214,0.35)">Free</span><span class="txt">No ratings. Both players can use the full assistance spectrum, always shown to each other. Your opponent joins with <b style="color:var(--text)">just a name</b>.</span></div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="createGame()" id="createBtn">Create game &amp; copy invite link</button>
+      <div class="rung-readout" id="postPreview"><span class="rung-badge" style="background:rgba(126,224,214,0.14);color:#7ee0d6;border-color:rgba(126,224,214,0.35)">Posted</span><span class="txt" id="postPreviewTxt"></span></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="createGame()" id="createBtn">Post challenge &amp; copy invite link</button>
     </div>
   </div>
 
@@ -347,21 +373,19 @@
   <div class="toasts" id="toasts"></div>
 
   <script src="./gb-ai-cast.js"></script>
+  <script src="./gb-terms.js"></script>
   <script src="./pieces.js"></script>
   <script src="./theme.js"></script>
   <script src="./social.js"></script>
   <script src="./rating.js"></script>
   <script>
-    const TIERS = [
-      { max:100, name:'Off',        text:'An even match — no assistance.' },
-      { max:300, name:'Hint',       text:'Safety signals — hanging pieces & checks.' },
-      { max:500, name:'Coach',      text:'Threats and the opponent’s plan, explained.' },
-      { max:800, name:'Guide',      text:'Candidate moves + a named strategy to follow.' },
-      { max:1200,name:'Assist',     text:'The single best move to play, every turn.' },
-      { max:1e9, name:'Autopilot',  text:'The co-pilot executes the plan.' },
-    ];
-    const SHORT = ['Even — no help','Safety: threats & checks','Reads the opponent’s plan','A strategy to follow','Plan + the move to play','Executes the plan'];
-    const tierFor = g => TIERS.find(t => Math.abs(g) < t.max);
+    // The handicap ladder comes from gb-terms.js — ONE definition shared by the
+    // lobby, the Challenge Board and the board itself. It used to be redeclared
+    // here (and twice more in multiplayer.js); four copies of the promise we make
+    // to players is four chances to break it.
+    const TIERS = GBTerms.RUNGS.map(r => ({ max: r.under, name: r.name, text: r.desc.charAt(0).toUpperCase() + r.desc.slice(1) + '.' }));
+    const SHORT = GBTerms.RUNGS.map(r => r.short);
+    const tierFor = (g) => { const r = GBTerms.rungForGap(g); return { max: r.under, name: r.name, text: r.desc.charAt(0).toUpperCase() + r.desc.slice(1) + '.' }; };
     const initials = n => (n||'?').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase() || '?';
 
     // ---- storage ----
@@ -446,7 +470,7 @@
       document.getElementById('idOverlay').classList.remove('open');
       btn.disabled = false; btn.textContent = label;
       toast(data.returning ? 'Welcome back, ' + data.name : 'Player created — ' + data.name, data.returning ? 'Signed in on this device.' : 'Your name + PIN work on any device.');
-      renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames();
+      renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames(); renderOpenGames();
       if (!data.returning) showWelcome(); // genuine first-time (new account)
     }
     function renderMe() {
@@ -495,12 +519,46 @@
       document.getElementById('createBtn').textContent = m === 'casual'
         ? 'Create casual game & copy link' : 'Create game & copy invite link';
     }
+    // What the host is posting: who they want, and the clock.
+    let createWant = 'any';
+    let createMinutes = 0;
+    const TIME_CHOICES = [[0, 'Untimed'], [5, '5 min'], [10, '10 min'], [30, '30 min']];
+    function renderWantPick() {
+      const host = document.getElementById('wantPick');
+      if (!host) return;
+      host.innerHTML = Object.keys(GBTerms.WANTS).map(k => {
+        const w = GBTerms.wantOf(k);
+        return `<button type="button" class="want-opt${k === createWant ? ' on' : ''}" data-w="${k}">${w.ic} ${escapeHtml(w.label)}<span class="wo-blurb">${escapeHtml(w.blurb)}</span></button>`;
+      }).join('');
+      host.querySelectorAll('.want-opt').forEach(b => b.onclick = () => { createWant = b.dataset.w; renderWantPick(); renderPostPreview(); });
+    }
+    function renderTimePick() {
+      const host = document.getElementById('timePick');
+      if (!host) return;
+      host.innerHTML = TIME_CHOICES.map(([m, label]) =>
+        `<button type="button" class="time-opt${m === createMinutes ? ' on' : ''}" data-m="${m}">${label}</button>`).join('');
+      host.querySelectorAll('.time-opt').forEach(b => b.onclick = () => { createMinutes = +b.dataset.m; renderTimePick(); renderPostPreview(); });
+    }
+    // Say plainly what posting this will advertise — no surprises after the fact.
+    function renderPostPreview() {
+      const el = document.getElementById('postPreviewTxt');
+      if (!el) return;
+      const named = document.getElementById('cOppName').value.trim();
+      const w = GBTerms.wantOf(createWant);
+      const lvl = createMode === 'casual' ? 'no rating' : (me ? me.rating : '');
+      el.innerHTML = named
+        ? `A private invite for <b style="color:var(--text)">${escapeHtml(named)}</b> — ${createMode === 'casual' ? '🎈 Casual' : '⚔ Match'} · ${GBTerms.fmtTime(createMinutes)}. Only someone with the link can join.`
+        : `Posted to <b style="color:var(--text)">Open challenges</b> as <b style="color:var(--text)">${escapeHtml(me ? me.name : 'you')} ${lvl}</b>, looking for <b style="color:var(--text)">${w.ic} ${escapeHtml(w.label.toLowerCase())}</b> — ${createMode === 'casual' ? '🎈 Casual' : '⚔ Match'} · ${GBTerms.fmtTime(createMinutes)}. Anyone can take it.`;
+    }
     function openCreate() {
       if (!me) { openIdentity(); return; }
       document.getElementById('cYou').value = me.rating;
       lockEarned('cYou');
       document.getElementById('cOppName').value = '';
+      createWant = 'any'; createMinutes = 0;
       setMode('match');
+      renderWantPick(); renderTimePick(); renderPostPreview();
+      document.getElementById('cOppName').oninput = renderPostPreview;
       document.getElementById('createOverlay').classList.add('open');
     }
     function closeCreate() { document.getElementById('createOverlay').classList.remove('open'); }
@@ -518,11 +576,14 @@
       const you = earnedOr(casual ? me.rating : Math.max(400, Math.min(3000, +document.getElementById('cYou').value || me.rating)));
       if (!casual) { me.rating = you; saveMe(me); renderMe(); }
       const id = Math.random().toString(36).slice(2, 6) + Math.random().toString(36).slice(2, 5);
-      const g = { id, oppName, myRating: you, status: 'waiting', created: Date.now(), mode: createMode };
+      const g = { id, oppName, myRating: you, status: 'waiting', created: Date.now(), mode: createMode,
+                  want: createWant, minutes: createMinutes, open: !document.getElementById('cOppName').value.trim() };
       const games = loadGames(); games.unshift(g); saveGames(games);
       registerGame(g);
       renderGames(); closeCreate();
-      copy(gameLink(g), (casual ? 'Casual game' : 'Game') + ' created — invite link copied');
+      copy(gameLink(g), g.open ? 'Challenge posted — anyone can take it (link copied too)'
+                                : (casual ? 'Casual game' : 'Game') + ' created — invite link copied');
+      renderOpenGames();
     }
 
     // Register the game with the server so the host holds White and we can be
@@ -531,7 +592,8 @@
       if (!me) return;
       fetch(SERVER_HTTP + '/games', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: g.id, pid: me.id, name: me.name, rating: g.myRating, mode: g.mode || 'match' })
+        body: JSON.stringify({ id: g.id, pid: me.id, name: me.name, rating: g.myRating, mode: g.mode || 'match',
+                                want: g.want || 'any', minutes: g.minutes || 0 })
       }).catch(() => {});
     }
     // Poll the server for our games' status → notify when someone joins.
@@ -581,6 +643,8 @@
       if (changed) { saveGames(games); renderGames(); renderRivals(); }
     }
     setInterval(pollGames, 4000);
+    // The board goes stale fast: a taken challenge should stop being offered.
+    setInterval(() => { if (me && !document.hidden) renderOpenGames(); }, 8000);
 
     // ---- mini board preview (renders the live position from FEN) ----
     const MINI_GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
@@ -876,6 +940,52 @@
       saveAiGames(merged); // keep the local cache in sync with the server truth
       return merged;
     }
+    // ---- THE CHALLENGE BOARD -------------------------------------------------
+    // Every open game, from anyone. Each card states the consequence of taking it
+    // BEFORE you commit: who'd get help, and how much. That's the glass box applied
+    // to the terms, not just to the moves.
+    async function fetchOpen() {
+      if (!me) return [];
+      try {
+        return await (await fetch(SERVER_HTTP + '/open?exclude=' + encodeURIComponent(me.id))).json() || [];
+      } catch { return []; }
+    }
+    function challengeCard(c) {
+      const w = GBTerms.wantOf(c.want);
+      const host = { name: c.host_name || 'A player', rating: c.host_rating || 0 };
+      const taker = { name: me ? me.name : 'You', rating: me ? me.rating : 0 };
+      const pv = GBTerms.previewForTaker(host, taker, c.mode, c.minutes);
+      const lvl = c.mode === 'casual' ? 'casual' : (c.host_rating || '—');
+      return `<div class="ch-card">
+        <div class="ch-who">
+          <div class="ch-name">${escapeHtml(host.name)} <span class="ch-lvl">${escapeHtml(String(lvl))}</span>
+            <span class="mode-chip">${c.mode === 'casual' ? '🎈 Casual' : '⚔ Match'}</span>
+            <span class="ch-lvl">${GBTerms.fmtTime(c.minutes)}</span></div>
+          <div class="ch-want">${w.ic} wants ${escapeHtml(w.label.toLowerCase())} — ${escapeHtml(w.blurb.toLowerCase())}</div>
+          <div class="ch-conseq ${pv.tone}">${escapeHtml(pv.text)}</div>
+        </div>
+        <div class="ch-take"><button class="btn btn-primary" onclick="takeChallenge('${c.id}','${escapeHtml(host.name)}')">Take it →</button></div>
+      </div>`;
+    }
+    async function renderOpenGames() {
+      const host = document.getElementById('openGames'), head = document.getElementById('openHead');
+      if (!host) return;
+      const list = await fetchOpen();
+      const cnt = document.getElementById('openCount');
+      if (cnt) cnt.textContent = list.length ? '· ' + list.length + ' waiting' : '';
+      if (head) head.hidden = false;
+      host.innerHTML = list.length
+        ? list.map(challengeCard).join('')
+        : `<div class="ch-empty">Nobody's waiting right now. <b style="color:var(--text)">Post a challenge</b> and it shows up here for anyone to take — you declare your level and say who you're after.</div>`;
+    }
+    // Sit down at someone else's challenge. The WS join seats you as the guest.
+    function takeChallenge(id, hostName) {
+      if (!me) { openIdentity(); return; }
+      const base = location.href.replace(/portal\.html.*$/, '').replace(/[^/]*$/, '');
+      location.href = base + 'multiplayer.html?room=' + encodeURIComponent(id) +
+        '&host=' + encodeURIComponent(hostName || 'Host') + '&me=' + encodeURIComponent(me.name) + '&he=' + me.rating;
+    }
+
     async function renderAiGames() {
       const host = document.getElementById('aiGames');
       const head = document.getElementById('aiHead');
@@ -972,7 +1082,7 @@
     // When the service worker takes control (first visit), the offline chips become
     // valid — refresh so "✈️ Offline" appears without a manual reload.
     if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('controllerchange', () => { renderAiGames(); });
-    if (me) { renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames(); } else openIdentity();
+    if (me) { renderMe(); pollGames(); renderProfile(); renderRivals(); renderAiGames(); renderOpenGames(); } else openIdentity();
     setInterval(renderProfile, 20000);
   </script>
 </body>
