@@ -33,6 +33,24 @@
         <span class="up-actions"><button id="modeYes" class="gb-btn">Agree ✓</button><button id="modeNo" class="gb-btn danger">Decline</button></span>
       </div>
 
+      <!-- THE TABLE: both players read the same contract and sign it before move 1.
+           The handicap is only fair because it's mutual, so this is where the
+           agreement actually happens — not buried in whoever clicked create. -->
+      <div class="table-card" id="tableCard" hidden>
+        <span class="tc-eyebrow">The table</span>
+        <h2 class="tc-head" id="tcHead"></h2>
+        <p class="tc-detail" id="tcDetail"></p>
+        <div class="tc-seats">
+          <div class="tc-seat" id="tcSeatW"><span class="tcs-dot"></span><span class="tcs-name"></span><span class="tcs-state"></span></div>
+          <div class="tc-seat" id="tcSeatB"><span class="tcs-dot"></span><span class="tcs-name"></span><span class="tcs-state"></span></div>
+        </div>
+        <div class="tc-actions">
+          <button id="tcSign" class="gb-btn primary">Agree &amp; start →</button>
+          <button id="tcMode" class="gb-btn"></button>
+        </div>
+        <p class="tc-foot">Either of you can propose different terms before the first move. Nothing starts until you both agree.</p>
+      </div>
+
       <div class="match-card" id="matchCard">
         <a class="new-here" id="newHere" href="./learn.html">
           <span class="nh-icon">👋</span>

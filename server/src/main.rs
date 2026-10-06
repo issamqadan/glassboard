@@ -66,6 +66,13 @@ struct RoomState {
     /// mid-game needs the OPPONENT's yes, exactly like a takeback: the handicap is a
     /// mutual contract, so neither side may rewrite it alone.
     pending_mode: Option<(Color, String)>,
+    /// THE TABLE. Both players must sign the contract before the first move. A
+    /// handicap nobody agreed to isn't a handicap, so the game does not begin until
+    /// each side has seen the terms and said yes. Deliberately NOT persisted: a
+    /// game that has a move on the board is already underway (see table_open), and
+    /// one that doesn't can simply be re-signed after a restart.
+    ready_white: bool,
+    ready_black: bool,
 }
 type Rooms = Arc<Mutex<HashMap<String, RoomState>>>;
 
@@ -392,6 +399,8 @@ async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
             want: row.get::<Option<String>, _>("want").unwrap_or_else(|| "any".to_string()),
             minutes: row.get::<Option<i32>, _>("minutes").unwrap_or(0),
             pending_mode: None,
+            ready_white: false,
+            ready_black: false,
         };
         out.push((id, rs));
     }
@@ -522,6 +531,19 @@ impl FromRef<AppState> for Store {
 
 static NEXT_ANON: AtomicU64 = AtomicU64::new(1);
 
+impl RoomState {
+    /// Are we still at the table? True only before the first move, while both seats
+    /// are filled and at least one player hasn't signed. A game with a move played
+    /// is underway no matter what the ready flags say, which is what keeps games
+    /// that predate the Table (and games reloaded after a restart) playable.
+    fn table_open(&self) -> bool {
+        self.room.last_uci.is_none()
+            && self.seats.host.is_some()
+            && self.seats.guest.is_some()
+            && !(self.ready_white && self.ready_black)
+    }
+}
+
 fn new_room_state() -> RoomState {
     RoomState {
         room: Room::new(),
@@ -533,6 +555,8 @@ fn new_room_state() -> RoomState {
         want: "any".to_string(),
         minutes: 0,
         pending_mode: None,
+        ready_white: false,
+        ready_black: false,
     }
 }
 
@@ -570,6 +594,11 @@ enum ClientMsg {
     ModeResponse {
         accept: bool,
     },
+    /// Sign (or un-sign) the contract at the table.
+    Ready {
+        #[serde(default)]
+        ready: bool,
+    },
 }
 
 #[derive(Serialize)]
@@ -595,6 +624,11 @@ enum ServerMsg {
         reason: String,
         /// "match" | "casual".
         mode: String,
+        /// Still at the table — the contract isn't signed by both yet.
+        at_table: bool,
+        /// Who has signed.
+        ready_white: bool,
+        ready_black: bool,
     },
     Glass {
         side: String,
@@ -1366,6 +1400,12 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                 if let Message::Text(t) = msg {
                     match serde_json::from_str::<ClientMsg>(&t) {
                         Ok(ClientMsg::Move { uci }) => {
+                            // Nothing may be played while the contract is unsigned.
+                            // Enforced server-side, so a stale client can't start a
+                            // game its opponent never agreed to.
+                            if { rooms.lock().await.get(&room_code).map(|rs| rs.table_open()).unwrap_or(false) } {
+                                continue;
+                            }
                             // Apply the move and, if legal, read the Player-Model signal.
                             let signal = {
                                 let mut map = rooms.lock().await;
@@ -1467,6 +1507,39 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                                 persist_game(&store, &rooms, &room_code).await;
                             }
                         }
+                        // Sign the contract. The game starts the moment both have.
+                        Ok(ClientMsg::Ready { ready }) => {
+                            let both = {
+                                let mut map = rooms.lock().await;
+                                match map.get_mut(&room_code) {
+                                    Some(rs) => {
+                                        match color {
+                                            Color::White => rs.ready_white = ready,
+                                            Color::Black => rs.ready_black = ready,
+                                        }
+                                        let both = rs.ready_white && rs.ready_black;
+                                        if both && rs.room.last_uci.is_none() {
+                                            let note = if rs.mode == "casual" {
+                                                "Both players signed the terms: CASUAL — full assistance for both sides, unrated."
+                                            } else {
+                                                "Both players signed the terms: MATCH — a handicap sized to the rating gap, visible to both."
+                                            };
+                                            rs.room.push_glass("", note);
+                                            let _ = rs.tx.send(json(&ServerMsg::Glass {
+                                                side: String::new(),
+                                                summary: note.to_string(),
+                                            }));
+                                        }
+                                        both
+                                    }
+                                    None => false,
+                                }
+                            };
+                            broadcast_state(&rooms, &room_code).await;
+                            if both {
+                                persist_game(&store, &rooms, &room_code).await;
+                            }
+                        }
                         // Ask to change the terms mid-game. Relayed, never applied —
                         // only the opponent's yes can change them.
                         Ok(ClientMsg::ModeRequest { mode }) => {
@@ -1560,6 +1633,9 @@ async fn broadcast_state(rooms: &Rooms, code: &str) {
             winner: winner.to_string(),
             reason: reason.to_string(),
             mode: rs.mode.clone(),
+            at_table: rs.table_open(),
+            ready_white: rs.ready_white,
+            ready_black: rs.ready_black,
         };
         let _ = rs.tx.send(json(&msg));
     }

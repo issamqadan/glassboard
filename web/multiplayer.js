@@ -185,7 +185,7 @@ async function main() {
   if (window.GBBoardInput && boardEl) {
     GBBoardInput.attach({
       boardEl,
-      canMove: () => !!(state && game && state.status === "ongoing" && state.turn === myColor),
+      canMove: () => !!(state && game && state.status === "ongoing" && state.turn === myColor && !atTable()),
       isMyPiece: (i) => { const c = game.boardString()[i];
         return (myColor === "white" && isWhitePiece(c)) || (myColor === "black" && c !== "." && !isWhitePiece(c)); },
       isCapture: (i) => game.boardString()[i] !== ".",
@@ -243,6 +243,22 @@ async function main() {
       : "Asked to make this a rated match — waiting for your opponent…";
     renderStatus();
   });
+  const sg = el("tcSign");
+  if (sg) sg.addEventListener("click", () => {
+    if (!ws || ws.readyState !== 1) return;
+    ws.send(JSON.stringify({ t: "ready", ready: true }));
+    sg.disabled = true;
+    statusEl.textContent = "You agreed to the terms — waiting for your opponent…";
+  });
+  const tm = el("tcMode");
+  if (tm) tm.addEventListener("click", () => {
+    if (modePending || !ws || ws.readyState !== 1) return;
+    ws.send(JSON.stringify({ t: "moderequest", mode: casualMode() ? "match" : "casual" }));
+    modePending = true;
+    tm.disabled = true;
+    statusEl.textContent = "Proposed different terms — waiting for your opponent…";
+  });
+
   const my = el("modeYes"), mn = el("modeNo");
   if (my) my.addEventListener("click", () => { ws && ws.send(JSON.stringify({ t: "moderesponse", accept: true })); hideModePrompt(); });
   if (mn) mn.addEventListener("click", () => { ws && ws.send(JSON.stringify({ t: "moderesponse", accept: false })); hideModePrompt(); });
@@ -453,6 +469,43 @@ function showUndoPrompt() {
 }
 function hideUndoPrompt() { const p = el("undoPrompt"); if (p) p.hidden = true; }
 
+// Still at the table? The server is authoritative; this just mirrors it.
+function atTable() { return !!(state && state.at_table); }
+
+// THE TABLE. Both players see the identical contract — same module the lobby used
+// to preview it, so what you were promised on the Challenge Board is what you sign.
+function renderTable() {
+  const card = el("tableCard");
+  if (!card) return;
+  const show = atTable() && !!myColor;
+  card.hidden = !show;
+  if (!show) return;
+  const w = { name: (state.white_name || "White"), rating: state.white_elo || 0 };
+  const bl = { name: (state.black_name || "Black"), rating: state.black_elo || 0 };
+  const c = GBTerms.contract(w, bl, state.mode, 0);
+  el("tcHead").textContent = c.headline;
+  el("tcDetail").textContent = c.detail;
+  [["tcSeatW", "white", w, state.ready_white], ["tcSeatB", "black", bl, state.ready_black]].forEach(([id, col, p, signed]) => {
+    const seat = el(id);
+    if (!seat) return;
+    seat.className = "tc-seat " + col + (signed ? " signed" : "");
+    seat.querySelector(".tcs-name").textContent = p.name + (col === myColor ? " (you)" : "") +
+      (state.mode === "casual" ? "" : "  " + (p.rating || "—"));
+    seat.querySelector(".tcs-state").textContent = signed ? "✓ agreed" : "waiting…";
+  });
+  const iSigned = myColor === "white" ? state.ready_white : state.ready_black;
+  const sign = el("tcSign");
+  if (sign) {
+    sign.textContent = iSigned ? "✓ You agreed — waiting for them" : "Agree & start →";
+    sign.disabled = !!iSigned;
+  }
+  const mb = el("tcMode");
+  if (mb) {
+    mb.textContent = casualMode() ? "⚔ Propose a match instead" : "🎈 Propose casual instead";
+    mb.disabled = modePending;
+  }
+}
+
 function onState(msg) {
   undoPending = false; // any new position resolves a pending takeback request
   state = msg;
@@ -480,6 +533,7 @@ function onState(msg) {
   const nowOver = !!rez.reason;
   if (!nowOver) { mateKingSq = -1; const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; }
 
+  renderTable();
   computeAssist();
   paint();
 
@@ -1773,6 +1827,7 @@ function simRefresh() {
     winner: over ? (st === "checkmate" ? (game.sideToMove() === "white" ? "black" : "white") : "") : "",
     reason: over ? (st === "checkmate" ? "checkmate" : st) : "",
   };
+  renderTable();
   computeAssist();
   paint();
   if (over) showGameOver({ winner: state.winner, reason: state.reason });

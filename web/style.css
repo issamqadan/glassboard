@@ -1842,3 +1842,27 @@ main.game .strat-panel { display: none; }
 .gbr-confetti i { position: absolute; top: -12px; width: 8px; height: 13px; border-radius: 2px; opacity: 0.95;
   animation-name: gbr-fall; animation-timing-function: cubic-bezier(.25,.6,.45,1); animation-fill-mode: forwards; }
 @keyframes gbr-fall { to { transform: translate(var(--dx), 105vh) rotate(var(--rot)); opacity: 0.9; } }
+
+
+/* ---- THE TABLE: the pre-game contract both players sign ------------------- */
+.table-card { max-width: 560px; margin: 18px auto; padding: 22px 22px 18px; border-radius: 18px;
+  background: linear-gradient(160deg, rgba(126,224,214,0.08), rgba(255,255,255,0.03));
+  border: 1px solid rgba(126,224,214,0.28); text-align: left; }
+.table-card .tc-eyebrow { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #7ee0d6; }
+.table-card .tc-head { margin: 8px 0 6px; font-size: 1.22rem; font-weight: 700; color: #eef4fb; text-wrap: balance; }
+.table-card .tc-detail { margin: 0 0 16px; font-size: 0.92rem; line-height: 1.5; color: #b9c7db; }
+.table-card .tc-seats { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.table-card .tc-seat { display: flex; align-items: center; gap: 10px; padding: 10px 13px; border-radius: 11px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); font-size: 0.9rem; }
+.table-card .tc-seat .tcs-dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto;
+  background: rgba(255,255,255,0.2); }
+.table-card .tc-seat.white .tcs-dot { background: #eef3fb; }
+.table-card .tc-seat.black .tcs-dot { background: #46536b; border: 1px solid #76839c; }
+.table-card .tc-seat .tcs-name { flex: 1 1 auto; min-width: 0; color: #eef4fb; font-weight: 650;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table-card .tc-seat .tcs-state { flex: 0 0 auto; font-size: 0.8rem; font-weight: 700; color: #8ea0b8; }
+.table-card .tc-seat.signed { border-color: rgba(126,224,214,0.5); background: rgba(126,224,214,0.1); }
+.table-card .tc-seat.signed .tcs-state { color: #7ee0d6; }
+.table-card .tc-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.table-card .tc-actions .gb-btn { flex: 1 1 auto; justify-content: center; }
+.table-card .tc-foot { margin: 14px 0 0; font-size: 0.78rem; color: #7f92ab; }
