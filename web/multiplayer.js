@@ -142,6 +142,7 @@ async function main() {
     document.body.appendChild(b);
   }
   const isJoiner = host && !mine;
+  joinerLink = !!isJoiner; // module-scope copy: onMessage is top-level and can't see this const
   gameMode = params.get("mode") === "casual" ? "casual" : "match";
   const casual = gameMode === "casual";
   const set = (id, txt) => { const e = el(id); if (e) e.textContent = txt; };
@@ -418,6 +419,12 @@ function onMessage(msg) {
   switch (msg.t) {
     case "joined": {
       myColor = msg.color;
+      // You followed an invite link (host=... with no mine=1) but the server seated
+      // you as WHITE — meaning this pid already holds the host seat. That happens
+      // when you open your OWN invite link: one browser is one player, so the link
+      // can't make you your own opponent. Say it plainly instead of leaving the
+      // page insisting you'll play Black.
+      if (joinerLink && msg.color === "white") notifyOwnLink();
       game = Game.fromFen(msg.fen);
       budgetSpent = 0; helpWasAvailable = false; lastRevealFen = ""; animMoveKey = null; // fresh agency budget
       rateMoves = []; ratedThisGame = false; // fresh rating evidence for the new game
@@ -475,6 +482,22 @@ function showModePrompt(mode) {
   p.hidden = false;
 }
 function hideModePrompt() { const p = el("modePrompt"); if (p) p.hidden = true; }
+
+// Did we arrive via someone's invite link (rather than our own lobby entry)?
+// Mirrored out of main()'s scope so the top-level message handler can read it.
+let joinerLink = false;
+// Honest message for "I opened my own invite link".
+function notifyOwnLink() {
+  const p = el("modePrompt"), t = el("modePromptText");
+  if (!p || !t) return;
+  t.innerHTML = "<b>This is your own game — you're White.</b> One browser counts as one player, " +
+    "so your invite link can't be your opponent. Send it to them, or go back to the lobby and use " +
+    "<b>“Play both sides here”</b> to open the other side as a separate player.";
+  const acts = p.querySelector(".up-actions");
+  if (acts) acts.innerHTML = '<button class="gb-btn" onclick="this.closest(\'.undo-prompt\').hidden = true">Got it</button>' +
+    '<a class="gb-btn" href="./portal.html">Lobby</a>';
+  p.hidden = false;
+}
 
 function showUndoPrompt() {
   const p = el("undoPrompt"), t = el("undoPromptText");

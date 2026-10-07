@@ -581,8 +581,9 @@
       const games = loadGames(); games.unshift(g); saveGames(games);
       registerGame(g);
       renderGames(); closeCreate();
-      copy(gameLink(g), g.open ? 'Challenge posted — anyone can take it (link copied too)'
-                                : (casual ? 'Casual game' : 'Game') + ' created — invite link copied');
+      copy(gameLink(g), (g.open ? 'Challenge posted — anyone can take it (link copied too). '
+                                 : (casual ? 'Casual game' : 'Game') + ' created — invite link copied. ') +
+                        'Send the link to your opponent — opening it yourself just re-enters as you (one browser = one player). To play both sides here, use "Play both sides here".');
       renderOpenGames();
     }
 
@@ -747,7 +748,7 @@
           <div class="g-actions">
             ${!over ? `<button class="enter" onclick="enterGame('${g.id}')">${active ? 'Resume game →' : 'Enter game →'}</button>` : ''}
             ${(active && !g.joined) ? `<button class="invite" onclick="copyInvite('${g.id}')" title="Copy the link to send your opponent">🔗 Invite link</button>` : ''}
-            ${(DEV && !over && !g.joined) ? `<button class="invite" onclick="testAsOpponent('${g.id}')" title="Open this game as a throwaway second player to test both sides yourself">🧪 Test opponent</button>` : ''}
+            ${(!over && !g.joined && g.status !== 'active') ? `<button class="invite" onclick="testAsOpponent('${g.id}')" title="One browser counts as one player, so your own invite link can't be your opponent. This opens the other side as a separate player in a new tab.">👥 Play both sides here</button>` : ''}
             ${!g.joined ? `<button class="del" onclick="deleteGame('${g.id}')">Delete</button>` : ''}
             <button class="del" onclick="hideGame('${g.id}')">Hide</button>
           </div>

@@ -1754,9 +1754,6 @@ main.game .strat-panel { display: none; }
   main.game .layout { display: flex; flex-direction: column; gap: 6px; width: 100%; margin: 0; }
   main.game .board-col { display: block; width: 100%; margin: 0; }
   main.game #materialBar, main.game #openingLine, main.game #planDock, main.game #status { display: none; }
-  /* Cap the board by height so gamebar + board + Lens fit above the fold. */
-  main.game .board-wrap { width: min(94vw, calc(100dvh - 330px)); max-width: 94vw;
-    height: auto; aspect-ratio: 1 / 1; margin: 0 auto; }
   /* The aside stacks under the board: show the ESSENTIAL Lens, then the move list;
      hide the redundant panels (folded into HUD/sheets). */
   main.game .panels { display: block; width: 100%; margin: 6px 0 0; }
@@ -1774,9 +1771,24 @@ main.game .strat-panel { display: none; }
   html, body { max-width: 100%; overflow-x: hidden; }
   main.game { width: 100%; max-width: 100vw; overflow-x: clip; }
   main.game .layout, main.game .board-col, main.game .gamebar, main.game .panels { max-width: 100%; min-width: 0; }
-  /* The board is measured against the VIEWPORT, never its container. */
+  /* The board is measured against the VIEWPORT, never its container.
+     ONE rule, sizing on BOTH axes. There used to be two: an earlier one that
+     capped the board by available HEIGHT and this one, which only capped width.
+     Equal specificity, this one came later, so the height cap was dead code and
+     the board was sized purely off width. On any viewport that is wide relative
+     to its height — a foldable's unfolded screen, or an iPhone in landscape
+     (844x390, under this 860px breakpoint) — that computes a board ~816px tall
+     for a 390px-tall screen, which is why the game UI didn't render.
+     The height term uses dvh so iOS Safari's collapsing URL bar doesn't make us
+     over-estimate (a plain-vh line first as the fallback), and max() keeps a
+     usable floor on very short screens — the page may scroll, but nothing is
+     mis-laid-out. */
   main.game .board-wrap, main.game .board-col > * { max-width: calc(100vw - 28px); }
-  main.game .board-wrap { width: min(100%, calc(100vw - 28px)); margin-inline: auto; }
+  main.game .board-wrap {
+    width: min(100%, calc(100vw - 28px), max(248px, calc(100vh - 300px)));
+    width: min(100%, calc(100vw - 28px), max(248px, calc(100dvh - 300px)));
+    max-width: calc(100vw - 28px);
+    height: auto; aspect-ratio: 1 / 1; margin-inline: auto; }
   /* Every flex row inside the game may wrap and may shrink. */
   /* The Lens sits BELOW the board, so it may wrap freely. The gamebar and the
      cockpit strips sit ABOVE it and must stay exactly one fixed-height line. */

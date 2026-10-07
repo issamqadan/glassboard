@@ -792,6 +792,9 @@ async function main() {
   const markScroll = () => { userScrollAt = nowMs(); };
   window.addEventListener("wheel", markScroll, { passive: true });
   window.addEventListener("touchmove", markScroll, { passive: true });
+  // Heartbeat for the safety net above: a dropped engine reply recovers on its own
+  // even when nothing else happens to nudge the game.
+  setInterval(() => { if (!document.hidden) ensureTurnProgress(); }, 4000);
   detectFirstGame();
   const nh = document.getElementById("newHereLink");
   if (nh) nh.hidden = firstGame; // hidden while the guided game is running
@@ -989,6 +992,9 @@ let positionToken = 0;
 // and repaints with the overlays when it arrives — the board stays interactive
 // throughout. Assist is computed once per position, for White's turn.
 function onPositionChanged() {
+  // Re-arm the safety net after every position change (deferred so this paint
+  // finishes first, and so a reply that is merely slow isn't double-fired).
+  setTimeout(ensureTurnProgress, 1400);
   hanging = [];
   threats = [];
   threatSquares = [];
@@ -2792,6 +2798,54 @@ function showPromotion(from, to, viaHelp) {
   ov.style.display = "grid";
 }
 
+// Play `uci` for the engine. Returns false if it couldn't be played — which the
+// caller MUST handle, because an unplayed engine move leaves the turn with a side
+// that will never move again.
+function applyEngineMove(uci) {
+  if (!uci || uci.length < 4) return false;
+  const sq = uciToSquares(uci);
+  const capturedByEngine = game.boardString()[sq.to] !== "."; // before the move lands
+  // makeMove's return value used to be IGNORED here. An illegal or stale move
+  // silently did nothing and the game deadlocked with the engine still "to move".
+  let ok = false;
+  try { ok = !!game.makeMove(sq.from, sq.to, uci.length > 4 ? uci[4] : undefined); } catch { ok = false; }
+  if (!ok) return false;
+  lastMove = sq;
+  uciHistory.push(uci);
+  recordPosition(); // threefold check
+  moveSound = { capture: capturedByEngine || (/p/i.test(game.boardString()[sq.to] || "") && (sq.from % 8) !== (sq.to % 8)), intensity: 0.62 };
+  return true;
+}
+// Any legal move for the side to move — the last resort so the game always
+// continues. A position with no legal move isn't "stuck", it's over, and
+// game.status() already says so.
+function anyLegalMove() {
+  try {
+    for (let i = 0; i < 64; i++) {
+      const outs = Array.from(game.legalTo(i));
+      if (outs.length) {
+        const to = outs[0];
+        const f = (c) => String.fromCharCode(97 + (c % 8)) + (1 + Math.floor(c / 8));
+        const promo = (/p/i.test(game.boardString()[i] || "") && (to < 8 || to > 55)) ? "q" : "";
+        return f(i) + f(to) + promo;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+// SAFETY NET: if it is the engine's turn, nothing is in flight and the game is
+// live, then the engine owes us a move. Any path that drops a reply (a search
+// that returns nothing, a rejected move, a promise that never settles) would
+// otherwise freeze the board forever with no way back. Cheap to check, and it
+// makes a deadlock impossible rather than merely unlikely.
+function ensureTurnProgress() {
+  if (busy || flagged || resigned || aiResigned || repetitionDraw) return;
+  if (!game || game.status() !== "ongoing") return;
+  if (game.sideToMove() !== engineColor()) return;
+  engineReply();
+}
+
 function engineReply() {
   if (game.status() !== "ongoing" || repetitionDraw) {
     busy = false; paint(); // draw reached (e.g. threefold) — show it, don't move
@@ -2818,15 +2872,17 @@ function engineReply() {
     .then((uci) => {
       // Stale/aborted (new game, resume, resign) — the position isn't the one we sent.
       if (flagged || game.fen() !== fenBefore || game.status() !== "ongoing" || game.sideToMove() !== engineColor()) { busy = false; return; }
-      if (uci && uci.length >= 4) {
-        const sq = uciToSquares(uci);
-        const capturedByEngine = game.boardString()[sq.to] !== "."; // before the move lands
-        game.makeMove(sq.from, sq.to, uci.length > 4 ? uci[4] : undefined);
-        lastMove = sq;
-        uciHistory.push(uci); // for opening identification
-        recordPosition(); // threefold check
-        lastMoveLifeline = usedLifeline; // mark the assisted move on the board
-        moveSound = { capture: capturedByEngine || (/p/i.test(game.boardString()[sq.to] || "") && (sq.from % 8) !== (sq.to % 8)), intensity: 0.62 }; // lands with its glide
+      let played = applyEngineMove(uci);
+      if (played) lastMoveLifeline = usedLifeline; // mark the assisted move on the board
+      if (!played) {
+        // The search gave us nothing usable (empty reply, "(none)", or a move the
+        // board rejected). Fall back rather than hand the turn back to nobody:
+        // the Rust core first, then any legal move. Silence here is what froze a
+        // game at the end, where a king had one legal move and the board stopped
+        // responding.
+        const fb = (() => { try { return game.engineMoveByElo(baseElo, 0); } catch { return null; } })();
+        played = applyEngineMove(fb) || applyEngineMove(anyLegalMove());
+        if (played) lastMoveLifeline = false;
       }
       busy = false;
       maybeEngineResign(); // a real opponent resigns when hopelessly lost

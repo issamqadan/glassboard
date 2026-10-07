@@ -32,6 +32,17 @@ if grep -q "ps-caps .cap-pc .pc-svg { width: 100%" "$CSS"; then
   printf "  FAIL capture trophy sized in %% inside an auto-width parent -> collapses to 0\n"; fail=1;
 else printf "  ok   capture trophy is sized in px, not %%\n"; fi
 
+# The board must be capped on BOTH axes. A width-only cap put an 824px board on a
+# 393px-tall screen (iPhone landscape) and 740px on a 640px-tall foldable. This is
+# the same trap as the trophy glyph: a second equal-specificity rule, later in the
+# file, silently winning.
+if grep -q "max(248px, calc(100dvh - 300px))" "$CSS"; then
+  printf "  ok   board is capped by height as well as width\n";
+else printf "  FAIL board has no height cap -> it overflows short/wide viewports\n"; fail=1; fi
+n=$(grep -c "main.game .board-wrap { width: min" "$CSS" || true)
+if [ "$n" -eq 0 ]; then printf "  ok   board has no second, overriding width rule\n";
+else printf "  FAIL %s extra board width rule(s) -> the later one silently wins\n" "$n"; fail=1; fi
+
 if [ "$fail" -eq 0 ]; then printf "All good — nothing above the board can resize.\n"; else
   printf "\nBROKEN: an above-board element can change height → the board will jump.\n"; fi
 exit $fail
