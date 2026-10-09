@@ -333,13 +333,39 @@ function rememberSetup() {
   } catch {}
 }
 let setupElo = typeof savedSetup.elo === "number" ? savedSetup.elo : 1500;   // chosen opponent rating
-let setupMode = savedSetup.mode || "full";        // "off" | "full" | "custom"
+let setupMode = savedSetup.mode || "auto";        // "auto" | "off" | "full" | "custom"
 let setupRung = savedSetup.rung || "suggestion";  // chosen rung when custom
 let setupColor = savedSetup.color || "white";     // "white" | "black" | "random" — the side YOU play
 let setupMinutes = typeof savedSetup.minutes === "number" ? savedSetup.minutes : 0; // 0 = untimed
 let setupDelivery = savedSetup.delivery || "open"; // how help arrives: "open" | "oncall" | "gentleman"
 let aiAssistOverride = "guided"; // the override applied to the live game
-const assistOverrideFor = () => setupMode === "off" ? "off" : setupMode === "full" ? "guided" : setupRung;
+// ASSISTANCE SIZED TO THE OPPONENT. Human games have always derived the rung from
+// the rating gap (gb-terms.js), but Play-AI used whatever you picked and defaulted
+// to full "Assist" regardless of who you were facing — so the assistance did not
+// reflect the opponent's level at all, and an even match handed you the same help
+// as a game against a Master. "auto" closes that, using the SAME ladder as human
+// games, and it is the default because guardrail #2 says the most equalizing
+// configuration is the free default.
+const RUNG_BY_KEY = { off: "off", hint: "awareness", coach: "coaching", guide: "suggestion", assist: "guided", autopilot: "autopilot" };
+function autoRungForOpponent() {
+  const you = parseInt(humanEloEl.value, 10) || 1200;
+  const opp = parseInt(setupElo, 10) || 1500;
+  // The handicap belongs to the WEAKER side. rungForGap takes an absolute gap,
+  // which is right in human games because the rung is handed to whoever is lower
+  // rated — but here it would be handed to YOU either way, so picking a Beginner
+  // while rated 1600 would have earned you Autopilot. If you're the favourite you
+  // get safety signals and nothing more.
+  if (opp <= you) return "awareness";
+  const key = GBTerms.rungForGap(opp - you).key;
+  // An even match gets no handicap at all in human games; here it still earns the
+  // safety rung, because Play-AI is also where people learn.
+  return RUNG_BY_KEY[key] === "off" ? "awareness" : RUNG_BY_KEY[key];
+}
+const assistOverrideFor = () =>
+  setupMode === "off" ? "off"
+  : setupMode === "full" ? "guided"
+  : setupMode === "auto" ? autoRungForOpponent()
+  : setupRung;
 
 // Which colour the human plays this game (the engine plays the other). Drives the
 // board orientation and every "your turn / your pieces" check.
@@ -702,6 +728,7 @@ function showSetup() {
     grid.querySelectorAll(".lvl-card").forEach((c) => c.onclick = () => {
       setupElo = +c.dataset.elo;
       grid.querySelectorAll(".lvl-card").forEach((x) => x.classList.toggle("on", x === c));
+      renderRungPicker(); // "Match my opponent" depends on this choice — re-read it
     });
   }
   const colors = document.getElementById("colorChoice");
@@ -736,6 +763,7 @@ function showSetup() {
       modes.querySelectorAll(".amode").forEach((x) => x.classList.toggle("on", x === m));
       renderRungPicker();
       syncDeliveryVisibility();
+      updateSetupSum();
     };
   });
   const deliv = document.getElementById("deliveryModes");
@@ -766,6 +794,22 @@ function syncDeliveryVisibility() {
 function renderRungPicker() {
   const rp = document.getElementById("rungPicker");
   if (!rp) return;
+  // "Match my opponent" must SAY what it worked out, or you'd be agreeing to terms
+  // you can't see — the same reason the Challenge Board previews the handicap.
+  if (setupMode === "auto") {
+    rp.hidden = false;
+    const gap = Math.abs((parseInt(humanEloEl.value, 10) || 1200) - (parseInt(setupElo, 10) || 1500));
+    const id = autoRungForOpponent();
+    const r = RUNGS.find((x) => x.id === id) || {};
+    const lvl = sfLevelFor(parseInt(setupElo, 10) || 1500);
+    rp.innerHTML = `<span class="rung on" style="pointer-events:none">${escapeHtml(r.name || "")}</span>` +
+      `<span class="rung-note">You ${parseInt(humanEloEl.value, 10) || 1200} vs ${lvl.ic} ${escapeHtml(lvl.name)} — ` +
+      ((parseInt(setupElo, 10) || 1500) <= (parseInt(humanEloEl.value, 10) || 1200)
+        ? `you're the favourite, so you get <b>${escapeHtml(r.name || "")}</b> only: ${escapeHtml((r.desc || "").toLowerCase())}.`
+        : `a ${gap}-point gap in their favour, so you get <b>${escapeHtml(r.name || "")}</b>: ${escapeHtml((r.desc || "").toLowerCase())}.`) +
+      `</span>`;
+    return;
+  }
   if (setupMode !== "custom") { rp.hidden = true; return; }
   rp.hidden = false;
   const note = (RUNGS.find((r) => r.id === setupRung) || {}).desc || "";
@@ -924,6 +968,7 @@ async function main() {
   if (humanEloEl) humanEloEl.addEventListener("change", () => {
     if (game) game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
     setLevelPill(game ? game.assistLevel() : "off");
+    renderRungPicker(); // your own level is half of the gap
     onPositionChanged();
   });
   document.getElementById("new").addEventListener("click", () => { closeMenu(); firstGame = false; showSetup(); });
@@ -2487,6 +2532,42 @@ function previewMove(m, boardOnly) {
 }
 function clearPreview() { if (previewedMove) { previewedMove = null; } }
 
+// THE STRATEGY ROW — pick a plan, see which one you're on, and how far through its
+// steps you are. Deliberately NOT help-gated: this file's own rule is that
+// awareness shows in every mode, and strategy is the headline of the product. It
+// used to be built inside the branch that runs only after the move-answer is
+// revealed, so in On Call mode (and, once allowances arrived, whenever you ran out
+// of tokens) the entire strategy surface disappeared.
+function planRowHTML() {
+  const sr = assistData && assistData.strategy, strategies = (sr && sr.strategies) || [];
+  const picked = strategies.find((s) => s.id === pickedStrategyId);
+  const bookOp = (followBook && bookNextMove()) ? currentOpening() : null;
+  const plansBtn = `<button class="gl-plansbtn" id="lensPlans" type="button" title="Pick a strategy">🧭 Plans</button>`;
+  if (picked) {
+    // Step progress, so following a plan reads as a sequence you're working through
+    // rather than a label. This is what "the assistance follows the strategy" looks
+    // like move to move.
+    const steps = picked.steps || [];
+    const doneN = steps.filter((x) => x.done).length;
+    const pips = steps.map((x, i) => `<span class="gl-pip${x.done ? " done" : i === doneN ? " now" : ""}"></span>`).join("");
+    const now = steps[doneN];
+    return `<div class="gl-planrow"><button class="gl-plan" id="lensPlan" type="button" title="${escapeHtml((now && now.text) || picked.idea || "")}">` +
+      `🧭 ${escapeHtml(picked.name)}</button><span class="gl-pips" title="${doneN} of ${steps.length} steps done">${pips}</span>` +
+      (now ? `<span class="gl-stepnow" title="the step you're on">${escapeHtml(now.text || "")}</span>` : "") +
+      `${plansBtn}</div>`;
+  }
+  if (bookOp) return `<div class="gl-planrow"><span class="gl-planlab book">📖 ${escapeHtml(bookOp.name)}</span>${plansBtn}</div>`;
+  if (strategies.length) {
+    // Proactive recommendation: the engine's best-fit plan for THIS position, offered
+    // as a one-tap "Try…" — plus the rest behind the Plans button.
+    const top = strategies[0];
+    const rec = `<button class="gl-planrec" data-id="${top.id}" type="button" title="${escapeHtml(top.idea || "")}">💡 Try: ${STRAT_ICON[top.id] || "◆"} ${escapeHtml(top.name)}</button>`;
+    const next = strategies[1] ? `<button class="gl-planpick" data-id="${strategies[1].id}" type="button">${STRAT_ICON[strategies[1].id] || "◆"} ${escapeHtml(strategies[1].name)}</button>` : "";
+    return `<div class="gl-planrow">${rec}${next}${plansBtn}</div>`;
+  }
+  return `<div class="gl-planrow">${plansBtn}</div>`;
+}
+
 function renderGlassLens() {
   const el = document.getElementById("glassLens");
   if (!el) return;
@@ -2499,7 +2580,7 @@ function renderGlassLens() {
     // Out of allowance: the only way on is to ask your opponent. Said plainly,
     // with the reassurance that safety warnings haven't gone anywhere.
     const out = !scarceAvailable();
-    el.innerHTML = glIdentityRow() + (
+    el.innerHTML = glIdentityRow() + planRowHTML() + (
       helpRequestPending
         ? `<div class="gl-askbtn waiting">🤝 Waiting for ${escapeHtml(aiName())}…</div>`
       : out
@@ -2509,6 +2590,7 @@ function renderGlassLens() {
         : `<button class="gl-askbtn" id="lensAsk" type="button">🔔 Show the key move <small>${GBHelpBudget.pips(helpLeft, helpMax)} ${helpLeft} of ${helpMax} left</small></button>`);
     const b = document.getElementById("lensAsk");
     if (b) b.onclick = out ? requestHelpFromOpponent : askForHelp;
+    bindPlanRow(el); // the strategy row works here too — it isn't help-gated
     return;
   }
   const p = pickPriority();
@@ -2522,21 +2604,7 @@ function renderGlassLens() {
   // Always-visible HUD: the advice is SHOWN (label + why), and the move is a single
   // clear button — tap ▶ to play it. The plan (pick or steps) folds in here too, so
   // NOTHING else needs to sit below the board — no scrolling to find help.
-  const sr = assistData.strategy, strategies = (sr && sr.strategies) || [];
-  const picked = strategies.find((s) => s.id === pickedStrategyId);
-  const bookOp = (followBook && bookNextMove()) ? currentOpening() : null;
-  const plansBtn = `<button class="gl-plansbtn" id="lensPlans" type="button" title="Pick a strategy">🧭 Plans</button>`;
-  let planRow = "";
-  if (picked) planRow = `<div class="gl-planrow"><button class="gl-plan" id="lensPlan" type="button">🧭 ${escapeHtml(picked.name)} · steps</button>${plansBtn}</div>`;
-  else if (bookOp) planRow = `<div class="gl-planrow"><span class="gl-planlab book">📖 ${escapeHtml(bookOp.name)}</span>${plansBtn}</div>`;
-  else if (strategies.length) {
-    // Proactive recommendation: the engine's best-fit plan for THIS position, offered
-    // as a one-tap "Try…" — plus the rest behind the Plans button.
-    const top = strategies[0];
-    const rec = `<button class="gl-planrec" data-id="${top.id}" type="button" title="${escapeHtml(top.idea || "")}">💡 Try: ${STRAT_ICON[top.id] || "◆"} ${escapeHtml(top.name)}</button>`;
-    const next = strategies[1] ? `<button class="gl-planpick" data-id="${strategies[1].id}" type="button">${STRAT_ICON[strategies[1].id] || "◆"} ${escapeHtml(strategies[1].name)}</button>` : "";
-    planRow = `<div class="gl-planrow">${rec}${next}${plansBtn}</div>`;
-  } else planRow = `<div class="gl-planrow">${plansBtn}</div>`;
+  const planRow = planRowHTML();
   const meaning = explainMoves ? moveMeaning(p.move) : "";
   el.className = "glass-lens kind-" + p.kind;
   el.innerHTML = glIdentityRow() +
@@ -2555,7 +2623,18 @@ function renderGlassLens() {
   document.getElementById("lensMore").onclick = () => openAltSheet(p);
   document.getElementById("lensLog").onclick = openGlassSheet;
   const ex = document.getElementById("lensExplain"); if (ex) ex.onclick = toggleExplain;
-  const pl = document.getElementById("lensPlan"); if (pl) pl.onclick = () => openStepsSheet(picked);
+  bindPlanRow(el);
+}
+
+// The strategy row is rendered in BOTH Lens states, so its handlers are bound in
+// one place. `picked` is looked up here rather than captured — it used to be a
+// local of the other branch, which is exactly how the row ended up inert.
+function bindPlanRow(el) {
+  if (!el) return;
+  const sr = assistData && assistData.strategy;
+  const picked = ((sr && sr.strategies) || []).find((x) => x.id === pickedStrategyId);
+  const pl = document.getElementById("lensPlan");
+  if (pl) pl.onclick = () => { if (picked) openStepsSheet(picked); else openPlanSheet(); };
   const pls = document.getElementById("lensPlans"); if (pls) pls.onclick = openPlanSheet;
   el.querySelectorAll(".gl-planpick, .gl-planrec").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; followBook = false; paint(); });
 }

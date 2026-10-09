@@ -27,7 +27,7 @@
   // didn't see. A beginner at zero tokens must still be in a game.
   const SCARCE = {
     best: "the single best move",
-    plan: "a plan to follow",
+    planMove: "the concrete move a plan calls for",
     candidates: "ranked candidate moves",
   };
   const FREE = {
@@ -35,6 +35,12 @@
     check: "you are in check",
     mate: "a checkmate threat",
     meaning: "what a move you're looking at would do",
+    // The STRATEGY LAYER is free: picking a plan, its name, its steps and how far
+    // through them you are. Strategy is the headline of this product, not a
+    // metered extra — and gating it was a regression that made the whole strategy
+    // surface vanish once an allowance ran out. What costs a token is the
+    // concrete MOVE the plan calls for (planMove above), never the plan itself.
+    plan: "which strategy you're following, and your progress through it",
   };
   const isScarce = (kind) => Object.prototype.hasOwnProperty.call(SCARCE, kind);
   const isFree = (kind) => Object.prototype.hasOwnProperty.call(FREE, kind);

@@ -1933,3 +1933,13 @@ main.game .strat-panel { display: none; }
   padding-left: 9px; border-left: 2px solid rgba(126,224,214,0.5); }
 .ai-ask .aa-row { display: flex; gap: 9px; }
 .ai-ask .aa-row .gb-btn { flex: 1 1 auto; justify-content: center; }
+
+
+/* Step progress in the Lens strategy row — the plan reads as a sequence you're
+   working through, not just a label. */
+.glass-lens .gl-pips { display: inline-flex; gap: 3px; align-items: center; flex: 0 0 auto; }
+.glass-lens .gl-pip { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.22); }
+.glass-lens .gl-pip.done { background: #7ee0d6; }
+.glass-lens .gl-pip.now { background: #e0be79; box-shadow: 0 0 0 2px rgba(224,190,121,0.25); }
+.glass-lens .gl-stepnow { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.78rem; color: #9fb0c6; }
