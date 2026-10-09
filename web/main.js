@@ -384,6 +384,18 @@ let helpPosPaid = -1;     // ply we last charged for — one charge per position
 // tells you what to play, a takeback un-plays it. Everyone gets one free; beyond
 // that the opponent decides.
 let tbMax = 0, tbUsed = 0, tbAsked = 0, tbPending = false;
+// The opponent is rationed too (aiTokens). When it runs out and it's struggling it
+// asks YOU — the mirror of you asking it. Symmetric assistance, in the open.
+let aiAsking = false, aiAskedCount = 0, aiGrantedCount = 0, aiAskedAtIdx = -9;
+// Each character asks in its own voice — the same request, but you're being asked
+// by somebody rather than by a dialog box.
+const AI_PLEA = {
+  aggressive: "You've blunted me. Give me one deep look and I'll come at you again.",
+  positional: "You've out-manoeuvred me. One proper think — I'd like to earn this.",
+  defensive: "I'm in real trouble here. One deep think, fair's fair?",
+  wildcard: "Well, this is going badly. Lend me a think and let's see what happens.",
+  balanced: "You've got me on the back foot. Lend me one deep think?",
+};
 function budgetUnlimited() { return !helpMax || GBHelpBudget.unlimited(helpLeft); }
 // Compute the allowance from the gap between you and this opponent's level.
 function resetHelpBudget() {
@@ -391,6 +403,7 @@ function resetHelpBudget() {
   helpMax = GBHelpBudget.tokensFor({ gap });
   helpLeft = helpMax; helpSpent = 0; helpEarned = 0; helpAsked = 0; helpGranted = 0; helpPosPaid = -1;
   tbMax = GBHelpBudget.takebacksFor({ gap }); tbUsed = 0; tbAsked = 0; tbPending = false;
+  aiAsking = false; aiAskedCount = 0; aiGrantedCount = 0; aiAskedAtIdx = -9;
 }
 // Is the powerful help available right now? Already paid for this position counts.
 function scarceAvailable() {
@@ -943,6 +956,9 @@ async function main() {
   if (snd) { snd.checked = soundOn; snd.addEventListener("change", toggleSound); }
   const ub = document.getElementById("undoBtn");
   if (ub) ub.addEventListener("click", () => { closeMenu(); requestTakeback(); });
+  const ay = document.getElementById("aiAskYes"), an = document.getElementById("aiAskNo");
+  if (ay) ay.addEventListener("click", () => answerAiAsk(true));
+  if (an) an.addEventListener("click", () => answerAiAsk(false));
   const orm = document.getElementById("overRematch");
   if (orm) orm.addEventListener("click", () => { hideOver(); newGame(); }); // same settings (opponent, colour, assistance)
   const ons = document.getElementById("overNewSetup");
@@ -2116,9 +2132,12 @@ function helpBudgetHtml() {
   const tbLine = tbAsked
     ? `<br><span class="hb-tb">↩ Takebacks: asked ${tbAsked}, allowed <b>${tbUsed}</b> of ${tbMax}${tbRefused ? `, refused ${tbRefused}` : ""}.</span>`
     : "";
+  const aiLine = aiAskedCount
+    ? `<br><span class="hb-tb">🤝 ${escapeHtml(aiName())} asked you for help ${aiAskedCount} time${aiAskedCount === 1 ? "" : "s"} — you allowed <b>${aiGrantedCount}</b>.</span>`
+    : "";
   const refused = Math.max(0, helpAsked - helpGranted);
   const extra = refused ? ` <span class="hb-refused">${escapeHtml(aiName())} refused ${refused} time${refused === 1 ? "" : "s"}.</span>` : "";
-  return `<div class="over-help"><span class="oh-ic">🤝</span><span class="oh-txt">${line}${extra}${tbLine}` +
+  return `<div class="over-help"><span class="oh-ic">🤝</span><span class="oh-txt">${line}${extra}${tbLine}${aiLine}` +
     `<small>${GBHelpBudget.pips(helpLeft, helpMax)} left at the end · safety warnings were always free</small></span></div>`;
 }
 
@@ -3050,12 +3069,53 @@ function engineReply() {
       }
       busy = false;
       maybeEngineResign(); // a real opponent resigns when hopelessly lost
+      maybeAiAsksForHelp(); // ...and asks for help when it's merely struggling
       if (usedLifeline) aiLifelineMoment(llKind);
       if (!firstGame) persistAiGame(game.status() !== "ongoing" || aiResigned);
       onPositionChanged();
       fgOn("engine");
     })
     .catch(() => { busy = false; });
+}
+
+// The opponent's own allowance is spent and it's in trouble: it asks you for one
+// more, and Glassboard tells you honestly whether saying yes is generous or daft.
+// You decide — the whole point is that the help layer is shared and negotiated,
+// not that one side owns it.
+function maybeAiAsksForHelp() {
+  if (firstGame || aiAsking || resigned || aiResigned || flagged) return;
+  if (game.status() !== "ongoing" || game.sideToMove() !== humanColor) return;
+  if (aiTokens > 0) return;                       // it still has its own
+  if (aiAskedCount >= 2) return;                  // it asks twice at most
+  if (uciHistory.length < 12) return;             // not in the opening
+  if (moveReview.length - aiAskedAtIdx < 6) return; // and not twice in a row
+  let sense = 0; try { sense = game.bestScore(2); } catch { return; } // + = YOU are better
+  if (sense < 120) return;                        // it only asks when it's actually worse
+  aiAsking = true; aiAskedCount += 1; aiAskedAtIdx = moveReview.length;
+  const rec = GBHelpBudget.recommend({ cp: sense, grantedBefore: aiGrantedCount });
+  const el = document.getElementById("aiAsk");
+  if (!el) { aiAsking = false; return; }
+  document.getElementById("aiAskWho").textContent = `${aiName()} is asking you for a lifeline`;
+  document.getElementById("aiAskPlea").textContent = `“${AI_PLEA[aiStyle] || AI_PLEA.balanced}”`;
+  document.getElementById("aiAskRec").innerHTML = `<b>Glassboard:</b> ${escapeHtml(rec.line)}`;
+  el.hidden = false;
+  playerHelpLog.push({ move: Math.floor(uciHistory.length / 2) + 1, note: `${aiName()} asked you for a lifeline` });
+  paint();
+}
+function answerAiAsk(grant) {
+  const el = document.getElementById("aiAsk");
+  if (el) el.hidden = true;
+  aiAsking = false;
+  const mv = Math.floor(uciHistory.length / 2) + 1;
+  if (grant) {
+    aiTokens += 1; aiGrantedCount += 1;
+    playerHelpLog.push({ move: mv, note: `you granted ${aiName()} a lifeline` });
+    showMoment(`<span class="mo-ic">🤝</span><span class="mo-txt"><b>You allowed it</b><small>${escapeHtml(aiName())} has one deep think in reserve. Sporting — and on the record.</small></span>`, "you");
+  } else {
+    playerHelpLog.push({ move: mv, note: `you refused ${aiName()} a lifeline` });
+    showMoment(`<span class="mo-ic">🚫</span><span class="mo-txt"><b>You refused</b><small>No lifeline for ${escapeHtml(aiName())}. Entirely your call.</small></span>`, "you");
+  }
+  paint();
 }
 
 // Realism: a real opponent doesn't make you grind out a hopeless position — it

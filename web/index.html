@@ -236,6 +236,18 @@
           <div id="planSheetBody" class="plan-sheet-body"></div>
         </div>
       </div>
+      <!-- The opponent is rationed too, so when it runs out it asks YOU. Glassboard
+           reads the position and advises without deciding. -->
+      <div id="aiAsk" class="ai-ask" hidden>
+        <div class="aa-head"><span class="aa-ic">🤝</span><b id="aiAskWho"></b></div>
+        <p class="aa-plea" id="aiAskPlea"></p>
+        <p class="aa-rec" id="aiAskRec"></p>
+        <div class="aa-row">
+          <button id="aiAskYes" class="gb-btn" type="button">Allow it</button>
+          <button id="aiAskNo" class="gb-btn danger" type="button">Refuse</button>
+        </div>
+      </div>
+
       <div id="promoOverlay" class="promo-overlay" style="display:none">
         <div class="promo-box"><div class="promo-title">Promote to</div><div class="promo-choices"></div></div>
       </div>

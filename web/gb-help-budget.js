@@ -170,6 +170,34 @@
              line: "A move's a move. Let's play on." };
   }
 
+  // ---- GLASSBOARD'S RECOMMENDATION (when the AI asks YOU) -------------------
+  // The assistance layer is symmetric: the opponent is rationed too, so when it
+  // runs out it has to ask. That puts the player in the chair the AI was in, and a
+  // beginner has no idea whether saying yes is generous or suicidal — so Glassboard
+  // reads the position and advises, without deciding. Neutral referee, not a nag.
+  //
+  //  cp — from the PLAYER's point of view (+ = the player is ahead)
+  // Returns { advise: "grant"|"refuse", line, why }.
+  function recommend(o) {
+    o = o || {};
+    const cp = Number(o.cp) || 0;
+    const granted = Number(o.grantedBefore) || 0;
+    if (granted >= 2) {
+      return { advise: "refuse", why: "you have already allowed " + granted,
+               line: "You've allowed " + granted + " already — nobody could call you unsporting for saying no now." };
+    }
+    if (cp >= 250) {
+      return { advise: "grant", why: "you are well ahead",
+               line: "You're clearly ahead. Letting it dig deep costs you little and makes the win worth more." };
+    }
+    if (cp <= -200) {
+      return { advise: "refuse", why: "you are already under pressure",
+               line: "You're under pressure as it is. Saying no is the sensible move." };
+    }
+    return { advise: "refuse", why: "the game is balanced",
+             line: "It's finely balanced — this is exactly the moment the help would matter most. Refusing is fair." };
+  }
+
   // ---- display -------------------------------------------------------------
   function pips(left, max) {
     if (unlimited(left)) return "∞";
@@ -191,6 +219,6 @@
 
   global.GBHelpBudget = {
     SCARCE, FREE, isScarce, isFree, tokensFor, earnBack, aiVerdict, pips, summary,
-    MAX_GRANTS, unlimited, takebacksFor, aiTakebackVerdict, FREE_TAKEBACKS,
+    MAX_GRANTS, unlimited, takebacksFor, aiTakebackVerdict, FREE_TAKEBACKS, recommend,
   };
 })(typeof window !== "undefined" ? window : this);
