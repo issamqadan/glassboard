@@ -5,7 +5,7 @@
 > travel with a `git clone`. This file + `docs/agent-memory/` carry everything a fresh
 > Claude session needs to continue exactly where the last one left off.
 >
-> **Last updated:** 2026-10-07.
+> **Last updated:** 2026-10-09.
 
 ## 0. First actions for a new session
 1. Read **`CLAUDE.md`** (operating agreement) and **`docs/VISION.md`** (the anchor).
@@ -144,8 +144,17 @@ accounts + Render secrets), #6 Web Push notifications (needs VAPID keys + Render
   **HONESTY RULE: only motifs verifiable on the board are claimed** (forced / defended /
   wins-material). Browsable under its own **🧠 Learned** chip + section on `strategy.html`,
   listed first; the demo replays from `demoFen` (the position it happened in), not move 1.
-  *Known limitation:* one motif family only (forcing checks). Forks/pins/skewers/squeezes are
-  invisible — **more rule-based detectors is the high-value next step, not an LLM.** Decided
+  **Widened 2026-10-08 to SIX detectors** (`web/gb-capture.js`): fork / royal fork, pin, skewer,
+  discovered attack, sacrifice, and the original forcing check. Each is a pure board function, so
+  each is unit-testable on built positions — and the tests cover the REFUSALS as much as the hits
+  (knights can't pin, king-first-on-the-ray is a check not a pin, two pawns aren't a fork, the
+  mover's own new attack isn't a discovery). Sacrifice is only claimed when the game proves it:
+  captured on the very next move AND this side ahead on material 4–6 plies later. Motifs score
+  fixed values + material actually won, so which lesson a game yields is reproducible.
+  Complexity is graded per motif (fork/pin/skewer = Intermediate, the rest Advanced).
+  Testing note: the WASM `Game` can't load in `jsc`, so detect() is exercised with a documented
+  test double (blind board + the shared attack tables) — fine for motif selection, not an engine.
+  Decided
   2026-10-04: detection must stay deterministic (guardrail #3 + offline play); if an LLM is ever
   added it may only re-word VERIFIED facts, never add a claim, with the template as fallback.
 - **THE AI OPPONENT HAS A STABLE NAME (2026-10-04, `web/gb-ai-cast.js`).** The roster is shared

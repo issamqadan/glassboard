@@ -367,8 +367,15 @@ automatically at game end in Play-AI *and* human games.
 Detection is deterministic and key-move-centric: the moment a move left the opponent
 with ≤3 legal replies, counted on the board. **Only motifs we can verify are claimed**
 (forced / defended / wins-material) — a lesson is evidence, not flavour. Today it
-recognises one motif family (forcing checks); widening it means **more rule-based
-detectors**, not an LLM. Per the AI/LLM clarification above, detection stays
+recognised one motif family at first (forcing checks). Widened 2026-10-08 to six,
+all rule-based: **fork / royal fork, pin, skewer, discovered attack, sacrifice**,
+plus the original forcing check. Each is a pure function of the board before and
+after a move, so each is tested on hand-built positions — including the cases it
+must REFUSE (a knight can't pin; an enemy king first on the ray is a check, not a
+pin; two attacked pawns aren't a fork; the mover's own new attack isn't a
+discovery). A sacrifice is only claimed when the game itself proves it: the piece
+was captured on the very next move and this side was ahead on material a few plies
+later. Still no LLM. Per the AI/LLM clarification above, detection stays
 deterministic so it works offline and stays measurable; an LLM could only ever
 re-word already-verified facts.
 
