@@ -1878,3 +1878,13 @@ main.game .strat-panel { display: none; }
 .table-card .tc-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .table-card .tc-actions .gb-btn { flex: 1 1 auto; justify-content: center; }
 .table-card .tc-foot { margin: 14px 0 0; font-size: 0.78rem; color: #7f92ab; }
+
+
+/* The help allowance, reported with the result. */
+.over-help { display: flex; gap: 10px; align-items: flex-start; margin: 10px auto 4px; padding: 10px 14px;
+  max-width: 420px; border-radius: 12px; text-align: left;
+  background: rgba(126,224,214,0.08); border: 1px solid rgba(126,224,214,0.28); }
+.over-help .oh-ic { font-size: 20px; flex: 0 0 auto; }
+.over-help .oh-txt { display: flex; flex-direction: column; gap: 3px; font-size: 0.88rem; color: #c9d6e8; }
+.over-help .oh-txt small { color: #8ea0b8; font-size: 0.76rem; letter-spacing: 0.02em; }
+.over-help .hb-refused { color: #e0be79; }
