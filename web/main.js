@@ -444,6 +444,7 @@ let ratePending = [];  // in-flight measurements, awaited at game end
 let lastRating = null; // GBRating.record() result for the last game
 let lastEval = null; // engine's read of your position (white-relative cp), for the live pill
 let evalTrail = []; // your-relative eval after each of your turns — the recap's story curve
+let assistFen = ""; // the position assistData was computed for (freshness guard)
 let lastResult = null; // { won, draw, reason } of the finished game — for the recap
 let capturedLesson = null; // a strategy learned from this game, if any
 let scored = false;    // guard: count each finished game into the score exactly once
@@ -994,6 +995,7 @@ function newGame() {
   helpReceived = 0; helpRevealed = helpDelivery === "open"; helpRequestPending = false;
   resetHelpBudget();
   GBResign.clear();
+  assistFen = "";
   // Clock: from the chosen time control (kept across rematches). Untimed if 0.
   timedGame = !firstGame && setupMinutes > 0;
   humanMs = engineMs = setupMinutes * 60000;
@@ -1096,6 +1098,7 @@ function onPositionChanged() {
       .then((json) => {
         if (token !== positionToken) return; // position moved on — drop stale result
         assistData = JSON.parse(json);
+        assistFen = fen; // which position this analysis is FOR — see assessPosition()
         hanging = assistData.hanging || [];
         threats = assistData.threats || [];
         threatSquares = threats.map((t) => t.sq);
@@ -1838,11 +1841,11 @@ function requestHelpFromOpponent() {
   helpRequestPending = true; helpAsked += 1;
   playerHelpLog.push({ move: Math.floor(uciHistory.length / 2) + 1, note: "asked the opponent for more help" });
   paint();
-  setTimeout(() => {
-    let sense = 0; try { sense = game.bestScore(2); } catch {} // relative to YOU (to move)
+  setTimeout(() => { assessPositionDeep().then((a) => {
     const b = aiBoost(parseInt(engineEloEl.value, 10));
     const verdict = GBHelpBudget.aiVerdict({
-      cp: -sense,                 // flip: the verdict wants it from the AI's side
+      cp: -a.cp,                  // flip: the verdict wants it from the AI's side
+      trend: -a.trend, phase: a.phase, danger: a.danger,
       skill: b.skill, style: aiStyle, grantedSoFar: helpGranted,
     });
     helpRequestPending = false;
@@ -1858,7 +1861,7 @@ function requestHelpFromOpponent() {
     showMoment(`<span class="mo-ic">🤝</span><span class="mo-txt"><b>${escapeHtml(aiName())} granted +${verdict.amount}</b><small>“${escapeHtml(verdict.line)}” · ${GBHelpBudget.pips(helpLeft, helpMax)}</small></span>`, "you");
     if (helpDelivery !== "open" && spendHelp("help granted and taken")) { helpRevealed = true; helpReceived += 1; revealHint(); }
     paint();
-  }, 650);
+  }); }, 650);
 }
 // Out of tokens: say so, and point at the only way to get more.
 function outOfHelpMoment() {
@@ -1879,11 +1882,11 @@ function requestTakeback() {
     return;
   }
   tbPending = true; tbAsked += 1; paint();
-  setTimeout(() => {
-    let sense = 0; try { sense = game.bestScore(2); } catch {} // relative to YOU (to move)
+  setTimeout(() => { assessPositionDeep().then((a) => {
     const b = aiBoost(parseInt(engineEloEl.value, 10));
     const verdict = GBHelpBudget.aiTakebackVerdict({
-      cp: -sense, skill: b.skill, style: aiStyle, usedSoFar: tbUsed, allowance: tbMax,
+      cp: -a.cp, trend: -a.trend, phase: a.phase,
+      skill: b.skill, style: aiStyle, usedSoFar: tbUsed, allowance: tbMax,
     });
     tbPending = false;
     const mv = Math.floor(uciHistory.length / 2) + 1;
@@ -1897,7 +1900,7 @@ function requestTakeback() {
     playerHelpLog.push({ move: mv, note: "takeback allowed (" + (tbMax - tbUsed) + " left)" });
     showMoment(`<span class="mo-ic">↩</span><span class="mo-txt"><b>${escapeHtml(aiName())} allowed it</b><small>“${escapeHtml(verdict.line)}” · ${tbMax - tbUsed} of ${tbMax} left</small></span>`, "you");
     undoMove();
-  }, 600);
+  }); }, 600);
 }
 
 function undoMove() {
@@ -3078,6 +3081,52 @@ function engineReply() {
     .catch(() => { busy = false; });
 }
 
+// ---- READING THE POSITION FOR A DECISION ---------------------------------
+// Every negotiation (grant help, allow a takeback, resign, ask for a lifeline)
+// used to consult `game.bestScore(2)` — a DEPTH-2 glance, which is nearly
+// tactics-blind. It cannot see a two-move combination, so it would happily call a
+// position "finely balanced" while you were one move from being mated, and the
+// explanation given to the player would be confidently wrong.
+//
+// This uses the deep number the engine ALREADY computed for the advice (depth 4-5,
+// via assistData) and only searches when that isn't available. It also reports the
+// trend and the phase, so a decision can talk about where the game is GOING rather
+// than just where it stands.
+//
+// cp is always YOUR-relative (+ = you are better).
+function assessPosition() {
+  let cp = null, src = "";
+  // Only trust the advice's eval if it was computed for THIS position. assistData
+  // holds the previous position's analysis until the async search lands, so without
+  // this check a decision right after the opponent moved would quote a stale number
+  // as if it were the current read.
+  const fresh = assistFen === game.fen();
+  if (fresh && assistData && (assistData.candidates || []).length && typeof assistData.candidates[0].score === "number") {
+    cp = assistData.candidates[0].score; src = "deep";          // depth() — already paid for
+  } else if (lastEval != null) {
+    cp = lastEval; src = "deep-stale";
+  } else {
+    try { cp = game.bestScore(2); src = "shallow"; } catch { cp = 0; src = "none"; }
+  }
+  const t = evalTrail.slice(-4).map((e) => e.cp);
+  const trend = t.length >= 2 ? t[t.length - 1] - t[0] : 0;
+  const pieces = ((game.boardString() || "").match(/[^.]/g) || []).length;
+  const phase = pieces >= 26 ? "opening" : pieces >= 14 ? "middlegame" : "endgame";
+  return {
+    cp, trend, phase, src,
+    danger: !!(assistData && (assistData.mateThreat || assistData.inCheck)),
+  };
+}
+// The same, but guaranteeing a real search when no advice was computed for this
+// position (assistance off, or the advice hasn't landed yet).
+function assessPositionDeep() {
+  const a = assessPosition();
+  if (a.src === "deep") return Promise.resolve(a); // already the real thing
+  return askEngine("bestScore", { fen: game.fen(), depth: depth() })
+    .then((cp) => Object.assign(a, { cp: typeof cp === "number" ? cp : a.cp, src: "searched" }))
+    .catch(() => a);
+}
+
 // The opponent's own allowance is spent and it's in trouble: it asks you for one
 // more, and Glassboard tells you honestly whether saying yes is generous or daft.
 // You decide — the whole point is that the help layer is shared and negotiated,
@@ -3089,10 +3138,11 @@ function maybeAiAsksForHelp() {
   if (aiAskedCount >= 2) return;                  // it asks twice at most
   if (uciHistory.length < 12) return;             // not in the opening
   if (moveReview.length - aiAskedAtIdx < 6) return; // and not twice in a row
-  let sense = 0; try { sense = game.bestScore(2); } catch { return; } // + = YOU are better
-  if (sense < 120) return;                        // it only asks when it's actually worse
-  aiAsking = true; aiAskedCount += 1; aiAskedAtIdx = moveReview.length;
-  const rec = GBHelpBudget.recommend({ cp: sense, grantedBefore: aiGrantedCount });
+  aiAsking = true; // claim the slot now so two replies can't both open the prompt
+  assessPositionDeep().then((a) => {
+  if (a.cp < 120) { aiAsking = false; return; }   // it only asks when it's actually worse
+  aiAskedCount += 1; aiAskedAtIdx = moveReview.length;
+  const rec = GBHelpBudget.recommend({ cp: a.cp, trend: a.trend, phase: a.phase, danger: a.danger, grantedBefore: aiGrantedCount });
   const el = document.getElementById("aiAsk");
   if (!el) { aiAsking = false; return; }
   document.getElementById("aiAskWho").textContent = `${aiName()} is asking you for a lifeline`;
@@ -3101,6 +3151,7 @@ function maybeAiAsksForHelp() {
   el.hidden = false;
   playerHelpLog.push({ move: Math.floor(uciHistory.length / 2) + 1, note: `${aiName()} asked you for a lifeline` });
   paint();
+  });
 }
 function answerAiAsk(grant) {
   const el = document.getElementById("aiAsk");
@@ -3128,7 +3179,9 @@ function maybeEngineResign() {
   if (uciHistory.length < 16) { aiHopeless = 0; return; }
   const lvl = sfLevelFor(parseInt(engineEloEl.value, 10));
   const resignAt = lvl.skill >= 12 ? 700 : lvl.skill >= 5 ? 1000 : Infinity;
-  let ev = 0; try { ev = game.bestScore(2); } catch { ev = 0; } // side to move = you → your-relative cp
+  // Was also a depth-2 read: resigning on a shallow misread is the worst possible
+  // version of this feature, so it uses the same deep assessment.
+  const ev = assessPosition().cp; // your-relative
   if (ev >= resignAt) aiHopeless++; else aiHopeless = 0;
   if (aiHopeless >= 2) {
     // It doesn't just announce a result — it lays its king down, same as you would.

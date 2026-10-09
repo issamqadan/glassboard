@@ -79,6 +79,16 @@
   //  grantedSoFar — how many extra tokens it has already given this game
   // Returns { grant, amount, reason, line } — `line` is what the character says.
   const GENEROSITY = { positional: 1, defensive: 1, balanced: 0, aggressive: -1, wildcard: -1 };
+  // Centipawns in the language players use. The decisions quote this, so the
+  // reasoning is checkable rather than just assertive.
+  const pawns = (cp) => (Math.abs(cp) / 100).toFixed(1);
+  // How the game has been MOVING, not just where it stands. `trend` is the change
+  // in the asker's eval across their last few turns.
+  function drift(trend) {
+    if (trend <= -150) return "slipping";
+    if (trend >= 150) return "climbing";
+    return "steady";
+  }
   const MAX_GRANTS = 3; // an allowance can be topped up, not made infinite
   function aiVerdict(o) {
     o = o || {};
@@ -89,15 +99,27 @@
       return { grant: false, amount: 0, reason: "already topped you up " + granted + " times",
                line: "I've been generous enough for one game." };
     }
+    // Immediate danger for the asker outranks everything else: a player one move
+    // from being mated is not in a negotiation, and refusing there is just cruel.
+    if (o.danger) {
+      return { grant: true, amount: 1, reason: "you are in immediate danger, which it can see",
+               line: "You're about to get mated. Here — I'd rather beat you properly." };
+    }
     // Comfortably ahead → granting costs nothing and it can afford to be sporting.
     if (cp >= 250) {
-      return { grant: true, amount: 2, reason: "it is clearly ahead, so it can afford to be generous",
-               line: "I'm well ahead — take two, let's make a game of it." };
+      return { grant: true, amount: 2, reason: `it reads the position at +${pawns(cp)} for itself`,
+               line: `I'm ${pawns(cp)} up by my count — take two, let's make a game of it.` };
     }
     // Behind → it is fighting for its life and says no.
     if (cp <= -150) {
-      return { grant: false, amount: 0, reason: "it is losing and will not help you finish it off",
-               line: "You're already on top. I'll take my chances." };
+      return { grant: false, amount: 0, reason: `it is ${pawns(cp)} down and will not help you finish it off`,
+               line: `You're ${pawns(cp)} up already. I'll take my chances.` };
+    }
+    // Close, but you've been pulling away for several moves: it reads the drift and
+    // digs in rather than funding your run.
+    if (drift(-(Number(o.trend) || 0)) === "climbing") {
+      return { grant: false, amount: 0, reason: "the game is level but you have been climbing for several moves",
+               line: "You've been gaining for a while now. I'm not helping that along." };
     }
     // A close game is where personality and level decide. Strong, sharp opponents
     // guard their edge; patient ones coach.
@@ -153,13 +175,19 @@
     }
     // Losing badly? A takeback that helps you finish it off is an easy no.
     if (cp <= -200) {
-      return { grant: false, reason: "it is losing and will not help you tidy up",
-               line: "You're winning as it is. I'll keep what I've got." };
+      return { grant: false, reason: `it is ${pawns(cp)} down and will not help you tidy up`,
+               line: `You're ${pawns(cp)} up as it is. I'll keep what I've got.` };
     }
     // Comfortably ahead: sporting, and it costs nothing.
     if (cp >= 250) {
-      return { grant: true, reason: "it is well ahead and can afford to be sporting",
-               line: "Take it back. I'm not worried." };
+      return { grant: true, reason: `it is ${pawns(cp)} ahead and can afford to be sporting`,
+               line: `Take it back — I'm ${pawns(cp)} up, I'm not worried.` };
+    }
+    // In the endgame a single move decides games, so a close endgame is where it
+    // holds the line hardest.
+    if (o.phase === "endgame" && Math.abs(cp) < 120) {
+      return { grant: false, reason: "a close endgame, where one move decides it",
+               line: "Not in an endgame this tight. One move decides this." };
     }
     const score = (GENEROSITY[o.style] != null ? GENEROSITY[o.style] : 0) + (skill >= 16 ? -1 : skill >= 9 ? 0 : 1);
     if (score >= 1) {
@@ -186,16 +214,29 @@
       return { advise: "refuse", why: "you have already allowed " + granted,
                line: "You've allowed " + granted + " already — nobody could call you unsporting for saying no now." };
     }
+    const tr = Number(o.trend) || 0;
+    if (o.danger) {
+      return { advise: "refuse", why: "you are in immediate danger yourself",
+               line: "You've got a threat against you right now — deal with your own board first. Refusing is obvious." };
+    }
     if (cp >= 250) {
+      const climbing = drift(tr) === "climbing" ? " and you've been pulling away for several moves" : "";
       return { advise: "grant", why: "you are well ahead",
-               line: "You're clearly ahead. Letting it dig deep costs you little and makes the win worth more." };
+               line: `You're ${pawns(cp)} up${climbing}. Letting it dig deep costs you little and makes the win worth more.` };
     }
     if (cp <= -200) {
       return { advise: "refuse", why: "you are already under pressure",
-               line: "You're under pressure as it is. Saying no is the sensible move." };
+               line: `You're ${pawns(cp)} down. Saying no is the sensible move.` };
     }
+    if (drift(tr) === "slipping") {
+      return { advise: "refuse", why: "the game is level but slipping away from you",
+               line: `It's near level but drifting your way out — you've lost about ${pawns(tr)} over your last few turns. Keep what you have.` };
+    }
+    const where = o.phase === "endgame" ? "In an endgame this close, one move decides it"
+                : o.phase === "opening" ? "It's still early and level"
+                : "It's finely balanced";
     return { advise: "refuse", why: "the game is balanced",
-             line: "It's finely balanced — this is exactly the moment the help would matter most. Refusing is fair." };
+             line: `${where} — this is exactly the moment the help would matter most. Refusing is fair.` };
   }
 
   // ---- display -------------------------------------------------------------
