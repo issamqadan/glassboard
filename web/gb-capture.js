@@ -328,6 +328,7 @@
       demoFen: fen, demoUci: moves,
       keyMove: best.uci, legalAfter: best.legalAfter,
       swing, motifs: best.motifs, byYou,
+      kind: best.kind, piece: best.piece,
       how: t.how,
       capturedAt: Date.now(),
     };
@@ -337,10 +338,27 @@
   // ---- the learned library (per device) ----
   const KEY = "gb_learned";
   function list() { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } }
+  // A lesson is identified by WHAT it teaches — motif + piece — not by the position
+  // it happened in. With six detectors nearly every game yields something, so keying
+  // on the position meant five knight forks became five entries called "The Knight
+  // Fork". The shelf is meant to be a library of distinct patterns you own, so we
+  // keep the single best example of each and sharpen it when a better one turns up.
+  function lessonKey(e) {
+    return ((e && e.kind) || (e && e.motifs && e.motifs[0]) || "x") + ":" + ((e && e.piece) || "piece");
+  }
   function save(entry) {
     if (!entry) return null;
     const all = list();
-    if (all.some((e) => e.id === entry.id)) return null; // already learned
+    if (all.some((e) => e.id === entry.id)) return null; // this exact moment, already learned
+    const key = lessonKey(entry);
+    const at = all.findIndex((e) => lessonKey(e) === key);
+    if (at >= 0) {
+      // Already know this pattern. Only keep the new one if it's a clearer example
+      // (a bigger swing), and say so rather than pretending it's a new discovery.
+      if ((all[at].swing || 0) >= (entry.swing || 0)) return null;
+      entry = Object.assign({}, entry, { sharpened: true, replaces: all[at].id });
+      all.splice(at, 1);
+    }
     all.unshift(entry);
     try { localStorage.setItem(KEY, JSON.stringify(all.slice(0, 50))); } catch {}
     register(entry);
@@ -355,7 +373,7 @@
     if (!e) return "";
     const who = e.byYou ? "You played it" : "Your opponent played it on you";
     return `<div class="rc-card learned"><span class="rc-ic">🧠</span><div>` +
-      `<b>Lesson captured — ${esc(e.name)}</b>` +
+      `<b>${e.sharpened ? "Lesson sharpened" : "Lesson captured"} — ${esc(e.name)}</b>` +
       `<p>${esc(e.idea)} <span class="rc-learn-who">${esc(who)} · swing ${(e.swing / 100).toFixed(1)}</span></p>` +
       `<p class="rc-learn-cta">Saved to your <a href="./strategy.html" target="_blank" rel="noopener">Strategies library</a> — replay it there any time.</p>` +
       `</div></div>`;
