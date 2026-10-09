@@ -1888,3 +1888,32 @@ main.game .strat-panel { display: none; }
 .over-help .oh-txt { display: flex; flex-direction: column; gap: 3px; font-size: 0.88rem; color: #c9d6e8; }
 .over-help .oh-txt small { color: #8ea0b8; font-size: 0.76rem; letter-spacing: 0.02em; }
 .over-help .hb-refused { color: #e0be79; }
+
+
+/* ---- RESIGNATION: the king goes over ------------------------------------- */
+/* Mr Shaibel's first lesson. The piece falls to its side and stays there — the
+   `fall` class carries the one-shot animation, `toppled` holds the rest pose, so a
+   repaint restores a fallen king without replaying the fall. */
+.sq.toppled .piece { transform: rotate(74deg) translate(7%, 13%); opacity: 0.82;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45)); }
+.sq.toppled.fall .piece { animation: king-fall 820ms cubic-bezier(.34,1.16,.48,1) both; }
+@keyframes king-fall {
+  0%   { transform: rotate(0deg) translate(0, 0); opacity: 1; }
+  38%  { transform: rotate(14deg) translate(1%, -4%); opacity: 1; }   /* the tip */
+  78%  { transform: rotate(84deg) translate(8%, 16%); opacity: 0.86; } /* overshoot */
+  100% { transform: rotate(74deg) translate(7%, 13%); opacity: 0.82; } /* settles */
+}
+.sq.toppled::after { content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: radial-gradient(circle at 54% 62%, rgba(0,0,0,0.26), transparent 62%); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .sq.toppled.fall .piece { animation: none; } }
+
+/* Long-press your own king to resign — the confirm bubble. */
+.tip-confirm { position: fixed; z-index: 80; transform: translate(-50%, -112%);
+  background: rgba(16,22,32,0.97); border: 1px solid rgba(242,112,126,0.45); border-radius: 12px;
+  padding: 11px 13px; width: 232px; box-shadow: 0 14px 34px rgba(0,0,0,0.5); text-align: left; }
+.tip-confirm b { display: block; font-size: 0.9rem; color: #eef4fb; margin-bottom: 3px; }
+.tip-confirm small { display: block; font-size: 0.76rem; color: #93a2b8; line-height: 1.4; margin-bottom: 9px; }
+.tip-confirm .tc-row { display: flex; gap: 7px; }
+.tip-confirm button { flex: 1 1 auto; padding: 7px 9px; border-radius: 8px; font-size: 0.8rem; font-weight: 700;
+  border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: #cdd8e8; cursor: pointer; }
+.tip-confirm button.yes { background: rgba(242,112,126,0.18); border-color: rgba(242,112,126,0.5); color: #f2a6ae; }

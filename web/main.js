@@ -970,6 +970,7 @@ function newGame() {
   if (firstGame) helpDelivery = "open"; // the guided game always shows help
   helpReceived = 0; helpRevealed = helpDelivery === "open"; helpRequestPending = false;
   resetHelpBudget();
+  GBResign.clear();
   // Clock: from the chosen time control (kept across rematches). Untimed if 0.
   timedGame = !firstGame && setupMinutes > 0;
   humanMs = engineMs = setupMinutes * 60000;
@@ -1865,13 +1866,27 @@ function undoMove() {
   startClock(); // keep the clock alive after a takeback
 }
 
+// Resigning is a GESTURE, not a dialog: your king goes over on the board, the way
+// Mr Shaibel teaches it in The Queen's Gambit. The result waits for the king to
+// land, so you see yourself concede.
 function resign() {
   if (resigned || game.status() !== "ongoing") return;
-  if (!confirm("Resign to the engine? It'll count as a loss.")) return;
-  resigned = true;
+  if (!confirm("Tip your king over? That resigns the game — it counts as a loss.")) return;
+  tipKingAndEnd(humanColor, () => {
+    resigned = true;
+    stopClock();
+    if (!firstGame && aiSaved) persistAiGame(true);
+    paint();
+  });
+}
+// Lay `color`'s king down, let it fall, then finish. Used by both sides.
+function tipKingAndEnd(color, done) {
+  const sq = GBResign.kingSquare(game.boardString(), color === "white");
+  if (!GBResign.tip(sq)) { done(); return; }
   stopClock();
-  if (!firstGame && aiSaved) persistAiGame(true);
-  paint();
+  renderBoard();                        // the king falls
+  if (window.GBSound && GBSound.isOn()) { try { GBSound.play("capture", 0.5); } catch {} }
+  setTimeout(done, 900);                // the result lands after the gesture
 }
 
 function findKing(color) {
@@ -1899,7 +1914,7 @@ function showGameOverIfNeeded() {
   const st = game.status();
   const over = resigned || aiResigned || flagged || repetitionDraw || st !== "ongoing";
   const rb = document.getElementById("resignBtn");
-  if (rb) rb.hidden = over;
+  if (rb) { rb.hidden = over; rb.textContent = "🏳 Tip your king"; rb.title = "Resign — your king goes over, the way players have always conceded"; }
   if (!over) { ov.style.display = "none"; mateKingSq = -1; return; }
   let winner = "", reason = "";
   if (flagged) { winner = flagLoser === humanColor ? engineColor() : humanColor; reason = "time"; } // ran out of time
@@ -2233,6 +2248,10 @@ function renderBoard() {
       sq.className = "sq " + ((file + rank) % 2 === 1 ? "light" : "dark");
       sq.dataset.sq = i;
       if (i === mateKingSq) sq.classList.add("mate");
+      // A resigned king stays down through repaints (the board rebuilds from
+      // scratch each paint, so the state lives in GBResign, not in the DOM).
+      const downCls = GBResign.classFor(i);
+      if (downCls) sq.className += downCls;
       if (chkKing && s[i] === chkKing) sq.classList.add("check");
       if (assistData && assistData.mateThreat && !assistData.inCheck && s[i] === (humanColor === "white" ? "K" : "k")) sq.classList.add("king-danger");
       if (selected === i) sq.classList.add("selected");
@@ -2999,7 +3018,15 @@ function maybeEngineResign() {
   const resignAt = lvl.skill >= 12 ? 700 : lvl.skill >= 5 ? 1000 : Infinity;
   let ev = 0; try { ev = game.bestScore(2); } catch { ev = 0; } // side to move = you → your-relative cp
   if (ev >= resignAt) aiHopeless++; else aiHopeless = 0;
-  if (aiHopeless >= 2) { aiResigned = true; stopClock(); paint(); }
+  if (aiHopeless >= 2) {
+    // It doesn't just announce a result — it lays its king down, same as you would.
+    tipKingAndEnd(engineColor(), () => {
+      aiResigned = true; stopClock();
+      showMoment(`<span class="mo-ic">🏳</span><span class="mo-txt"><b>${escapeHtml(aiName())} tipped their king</b>` +
+        `<small>${escapeHtml(GBResign.LESSON)}</small></span>`, "ai");
+      paint();
+    });
+  }
 }
 
 // --- helpers ---------------------------------------------------------------

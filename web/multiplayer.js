@@ -224,7 +224,11 @@ async function main() {
   if (rcs) rcs.addEventListener("click", (e) => { if (e.target === rcs) closeRecap(); });
 
   const rb = el("resignBtn");
-  if (rb) rb.addEventListener("click", resign);
+  if (rb) {
+    rb.addEventListener("click", resign);
+    rb.textContent = "🏳 Tip your king";
+    rb.title = "Resign — your king goes over, the way players have always conceded";
+  }
 
   // Move sounds — same shared engine and same saved preference as Play-AI.
   const sb = el("soundBtn");
@@ -565,6 +569,23 @@ function onState(msg) {
   if (!myTurn) document.title = baseTitle;
   prevMyTurn = myTurn;
   seenState = true;
+
+  // Resignation is shown as the gesture, not just a word: the loser's king goes
+  // over on BOTH screens. Derived from the server's own result, so there is nothing
+  // extra to send and the two boards cannot disagree about who conceded.
+  if (msg.reason === "resignation" && msg.winner) {
+    const loser = msg.winner === "white" ? "black" : "white";
+    const ksq = GBResign.kingSquare(Game.fromFen(msg.fen).boardString(), loser === "white");
+    if (!GBResign.isDown(ksq) && GBResign.tip(ksq)) {
+      if (window.GBSound && GBSound.isOn()) { try { GBSound.play("capture", 0.5); } catch {} }
+      if (loser !== myColor) {
+        const who = loser === "white" ? (msg.white_name || "White") : (msg.black_name || "Black");
+        statusEl.textContent = who + " tipped their king — you win.";
+      }
+    }
+  } else if (msg.reason !== "resignation") {
+    GBResign.clear(); // a rematch stands the king back up
+  }
 
   const rez = gameResult(msg);
   const nowOver = !!rez.reason;
@@ -1193,7 +1214,7 @@ function renderBoard() {
   for (const { file, rank } of orientedSquares()) {
     const i = idx(file, rank);
     const sq = document.createElement("div");
-    sq.className = "sq " + ((file + rank) % 2 === 1 ? "light" : "dark");
+    sq.className = "sq " + ((file + rank) % 2 === 1 ? "light" : "dark") + GBResign.classFor(i);
     sq.dataset.sq = i;
     if (i === mateKingSq) sq.classList.add("mate");
     if (chkKing && s[i] === chkKing) sq.classList.add("check");
@@ -1312,7 +1333,7 @@ function renderStatus() {
 function resign() {
   if (!ws || ws.readyState !== 1 || !myColor) return;
   if (!state || state.status !== "ongoing" || (state.reason && state.reason !== "")) return;
-  if (!confirm("Resign this game? Your opponent will be recorded as the winner.")) return;
+  if (!confirm("Tip your king over? That resigns the game and your opponent is recorded as the winner.")) return;
   ws.send(JSON.stringify({ t: "resign" }));
 }
 
