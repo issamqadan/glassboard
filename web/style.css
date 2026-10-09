@@ -1917,3 +1917,4 @@ main.game .strat-panel { display: none; }
 .tip-confirm button { flex: 1 1 auto; padding: 7px 9px; border-radius: 8px; font-size: 0.8rem; font-weight: 700;
   border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: #cdd8e8; cursor: pointer; }
 .tip-confirm button.yes { background: rgba(242,112,126,0.18); border-color: rgba(242,112,126,0.5); color: #f2a6ae; }
+.over-help .hb-tb { color: #b9c7db; }

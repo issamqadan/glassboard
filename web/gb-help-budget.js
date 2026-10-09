@@ -112,6 +112,64 @@
              line: "Too close to call. No freebies here." };
   }
 
+  // ---- TAKEBACKS -----------------------------------------------------------
+  // Same shape as the help allowance, and Issam's point that it matters MORE is
+  // right: help only tells you what to play, a takeback un-plays it. So it is
+  // agreed up front, counted, and every single one needs the opponent's yes —
+  // including against the AI, which previously let you undo as often as you liked
+  // with nobody's permission.
+  //
+  // EVERYONE gets one free. An "oops" you can't take back is the single most
+  // common way a beginner's game stops being fun, and the free one costs the
+  // stronger player almost nothing. Beyond that the gap decides, same as help.
+  const FREE_TAKEBACKS = 1;
+  function takebacksFor(opts) {
+    opts = opts || {};
+    if (opts.mode === "casual") return Infinity; // "just play" mode stays permissive
+    const gap = Math.abs(Number(opts.gap) || 0);
+    const extra = gap >= 800 ? 2 : gap >= 300 ? 1 : 0;
+    return FREE_TAKEBACKS + extra;
+  }
+
+  // Whether the opponent allows THIS takeback. Pure, like the help verdict, so a
+  // player can learn the character rather than being refused at random.
+  //  cp        — from the opponent's point of view (+ = the opponent is better)
+  //  usedSoFar — takebacks this player has already been granted
+  //  allowance — what was agreed at the start
+  function aiTakebackVerdict(o) {
+    o = o || {};
+    const cp = Number(o.cp) || 0;
+    const skill = Math.max(0, Math.min(20, Number(o.skill) || 0));
+    const used = Number(o.usedSoFar) || 0;
+    const allowance = Number(o.allowance) || 0;
+    if (used >= allowance) {
+      return { grant: false, reason: "the agreed takebacks are used up",
+               line: "We agreed on " + allowance + ". That's " + allowance + "." };
+    }
+    // The first one was agreed as free — refusing it would make the agreement a lie.
+    if (used < FREE_TAKEBACKS) {
+      return { grant: true, reason: "the first takeback was agreed as free",
+               line: "Go on — that one's free, we agreed." };
+    }
+    // Losing badly? A takeback that helps you finish it off is an easy no.
+    if (cp <= -200) {
+      return { grant: false, reason: "it is losing and will not help you tidy up",
+               line: "You're winning as it is. I'll keep what I've got." };
+    }
+    // Comfortably ahead: sporting, and it costs nothing.
+    if (cp >= 250) {
+      return { grant: true, reason: "it is well ahead and can afford to be sporting",
+               line: "Take it back. I'm not worried." };
+    }
+    const score = (GENEROSITY[o.style] != null ? GENEROSITY[o.style] : 0) + (skill >= 16 ? -1 : skill >= 9 ? 0 : 1);
+    if (score >= 1) {
+      return { grant: true, reason: "a patient opponent at this level allows it",
+               line: "Fine — learn from it." };
+    }
+    return { grant: false, reason: "a close game and this opponent plays it straight",
+             line: "A move's a move. Let's play on." };
+  }
+
   // ---- display -------------------------------------------------------------
   function pips(left, max) {
     if (unlimited(left)) return "∞";
@@ -133,6 +191,6 @@
 
   global.GBHelpBudget = {
     SCARCE, FREE, isScarce, isFree, tokensFor, earnBack, aiVerdict, pips, summary,
-    MAX_GRANTS, unlimited,
+    MAX_GRANTS, unlimited, takebacksFor, aiTakebackVerdict, FREE_TAKEBACKS,
   };
 })(typeof window !== "undefined" ? window : this);

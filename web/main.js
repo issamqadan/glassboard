@@ -378,12 +378,19 @@ let helpEarned = 0;       // tokens won back by finding the best move unaided
 let helpAsked = 0;        // times you asked the opponent for more
 let helpGranted = 0;      // times they said yes
 let helpPosPaid = -1;     // ply we last charged for — one charge per position
+// ---- TAKEBACKS: agreed, counted, and the opponent's call ------------------
+// Undo used to be unlimited and unilateral here: you pressed the button and the
+// move was gone. Issam's point that this matters MORE than help is right — help
+// tells you what to play, a takeback un-plays it. Everyone gets one free; beyond
+// that the opponent decides.
+let tbMax = 0, tbUsed = 0, tbAsked = 0, tbPending = false;
 function budgetUnlimited() { return !helpMax || GBHelpBudget.unlimited(helpLeft); }
 // Compute the allowance from the gap between you and this opponent's level.
 function resetHelpBudget() {
   const gap = Math.abs((parseInt(humanEloEl.value, 10) || 1200) - (parseInt(engineEloEl.value, 10) || 1500));
   helpMax = GBHelpBudget.tokensFor({ gap });
   helpLeft = helpMax; helpSpent = 0; helpEarned = 0; helpAsked = 0; helpGranted = 0; helpPosPaid = -1;
+  tbMax = GBHelpBudget.takebacksFor({ gap }); tbUsed = 0; tbAsked = 0; tbPending = false;
 }
 // Is the powerful help available right now? Already paid for this position counts.
 function scarceAvailable() {
@@ -935,7 +942,7 @@ async function main() {
   const snd = document.getElementById("soundToggle");
   if (snd) { snd.checked = soundOn; snd.addEventListener("change", toggleSound); }
   const ub = document.getElementById("undoBtn");
-  if (ub) ub.addEventListener("click", () => { closeMenu(); undoMove(); });
+  if (ub) ub.addEventListener("click", () => { closeMenu(); requestTakeback(); });
   const orm = document.getElementById("overRematch");
   if (orm) orm.addEventListener("click", () => { hideOver(); newGame(); }); // same settings (opponent, colour, assistance)
   const ons = document.getElementById("overNewSetup");
@@ -1846,6 +1853,37 @@ function outOfHelpMoment() {
 // Takeback: roll back your last move (and the engine's reply) to before you moved.
 // Only when it's your turn and the engine isn't mid-search. Board-only + counters;
 // the AI's lifelines aren't refunded (they're a spent game event, not a mistake).
+// Ask for a takeback. The opponent answers — the first one is free because that
+// was the agreement, the rest depend on the position, the level and the character.
+function requestTakeback() {
+  if (tbPending || busy || history.length === 0) return;
+  if (tbUsed >= tbMax) {
+    showMoment(`<span class="mo-ic">🚫</span><span class="mo-txt"><b>No takebacks left</b>` +
+      `<small>You agreed on ${tbMax} for this game.</small></span>`, "you");
+    return;
+  }
+  tbPending = true; tbAsked += 1; paint();
+  setTimeout(() => {
+    let sense = 0; try { sense = game.bestScore(2); } catch {} // relative to YOU (to move)
+    const b = aiBoost(parseInt(engineEloEl.value, 10));
+    const verdict = GBHelpBudget.aiTakebackVerdict({
+      cp: -sense, skill: b.skill, style: aiStyle, usedSoFar: tbUsed, allowance: tbMax,
+    });
+    tbPending = false;
+    const mv = Math.floor(uciHistory.length / 2) + 1;
+    if (!verdict.grant) {
+      playerHelpLog.push({ move: mv, note: "takeback refused — " + verdict.reason });
+      showMoment(`<span class="mo-ic">🚫</span><span class="mo-txt"><b>${escapeHtml(aiName())} said no</b><small>“${escapeHtml(verdict.line)}”</small></span>`, "ai");
+      paint();
+      return;
+    }
+    tbUsed += 1;
+    playerHelpLog.push({ move: mv, note: "takeback allowed (" + (tbMax - tbUsed) + " left)" });
+    showMoment(`<span class="mo-ic">↩</span><span class="mo-txt"><b>${escapeHtml(aiName())} allowed it</b><small>“${escapeHtml(verdict.line)}” · ${tbMax - tbUsed} of ${tbMax} left</small></span>`, "you");
+    undoMove();
+  }, 600);
+}
+
 function undoMove() {
   if (busy || history.length === 0) return;
   const snap = history.pop();
@@ -1854,6 +1892,7 @@ function undoMove() {
   game.setAssistOverride(firstGame ? "guided" : aiAssistOverride);
   indepOwn = snap.indepOwn; indepFollowed = snap.indepFollowed;
   playerFollows = snap.playerFollows; playerTokens = Math.max(0, PLAYER_TOKENS_MAX - playerFollows);
+  if (typeof snap.helpLeft === "number") { helpLeft = snap.helpLeft; helpSpent = snap.helpSpent; helpEarned = snap.helpEarned; helpPosPaid = snap.helpPosPaid; }
   if (moveReview.length > snap.reviewLen) moveReview.length = snap.reviewLen;
   if (snap.rateLen != null && rateMoves.length > snap.rateLen) rateMoves.length = snap.rateLen;
   if (typeof snap.uciLen === "number" && uciHistory.length > snap.uciLen) uciHistory.length = snap.uciLen;
@@ -2073,9 +2112,13 @@ function aiLifelineHtml() {
 function helpBudgetHtml() {
   if (firstGame || aiAssistOverride === "off" || !helpMax) return "";
   const line = GBHelpBudget.summary({ max: helpMax, spent: helpSpent, earned: helpEarned, asked: helpAsked, granted: helpGranted });
+  const tbRefused = Math.max(0, tbAsked - tbUsed);
+  const tbLine = tbAsked
+    ? `<br><span class="hb-tb">↩ Takebacks: asked ${tbAsked}, allowed <b>${tbUsed}</b> of ${tbMax}${tbRefused ? `, refused ${tbRefused}` : ""}.</span>`
+    : "";
   const refused = Math.max(0, helpAsked - helpGranted);
   const extra = refused ? ` <span class="hb-refused">${escapeHtml(aiName())} refused ${refused} time${refused === 1 ? "" : "s"}.</span>` : "";
-  return `<div class="over-help"><span class="oh-ic">🤝</span><span class="oh-txt">${line}${extra}` +
+  return `<div class="over-help"><span class="oh-ic">🤝</span><span class="oh-txt">${line}${extra}${tbLine}` +
     `<small>${GBHelpBudget.pips(helpLeft, helpMax)} left at the end · safety warnings were always free</small></span></div>`;
 }
 
@@ -2356,7 +2399,13 @@ function renderStatus() {
   // turn, with a move to take back. Never in a timed game (a takeback can't unspend
   // the clock, and a timed game is the serious mode).
   const ub = document.getElementById("undoBtn");
-  if (ub) ub.hidden = firstGame || timedGame || flagged || st !== "ongoing" || side !== humanColor || history.length === 0;
+  if (ub) {
+    ub.hidden = firstGame || timedGame || flagged || st !== "ongoing" || side !== humanColor || history.length === 0;
+    const left = Math.max(0, tbMax - tbUsed);
+    ub.textContent = tbPending ? "↩ Asking…" : `↩ Takeback (${left})`;
+    ub.title = left ? `Ask ${aiName()} to allow a takeback — ${left} of ${tbMax} agreed for this game` : "No takebacks left this game";
+    ub.disabled = tbPending || left === 0;
+  }
 }
 
 // A playful character for a suggested move — derived from the board, not vibes:
@@ -2822,7 +2871,10 @@ function doPlay(from, to, promo, viaHelp) {
   if (flagged || busy || repetitionDraw || aiResigned) return; // clock's out, mid-think, a draw, or the engine resigned
   const preFen = game.fen(); // position before the human's move (for the Player Model)
   // Takeback snapshot: this position + the pre-move counters. Undo restores here.
-  history.push({ fen: preFen, indepOwn, indepFollowed, reviewLen: moveReview.length, rateLen: rateMoves.length, playerFollows, uciLen: uciHistory.length, helpLogLen: playerHelpLog.length });
+  history.push({ fen: preFen, indepOwn, indepFollowed, reviewLen: moveReview.length, rateLen: rateMoves.length, playerFollows, uciLen: uciHistory.length, helpLogLen: playerHelpLog.length,
+    // The help budget rewinds with the board: taking a move back must not leave
+    // you charged for help on a position that no longer happened.
+    helpLeft, helpSpent, helpEarned, helpPosPaid });
   const prov = provenanceOf(viaHelp); // by SOURCE (clicked help vs your own board move)
   if (prov === "own") indepOwn += 1; else if (prov === "followed") indepFollowed += 1;
   lastMoveLifeline = false; // your move — clear the AI's lifeline board badge
