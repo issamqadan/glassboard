@@ -1,0 +1,13 @@
+var window = this; load(SRC + 'gb-resign.js'); var R = window.GBResign;
+var START = "RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr";
+print("white king found at      : " + R.kingSquare(START, true) + "  (e1 = 4)");
+print("black king found at      : " + R.kingSquare(START, false) + "  (e8 = 60)");
+print("missing king             : " + R.kingSquare(".".repeat(64), true) + "  (want -1)");
+print("\nnothing down yet         : " + R.isDown(4));
+print("tip the white king       : " + R.tip(4) + "   down now: " + R.isDown(4));
+print("the fall animates once   : class='" + R.classFor(4) + "'");
+print("other squares unaffected : '" + R.classFor(60) + "'");
+print("tipping a missing king   : " + R.tip(-1) + "  (refused)");
+R.clear();
+print("rematch stands it up     : " + R.isDown(4) + ", class='" + R.classFor(4) + "'");
+print("\nthe lesson shown to a first-timer:\n  \"" + R.LESSON + "\"");

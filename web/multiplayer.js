@@ -52,8 +52,6 @@ let threats = [];        // value-aware [{sq,kind,loss}], biggest loss first
 let threatSquares = [];
 let freeCaptures = [];
 let assistData = null;
-let lastStratSig = ""; // signature of strategies last seen while the fold was open
-let curStratSig = "";
 // Agency budget (soft) — Match mode only; Casual keeps help unlimited. Free
 // safety net (threats/glow) always on; seeing deeper help spends from a pool.
 const BUDGET_TOTAL = 40, COST_SUGG = 2, COST_BEST = 4;
@@ -71,7 +69,6 @@ let lastMove = null;
 let lastMoveCapture = false; // was the last move a capture? (drives the capture sound)
 let prevPieceCount = null;  // piece count of the previous position, to detect it
 let mateKingSq = -1; // the mated king's square, ringed when the game ends
-let lastGlassFen = null;
 let hostName = null;
 let myName = null;
 

@@ -5,4 +5,25 @@
 if [ -x scripts/sync-context.sh ]; then
   sh scripts/sync-context.sh || true
 fi
+
+# Guard against the two bug shapes that have actually cost time here:
+#   • an above-board element that can resize (the board jumps)
+#   • a UI promise the code doesn't keep / state set on one path but not another
+# Both are cheap to check and both have shipped broken before. Skip with
+#   git commit --no-verify
+if [ -n "$(git diff --cached --name-only -- web/ 2>/dev/null)" ]; then
+  if [ -x scripts/check-board-stability.sh ] || [ -f scripts/check-board-stability.sh ]; then
+    sh scripts/check-board-stability.sh >/dev/null 2>&1 || {
+      echo "pre-commit: board-stability invariants FAILED — run: sh scripts/check-board-stability.sh"
+      exit 1
+    }
+  fi
+  if [ -f scripts/test-web.sh ]; then
+    sh scripts/test-web.sh >/tmp/gb-test-web.log 2>&1 || {
+      echo "pre-commit: web tests FAILED — run: sh scripts/test-web.sh"
+      tail -12 /tmp/gb-test-web.log
+      exit 1
+    }
+  fi
+fi
 exit 0

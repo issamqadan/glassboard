@@ -152,7 +152,7 @@ async function resumeAiGame(id) {
   flagged = false; flagLoser = "";
   aiTokens = typeof rec.aiTokens === "number" ? rec.aiTokens : AI_TOKENS_MAX;
   aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {};
-  lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX; playerHelpLog = [];
+  lastMoveLifeline = false; playerFollows = 0; playerHelpLog = [];
   history = []; uciHistory = []; posCounts = Object.create(null); repetitionDraw = false; recordPosition(); // resumed from a FEN — opening history can't be reconstructed
   helpDelivery = rec.helpDelivery || "open";
   helpReceived = typeof rec.helpReceived === "number" ? rec.helpReceived : 0;
@@ -175,6 +175,15 @@ async function resumeAiGame(id) {
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; aiResigned = false; aiHopeless = 0; mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; rateMoves = []; ratePending = []; lastRating = null; lastEval = null; evalTrail = [];
   pickedStrategyId = null; followBook = false; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
+  // Per-GAME guards that newGame() resets and this path did not. Each one is a
+  // latch, so inheriting it from the previous game silently disables a feature for
+  // the whole of this one:
+  //   scored         — "already counted" → a resumed game would never be scored,
+  //                    so no points, no rating, nothing sent to the server
+  //   capturedLesson — "already learned something" → no strategy capture
+  //   lastScore      — the PREVIOUS game's result, which is what would get submitted
+  //   assistFen      — freshness guard for the deep eval, pointing at another game
+  scored = false; lastScore = null; capturedLesson = null; assistFen = "";
   firstGame = false;
   hideOver();
   if (window.GBTheme) GBTheme.setContext(id); // restore this game's board
@@ -411,7 +420,6 @@ let aiLastLifelineIdx = -9;      // move index of the last spend (spacing, so it
 let lastMoveLifeline = false;    // was the most recent move an AI lifeline? (for the board badge)
 let momentSeen = {};             // one-shot guards for personality moments this game
 // Your side of the symmetric meter: lifelines you've cashed in by following help.
-const PLAYER_TOKENS_MAX = 3;
 // ---- THE HELP BUDGET ------------------------------------------------------
 // A finite allowance, sized to the gap, spent as help is OFFERED (not as it's
 // followed — playerFollows below still tracks that, for the independence score).
@@ -475,7 +483,6 @@ function spendHelp(note) {
   return true;
 }
 let playerFollows = 0;           // how many times you've played the suggested move
-let playerTokens = PLAYER_TOKENS_MAX;
 let playerHelpLog = [];          // [{move, note}] — YOUR help events, shown in the glass panel
 
 let selected = null;
@@ -604,14 +611,11 @@ function postScoreToServer() {
 }
 let evalBeforeEngine = null; // white-relative eval right after YOUR move — to spot the AI slipping
 let freeCaptures = [];
-let lastStratSig = ""; // signature of strategies last seen while the fold was open
-let curStratSig = "";
 // Agency budget (soft): the free safety net (threats/glow) is always on; seeing
 // deeper help spends from a per-game pool. No cutoff — spend is a self-improvement
 // score, logged and summarized at game end. Costs: suggestions 2, best move 4.
 const BUDGET_TOTAL = 40;
 let budgetSpent = 0;
-let revealedSugg = false; // did we reveal the candidate list this position?
 let revealedBest = false; // did we reveal the single best move this position?
 let helpWasAvailable = false; // was move-level help on the table at all this game?
 // Takeback history: a snapshot captured just before each of YOUR moves, so Undo
@@ -1064,7 +1068,7 @@ function newGame() {
   aiGameId = newAiId(); // a fresh slot; only saved once a move is played
   aiSaved = false;
   aiTokens = AI_TOKENS_MAX; aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {}; // fresh
-  lastMoveLifeline = false; playerFollows = 0; playerTokens = PLAYER_TOKENS_MAX; playerHelpLog = [];
+  lastMoveLifeline = false; playerFollows = 0; playerHelpLog = [];
   history = []; uciHistory = []; // posCounts/repetition already reset + initial recorded above
   if (firstGame) helpDelivery = "open"; // the guided game always shows help
   helpReceived = 0; helpRevealed = helpDelivery === "open"; helpRequestPending = false;
@@ -1135,8 +1139,7 @@ function onPositionChanged() {
   threatSquares = [];
   freeCaptures = [];
   assistData = null;
-  revealedSugg = false; // deeper help must be re-revealed (and re-paid) each position
-  revealedBest = false;
+  revealedBest = false; // deeper help must be re-revealed (and re-paid) each position
   // Open Hand shows the answer unasked, so it is charged for the position the
   // moment that position arrives — that's what "counts down as it's offered" means.
   if (helpDelivery === "open" && game.status() === "ongoing" && game.sideToMove() === humanColor) {
@@ -1694,8 +1697,8 @@ function renderPlayers() {
     // handicap uses); otherwise the working estimate.
     name: "You", rating: (() => { const g = window.GBRating ? GBRating.get() : null;
       return g && g.r != null ? `${g.tier ? g.tier.ic + " " : ""}${g.r}${g.provisional ? "?" : ""}` : humanEloEl.value; })(),
-    // The pips were decorative: playerTokens counted moves you FOLLOWED and nothing
-    // was ever gated on it. They now show the real, spendable allowance.
+    // These pips were once decorative — a counter that nothing was gated on. They
+    // now show the real, spendable allowance (and the dead counter is gone).
     // pipRow drew one emoji PER TOKEN — fine for the AI's 3 lifelines, but ten of
     // them in this fixed 38px overflow:hidden row were clipped to nothing, so a
     // 10-token allowance showed no counter at all. GBHelpBudget.counter switches to
@@ -1993,7 +1996,7 @@ function undoMove() {
   game.setRatings(parseInt(humanEloEl.value, 10), parseInt(engineEloEl.value, 10));
   game.setAssistOverride(firstGame ? "guided" : aiAssistOverride);
   indepOwn = snap.indepOwn; indepFollowed = snap.indepFollowed;
-  playerFollows = snap.playerFollows; playerTokens = Math.max(0, PLAYER_TOKENS_MAX - playerFollows);
+  playerFollows = snap.playerFollows;
   if (typeof snap.helpLeft === "number") { helpLeft = snap.helpLeft; helpSpent = snap.helpSpent; helpEarned = snap.helpEarned; helpPosPaid = snap.helpPosPaid; }
   if (moveReview.length > snap.reviewLen) moveReview.length = snap.reviewLen;
   if (snap.rateLen != null && rateMoves.length > snap.rateLen) rateMoves.length = snap.rateLen;
@@ -3021,7 +3024,7 @@ function doPlay(from, to, promo, viaHelp) {
   if (prov === "own") indepOwn += 1; else if (prov === "followed") indepFollowed += 1;
   lastMoveLifeline = false; // your move — clear the AI's lifeline board badge
   if (prov === "followed") {
-    playerFollows += 1; playerTokens = Math.max(0, PLAYER_TOKENS_MAX - playerFollows);
+    playerFollows += 1;
     // Glass: taking a suggested move is help received — put it on the record.
     playerHelpLog.push({ move: Math.floor(uciHistory.length / 2) + 1, note: "played the suggested move" });
   }
