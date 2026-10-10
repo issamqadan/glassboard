@@ -103,6 +103,13 @@ function persistAiGame(over) {
     aiPersona: aiPersona,
     helpDelivery: helpDelivery,
     helpReceived: helpReceived,
+    // The allowance travels with the game. Infinity can't be JSON-encoded, so the
+    // "nothing is rationed" case is stored as a flag and rebuilt on resume.
+    helpFree: helpUnlimited,
+    helpMax: isFinite(helpMax) ? helpMax : null,
+    helpLeft: isFinite(helpLeft) ? helpLeft : null,
+    helpSpent: helpSpent, helpEarned: helpEarned, helpAsked: helpAsked, helpGranted: helpGranted,
+    tbMax: isFinite(tbMax) ? tbMax : null, tbUsed: tbUsed, tbAsked: tbAsked,
     minutes: setupMinutes,
     timedGame: timedGame,
     humanMs: humanMs,
@@ -150,6 +157,19 @@ async function resumeAiGame(id) {
   helpDelivery = rec.helpDelivery || "open";
   helpReceived = typeof rec.helpReceived === "number" ? rec.helpReceived : 0;
   helpRevealed = helpDelivery === "open"; helpRequestPending = false;
+  // THE ALLOWANCE. resetHelpBudget() was only ever called by newGame(), so a
+  // resumed game kept helpMax = 0 — which made scarceAvailable() false and left
+  // the game with no help at all. Rebuild it, then lay the saved progress back on
+  // top so a resumed game continues with what you had left rather than a fresh
+  // allowance (or none).
+  helpUnlimited = !!rec.helpFree;
+  resetHelpBudget();
+  if (typeof rec.helpMax === "number") helpMax = rec.helpMax;
+  if (typeof rec.helpLeft === "number") helpLeft = rec.helpLeft;
+  helpSpent = rec.helpSpent || 0; helpEarned = rec.helpEarned || 0;
+  helpAsked = rec.helpAsked || 0; helpGranted = rec.helpGranted || 0;
+  if (typeof rec.tbMax === "number") tbMax = rec.tbMax;
+  tbUsed = rec.tbUsed || 0; tbAsked = rec.tbAsked || 0;
   aiGameId = id; aiSaved = true;
   if (window.GBAssistUI && GBAssistUI.capTrayReset) GBAssistUI.capTrayReset();
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; aiResigned = false; aiHopeless = 0; mateKingSq = -1;
@@ -410,6 +430,10 @@ let helpPosPaid = -1;     // ply we last charged for — one charge per position
 // tells you what to play, a takeback un-plays it. Everyone gets one free; beyond
 // that the opponent decides.
 let tbMax = 0, tbUsed = 0, tbAsked = 0, tbPending = false;
+// Did the player pick "♾️ Full help"? Then nothing is rationed. Kept as its own
+// flag because the resolved rung can't tell you: "Full help" and an auto-sized
+// game against a Master both land on "guided".
+let helpUnlimited = false;
 // The opponent is rationed too (aiTokens). When it runs out and it's struggling it
 // asks YOU — the mirror of you asking it. Symmetric assistance, in the open.
 let aiAsking = false, aiAskedCount = 0, aiGrantedCount = 0, aiAskedAtIdx = -9;
@@ -426,9 +450,14 @@ function budgetUnlimited() { return !helpMax || GBHelpBudget.unlimited(helpLeft)
 // Compute the allowance from the gap between you and this opponent's level.
 function resetHelpBudget() {
   const gap = Math.abs((parseInt(humanEloEl.value, 10) || 1200) - (parseInt(engineEloEl.value, 10) || 1500));
-  helpMax = GBHelpBudget.tokensFor({ gap });
+  // "♾️ Full help" says unlimited on the tin, so it must BE unlimited — both the
+  // help and the takebacks. This read the gap only, so choosing Full help still
+  // handed you a finite allowance (10 tokens at a wide gap) and then cut you off.
+  // Allowances belong to the sized modes ("Match my opponent" / "Choose level").
+  const free = helpUnlimited;
+  helpMax = free ? Infinity : GBHelpBudget.tokensFor({ gap });
   helpLeft = helpMax; helpSpent = 0; helpEarned = 0; helpAsked = 0; helpGranted = 0; helpPosPaid = -1;
-  tbMax = GBHelpBudget.takebacksFor({ gap }); tbUsed = 0; tbAsked = 0; tbPending = false;
+  tbMax = free ? Infinity : GBHelpBudget.takebacksFor({ gap }); tbUsed = 0; tbAsked = 0; tbPending = false;
   aiAsking = false; aiAskedCount = 0; aiGrantedCount = 0; aiAskedAtIdx = -9;
 }
 // Is the powerful help available right now? Already paid for this position counts.
@@ -824,6 +853,7 @@ function startFromSetup() {
   engineEloEl.value = setupElo;
   syncAiLevel();
   aiAssistOverride = assistOverrideFor();
+  helpUnlimited = setupMode === "full";
   // Gentleman's Game starts with no help on the board (you request it); the chosen
   // level is what gets GRANTED. On Call also starts hidden. Open Hand shows it.
   helpDelivery = setupMode === "off" ? "open" : setupDelivery;
@@ -1666,8 +1696,14 @@ function renderPlayers() {
       return g && g.r != null ? `${g.tier ? g.tier.ic + " " : ""}${g.r}${g.provisional ? "?" : ""}` : humanEloEl.value; })(),
     // The pips were decorative: playerTokens counted moves you FOLLOWED and nothing
     // was ever gated on it. They now show the real, spendable allowance.
-    pips: (firstGame || aiAssistOverride === "off") ? "" : pipRow(helpLeft, helpMax),
-    pipsTitle: `help tokens — ${helpLeft} of ${helpMax} left (safety warnings are always free)`,
+    // pipRow drew one emoji PER TOKEN — fine for the AI's 3 lifelines, but ten of
+    // them in this fixed 38px overflow:hidden row were clipped to nothing, so a
+    // 10-token allowance showed no counter at all. GBHelpBudget.counter switches to
+    // a number past five, and renders ∞ when nothing is rationed.
+    pips: (firstGame || aiAssistOverride === "off") ? "" : `<span class="ps-budget">🤝 ${GBHelpBudget.counter(helpLeft, helpMax)}</span>`,
+    pipsTitle: GBHelpBudget.unlimited(helpMax)
+      ? "help is unlimited this game"
+      : `help tokens — ${helpLeft} of ${helpMax} left (safety warnings are always free)`,
     caps: capGlyphs(youCap, engineColor(), "you"), lead: youLead,
     clock: showClock ? fmtClock(humanMs) : "", low: showClock && humanMs <= 10000,
     turn: turn === humanColor, turnText: "your move",
@@ -1872,7 +1908,7 @@ function askForHelp() {
   if (helpDelivery === "gentleman") { requestHelpFromOpponent(); return; }
   if (!spendHelp("asked to see a move")) { outOfHelpMoment(); paint(); return; }
   helpRevealed = true; helpReceived += 1;
-  showMoment(`<span class="mo-ic">🔔</span><span class="mo-txt"><b>Help on call</b><small>${GBHelpBudget.pips(helpLeft, helpMax)} — ${helpLeft} left of ${helpMax}.</small></span>`, "you");
+  showMoment(`<span class="mo-ic">🔔</span><span class="mo-txt"><b>Help on call</b><small>${GBHelpBudget.unlimited(helpMax) ? "Help is unlimited this game." : `${GBHelpBudget.counter(helpLeft, helpMax)} — ${helpLeft} left of ${helpMax}.`}</small></span>`, "you");
   revealHint(); paint();
 }
 // Gentleman's Game: ask, and the opponent decides. The AI grants unless it's
@@ -1903,7 +1939,7 @@ function requestHelpFromOpponent() {
     helpGranted += 1;
     helpLeft += verdict.amount; helpMax += verdict.amount; // the allowance really grew
     playerHelpLog.push({ move: Math.floor(uciHistory.length / 2) + 1, note: `opponent granted +${verdict.amount} help` });
-    showMoment(`<span class="mo-ic">🤝</span><span class="mo-txt"><b>${escapeHtml(aiName())} granted +${verdict.amount}</b><small>“${escapeHtml(verdict.line)}” · ${GBHelpBudget.pips(helpLeft, helpMax)}</small></span>`, "you");
+    showMoment(`<span class="mo-ic">🤝</span><span class="mo-txt"><b>${escapeHtml(aiName())} granted +${verdict.amount}</b><small>“${escapeHtml(verdict.line)}” · ${GBHelpBudget.counter(helpLeft, helpMax)}</small></span>`, "you");
     if (helpDelivery !== "open" && spendHelp("help granted and taken")) { helpRevealed = true; helpReceived += 1; revealHint(); }
     paint();
   }); }, 650);
@@ -1921,6 +1957,8 @@ function outOfHelpMoment() {
 // was the agreement, the rest depend on the position, the level and the character.
 function requestTakeback() {
   if (tbPending || busy || history.length === 0) return;
+  // Unlimited means unlimited: no allowance, so nothing to ask permission for.
+  if (GBHelpBudget.unlimited(tbMax)) { tbUsed += 1; undoMove(); return; }
   if (tbUsed >= tbMax) {
     showMoment(`<span class="mo-ic">🚫</span><span class="mo-txt"><b>No takebacks left</b>` +
       `<small>You agreed on ${tbMax} for this game.</small></span>`, "you");
@@ -2186,7 +2224,7 @@ function helpBudgetHtml() {
   const refused = Math.max(0, helpAsked - helpGranted);
   const extra = refused ? ` <span class="hb-refused">${escapeHtml(aiName())} refused ${refused} time${refused === 1 ? "" : "s"}.</span>` : "";
   return `<div class="over-help"><span class="oh-ic">🤝</span><span class="oh-txt">${line}${extra}${tbLine}${aiLine}` +
-    `<small>${GBHelpBudget.pips(helpLeft, helpMax)} left at the end · safety warnings were always free</small></span></div>`;
+    `<small>${GBHelpBudget.unlimited(helpMax) ? "Nothing was rationed" : GBHelpBudget.counter(helpLeft, helpMax) + " left at the end"} · safety warnings were always free</small></span></div>`;
 }
 
 function independenceHtml() {
@@ -2468,9 +2506,12 @@ function renderStatus() {
   const ub = document.getElementById("undoBtn");
   if (ub) {
     ub.hidden = firstGame || timedGame || flagged || st !== "ongoing" || side !== humanColor || history.length === 0;
-    const left = Math.max(0, tbMax - tbUsed);
-    ub.textContent = tbPending ? "↩ Asking…" : `↩ Takeback (${left})`;
-    ub.title = left ? `Ask ${aiName()} to allow a takeback — ${left} of ${tbMax} agreed for this game` : "No takebacks left this game";
+    const free = GBHelpBudget.unlimited(tbMax);
+    const left = free ? Infinity : Math.max(0, tbMax - tbUsed);
+    ub.textContent = tbPending ? "↩ Asking…" : free ? "↩ Takeback" : `↩ Takeback (${left})`;
+    ub.title = free ? "Take back your last move — unlimited in this game"
+      : left ? `Ask ${aiName()} to allow a takeback — ${left} of ${tbMax} agreed for this game`
+      : "No takebacks left this game";
     ub.disabled = tbPending || left === 0;
   }
 }
@@ -2587,7 +2628,7 @@ function renderGlassLens() {
         ? `<button class="gl-askbtn" id="lensAsk" type="button">🪫 Out of help — ask ${escapeHtml(aiName())} for more <small>safety warnings stay on</small></button>`
       : helpDelivery === "gentleman"
         ? `<button class="gl-askbtn" id="lensAsk" type="button">🤝 Ask for the key move <small>opponent must allow</small></button>`
-        : `<button class="gl-askbtn" id="lensAsk" type="button">🔔 Show the key move <small>${GBHelpBudget.pips(helpLeft, helpMax)} ${helpLeft} of ${helpMax} left</small></button>`);
+        : `<button class="gl-askbtn" id="lensAsk" type="button">🔔 Show the key move <small>${GBHelpBudget.unlimited(helpMax) ? "unlimited" : `${GBHelpBudget.counter(helpLeft, helpMax)} left`}</small></button>`);
     const b = document.getElementById("lensAsk");
     if (b) b.onclick = out ? requestHelpFromOpponent : askForHelp;
     bindPlanRow(el); // the strategy row works here too — it isn't help-gated
@@ -3008,7 +3049,7 @@ function doPlay(from, to, promo, viaHelp) {
       if (eb.earn) {
         helpLeft += 1; helpEarned += 1;
         playerHelpLog.push({ move: Math.floor(uciHistory.length / 2) + 1, note: "earned a help token back (found the best move alone)" });
-        showMoment(`<span class="mo-ic">🎁</span><span class="mo-txt"><b>+1 help token</b><small>${eb.reason} ${GBHelpBudget.pips(helpLeft, helpMax)}</small></span>`, "you");
+        showMoment(`<span class="mo-ic">🎁</span><span class="mo-txt"><b>+1 help token</b><small>${eb.reason} ${GBHelpBudget.counter(helpLeft, helpMax)}</small></span>`, "you");
       }
     }
     const bestSan = (assistData.candidates[0] || {}).san || "";

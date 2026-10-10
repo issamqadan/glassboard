@@ -1943,3 +1943,8 @@ main.game .strat-panel { display: none; }
 .glass-lens .gl-pip.now { background: #e0be79; box-shadow: 0 0 0 2px rgba(224,190,121,0.25); }
 .glass-lens .gl-stepnow { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 0.78rem; color: #9fb0c6; }
+
+/* The help counter in the cockpit strip: a compact chip that can't be clipped. */
+.pstrip .ps-pips .ps-budget { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto;
+  font-size: 0.76rem; font-weight: 700; color: #9fb0c6; font-variant-numeric: tabular-nums;
+  padding: 2px 7px; border-radius: 999px; background: rgba(255,255,255,0.06); white-space: nowrap; }

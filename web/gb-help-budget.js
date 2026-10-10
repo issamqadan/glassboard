@@ -247,15 +247,30 @@
 
   // ---- display -------------------------------------------------------------
   function pips(left, max) {
-    if (unlimited(left)) return "∞";
+    if (unlimited(left) || unlimited(max)) return "∞";
     const n = Math.max(0, Math.min(max, left));
     return "●".repeat(n) + "○".repeat(Math.max(0, max - n));
+  }
+  // The counter, in the form that actually fits. Dots read instantly up to five;
+  // beyond that they are unreadable in a one-line strip (ten emoji in a 38px row
+  // with overflow:hidden simply vanished, which is how a 10-token allowance ended
+  // up invisible), so past five it becomes a number.
+  function counter(left, max) {
+    if (unlimited(left) || unlimited(max)) return "∞";
+    const n = Math.max(0, left);
+    if (max <= 5) return pips(n, max);
+    return n + "/" + max;
   }
   // One honest line for the result screen. Anything that didn't happen is omitted
   // rather than reported as a zero — same rule as the recap.
   function summary(o) {
     o = o || {};
-    if (unlimited(o.max)) return "Casual — help was unlimited for both of you.";
+    // Unlimited is still COUNTED — you should see what you leaned on even when
+    // nothing was rationing you.
+    if (unlimited(o.max)) {
+      if (!o.spent) return "Help was unlimited — and you never once took it.";
+      return `Help was unlimited this game; you took it <b>${o.spent}</b> time${o.spent === 1 ? "" : "s"}.`;
+    }
     const bits = [];
     bits.push(`Spent <b>${o.spent || 0}</b> of your <b>${o.max || 0}</b> help token${(o.max || 0) === 1 ? "" : "s"}`);
     if (o.earned) bits.push(`earned <b>${o.earned}</b> back by finding the best move unaided`);
@@ -266,6 +281,6 @@
 
   global.GBHelpBudget = {
     SCARCE, FREE, isScarce, isFree, tokensFor, earnBack, aiVerdict, pips, summary,
-    MAX_GRANTS, unlimited, takebacksFor, aiTakebackVerdict, FREE_TAKEBACKS, recommend,
+    MAX_GRANTS, unlimited, takebacksFor, aiTakebackVerdict, FREE_TAKEBACKS, recommend, counter,
   };
 })(typeof window !== "undefined" ? window : this);
