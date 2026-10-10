@@ -259,6 +259,10 @@ async function main() {
       : "Asked to make this a rated match — waiting for your opponent…";
     renderStatus();
   });
+  const hy = el("helpYes"), hn = el("helpNo");
+  if (hy) hy.addEventListener("click", () => { ws && ws.send(JSON.stringify({ t: "helpresponse", accept: true })); hideHelpPrompt(); });
+  if (hn) hn.addEventListener("click", () => { ws && ws.send(JSON.stringify({ t: "helpresponse", accept: false })); hideHelpPrompt(); });
+
   const sg = el("tcSign");
   if (sg) sg.addEventListener("click", () => {
     if (!ws || ws.readyState !== 1) return;
@@ -456,6 +460,19 @@ function onMessage(msg) {
       statusEl.textContent = msg.accepted ? "Takeback allowed — the move was taken back." : "Your opponent declined the takeback.";
       renderStatus();
       break;
+    case "helpask":
+      // Only the opponent's request prompts you; your own echo just confirms waiting.
+      if (msg.from && msg.from !== myColor) showHelpPrompt();
+      else statusEl.textContent = "Asked your opponent for more help — waiting…";
+      break;
+    case "helpgrant":
+      hideHelpPrompt();
+      helpAskPending = false;
+      statusEl.textContent = msg.accepted
+        ? `Your opponent allowed +${msg.amount} help.`
+        : "Your opponent refused more help — safety warnings stay on.";
+      renderStatus();
+      break;
     case "modeask":
       if (msg.from && msg.from !== myColor) showModePrompt(msg.mode);
       else statusEl.textContent = "Terms proposed — waiting for your opponent…";
@@ -473,6 +490,32 @@ function onMessage(msg) {
       break;
   }
 }
+// Your opponent has run out and is asking. Glassboard advises from the real
+// position — someone who has never played has no idea whether yes is generous or
+// suicidal — but the choice stays theirs. Same function Play-AI uses.
+function showHelpPrompt() {
+  const p = el("helpPrompt"), t = el("helpPromptText");
+  if (!p || !t) return;
+  const oppName = (myColor === "white" ? (state && state.black_name) : (state && state.white_name)) || "Your opponent";
+  // assistData's eval is from the side to move; normalise to "+ = I'm better".
+  let cp = 0;
+  try {
+    const c = (assistData && assistData.candidates) || [];
+    if (c.length && typeof c[0].score === "number") {
+      cp = (state && state.turn === myColor) ? c[0].score : -c[0].score;
+    }
+  } catch {}
+  const rec = GBHelpBudget.recommend({
+    cp, phase: "middlegame",
+    danger: !!(assistData && (assistData.mateThreat || assistData.inCheck)),
+    grantedBefore: 0,
+  });
+  t.innerHTML = `<b>${escapeHtml(oppName)} is out of help and is asking you for more.</b>` +
+    `<span class="hp-rec"><b>Glassboard:</b> ${escapeHtml(rec.line)}</span>`;
+  p.hidden = false;
+}
+function hideHelpPrompt() { const p = el("helpPrompt"); if (p) p.hidden = true; }
+
 let modePending = false;
 function showModePrompt(mode) {
   const p = el("modePrompt"), t = el("modePromptText");
@@ -523,6 +566,14 @@ function renderTable() {
   const c = GBTerms.contract(w, bl, state.mode, 0);
   el("tcHead").textContent = c.headline;
   el("tcDetail").textContent = c.detail;
+  // The allowances are part of what you're signing, so they're on the contract.
+  const hw = state.help_max_white, tw = state.tb_max_white;
+  if (hw != null) {
+    const txt = hw < 0
+      ? "Casual: help and takebacks are unlimited for both of you."
+      : `Each of you gets ${hw} help token${hw === 1 ? "" : "s"} and ${tw} takeback${tw === 1 ? "" : "s"}. Safety warnings and the strategy layer are always free. Run out and you can ask your opponent for more.`;
+    el("tcDetail").textContent = c.detail + " " + txt;
+  }
   [["tcSeatW", "white", w, state.ready_white], ["tcSeatB", "black", bl, state.ready_black]].forEach(([id, col, p, signed]) => {
     const seat = el(id);
     if (!seat) return;
@@ -1044,19 +1095,66 @@ function agencySummaryHtml() {
   return `<div class="over-help">🪙 ${body}</div>`;
 }
 // Spend from the agency budget when the player reveals deeper help.
+// ---- THE AGREED ALLOWANCE (server-owned) ----------------------------------
+// The server sizes and counts these; this file only displays them and asks. A
+// budget the browser could edit wouldn't be an agreement, and two clients deriving
+// their own numbers would disagree about the contract they both signed.
+//
+// `budgetSpent` below is kept, but demoted to what it always honestly was: a
+// measure of how much you LEANED on help, for the end-of-game read. It never
+// gated anything — the bar could sail past BUDGET_TOTAL with no effect — so the
+// real allowance is what the bar now shows.
+function myAl() {
+  if (!state || !myColor) return null;
+  const w = myColor === "white";
+  return {
+    left: w ? state.help_white : state.help_black,
+    max: w ? state.help_max_white : state.help_max_black,
+    tbLeft: w ? state.tb_white : state.tb_black,
+    tbMax: w ? state.tb_max_white : state.tb_max_black,
+  };
+}
+const alUnlimited = (a) => !a || a.max == null || a.max < 0;
+// Is the powerful help available? Unlimited, or something left, or already paid
+// for this position (so looking twice is free — the server agrees).
+function scarceOk() {
+  const a = myAl();
+  if (!a || alUnlimited(a)) return true;
+  return revealedBest || revealedSugg || (a.left || 0) > 0;
+}
+// A stable integer for "which position is this", so the server can charge once.
+function plyFromFen(fen) {
+  const p = String(fen || "").split(" ");
+  const full = parseInt(p[5], 10) || 1;
+  return (full - 1) * 2 + (p[1] === "b" ? 1 : 0);
+}
+function claimHelpToken() {
+  if (ws && ws.readyState === 1 && state) ws.send(JSON.stringify({ t: "helpspend", ply: plyFromFen(state.fen) }));
+}
+function askOpponentForHelp() {
+  if (!ws || ws.readyState !== 1 || helpAskPending) return;
+  helpAskPending = true;
+  ws.send(JSON.stringify({ t: "helprequest" }));
+  statusEl.textContent = "Asked your opponent for more help — waiting…";
+  renderStatus();
+}
+let helpAskPending = false;
+
 function spend(n) { budgetSpent += n; renderBudget(); }
 function renderBudget() {
   const elb = document.getElementById("budget");
   if (!elb) return;
-  const on = assistData && !casualMode() && budgetSpent > 0 && (assistData.candidates || []).length > 0;
+  const a = myAl();
+  const on = !!(a && !alUnlimited(a) && assistData && (assistData.candidates || []).length > 0);
   elb.hidden = !on;
   if (!on) return;
-  const pct = Math.min(100, Math.round((budgetSpent / BUDGET_TOTAL) * 100));
-  elb.classList.toggle("over", budgetSpent > BUDGET_TOTAL);
+  const left = Math.max(0, a.left || 0), max = a.max || 0;
+  const pct = max ? Math.min(100, Math.round(((max - left) / max) * 100)) : 0;
+  elb.classList.toggle("over", left === 0);
   elb.innerHTML =
-    `<span class="bg-lab">🪙 Help used</span>` +
+    `<span class="bg-lab">🤝 Help left</span>` +
     `<span class="bg-bar"><span class="bg-fill" style="width:${pct}%"></span></span>` +
-    `<span class="bg-num">${budgetSpent} / ${BUDGET_TOTAL}</span>`;
+    `<span class="bg-num">${GBHelpBudget.counter(left, max)}</span>`;
 }
 
 // The coach: one prominent, concrete piece of advice under the board — the
@@ -1152,9 +1250,17 @@ function renderPlayers() {
     extra: oppSeated ? rivalryChip(oppName) : "", // keep the head-to-head record visible
     turn: turn && turn !== myColor, turnText: "their move",
   });
+  const al = myAl();
+  const budgetChip = (al && al.max) ? `<span class="ps-budget">🤝 ${GBHelpBudget.counter(Math.max(0, al.left || 0), al.max)}</span>` : "";
   const you = S.playerStripHTML({
     icon: `<span class="dot ${myColor}"></span>👤`,
     name: youName, rating: String(youElo || ""),
+    // Your agreed allowance, shown exactly as in Play-AI (dots to five, then a
+    // number, ∞ when nothing is rationed).
+    pips: budgetChip,
+    pipsTitle: al && !alUnlimited(al)
+      ? `help tokens — ${Math.max(0, al.left || 0)} of ${al.max} left (safety warnings are always free)`
+      : "help is unlimited in this game",
     caps: capGlyphsMP(youCap, "you"), lead: youLead,
     turn: turn === myColor, turnText: "your move",
   });
@@ -1301,7 +1407,17 @@ function renderStatus() {
   if (rb) rb.hidden = !(myColor && state.status === "ongoing" && !over);
   // Takeback: casual only, once a move has been played, while the game is live.
   const ub = el("undoBtn");
-  if (ub) ub.hidden = undoPending || !(casualMode() && myColor && state.status === "ongoing" && !over && state.last);
+  // Takebacks are now an AGREED allowance, so a match has them too — not just
+  // casual. The server refuses once the agreement is used up.
+  if (ub) {
+    const a = myAl();
+    const tbLeft = a ? (alUnlimited(a) ? Infinity : Math.max(0, a.tbLeft || 0)) : 0;
+    ub.hidden = undoPending || !(myColor && state.status === "ongoing" && !over && state.last && tbLeft > 0);
+    ub.textContent = isFinite(tbLeft) ? `↩ Takeback (${tbLeft})` : "↩ Takeback";
+    ub.title = isFinite(tbLeft)
+      ? `Ask your opponent to allow a takeback — ${tbLeft} of ${a.tbMax} agreed for this game`
+      : "Ask your opponent to allow a takeback";
+  }
   // The terms button offers the OTHER mode, and only while the game is live.
   const mbtn = el("modeBtn");
   if (mbtn) {
@@ -1423,7 +1539,10 @@ function renderGlassLens() {
     el.className = "glass-lens ask";
     el.innerHTML = idRow + `<button class="gl-askbtn" id="mpLensAsk" type="button">💡 Show the key move <small>−${COST_BEST} from your help budget</small></button>`;
     const b = el2("mpLensAsk");
-    if (b) b.onclick = () => { spend(COST_BEST); revealedBest = true; paint(); };
+    if (b) b.onclick = () => {
+      if (!scarceOk()) { askOpponentForHelp(); return; }
+      claimHelpToken(); spend(COST_BEST); revealedBest = true; paint();
+    };
     return;
   }
   const sr = a.strategy;
@@ -1520,7 +1639,10 @@ function renderAssist() {
     const btn = document.createElement("button");
     btn.className = "reveal-btn";
     btn.textContent = `💡 Show ${a.candidates.length} suggested move${a.candidates.length > 1 ? "s" : ""} (−${COST_SUGG})`;
-    btn.addEventListener("click", () => { spend(COST_SUGG); revealedSugg = true; renderAssist(); });
+    btn.addEventListener("click", () => {
+      if (!scarceOk()) { askOpponentForHelp(); return; }
+      claimHelpToken(); spend(COST_SUGG); revealedSugg = true; renderAssist();
+    });
     assistEl.appendChild(btn);
     const note = document.createElement("div");
     note.className = "reveal-note";

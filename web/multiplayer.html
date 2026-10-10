@@ -26,6 +26,13 @@
         <span id="undoPromptText">Your opponent asks to take back a move.</span>
         <span class="up-actions"><button id="undoYes" class="gb-btn">Allow ↩</button><button id="undoNo" class="gb-btn danger">Decline</button></span>
       </div>
+      <!-- Your opponent is out of help and is asking you. Glassboard reads the
+           position and advises; you still decide. -->
+      <div id="helpPrompt" class="undo-prompt" hidden>
+        <span id="helpPromptText"></span>
+        <span class="up-actions"><button id="helpYes" class="gb-btn">Allow +2</button><button id="helpNo" class="gb-btn danger">Refuse</button></span>
+      </div>
+
       <!-- Changing the terms needs BOTH players. Same shape as the takeback prompt:
            one side asks, the other decides, and the glass box records it. -->
       <div id="modePrompt" class="undo-prompt" hidden>

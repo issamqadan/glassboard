@@ -73,6 +73,74 @@ struct RoomState {
     /// one that doesn't can simply be re-signed after a restart.
     ready_white: bool,
     ready_black: bool,
+    /// THE AGREED ALLOWANCES, one set per side. Authoritative here rather than in
+    /// the browser: an allowance a client could edit is not an agreement. Play-AI
+    /// computes its own because it has no opponent to protect, but in a human game
+    /// the numbers are part of a signed contract, so the server sizes them when the
+    /// table closes and the clients only ever DISPLAY what it sends.
+    /// -1 means unlimited (casual).
+    white: Allowance,
+    black: Allowance,
+}
+
+/// Mirrors web/gb-help-budget.js — tokensFor() / takebacksFor(). Kept in step by
+/// hand because the server must not trust the client for either number; the client
+/// renders these values and never derives its own for a human game.
+#[derive(Clone)]
+struct Allowance {
+    help_max: i32,
+    help_left: i32,
+    help_spent: i32,
+    help_asked: i32,
+    help_granted: i32,
+    tb_max: i32,
+    tb_used: i32,
+    /// Ply already charged for, so looking twice at one position is free.
+    charged_ply: i32,
+}
+
+fn help_tokens_for(gap: i32, casual: bool) -> i32 {
+    if casual {
+        return -1;
+    }
+    let g = gap.abs();
+    if g < 100 { 2 } else if g < 300 { 3 } else if g < 500 { 4 } else if g < 800 { 6 } else if g < 1200 { 8 } else { 10 }
+}
+fn takebacks_for(gap: i32, casual: bool) -> i32 {
+    if casual {
+        return -1;
+    }
+    let g = gap.abs();
+    // Everyone gets one free; the gap adds up to two more.
+    1 + if g >= 800 { 2 } else if g >= 300 { 1 } else { 0 }
+}
+/// Apply a freshly sized ceiling to an allowance already in use, keeping what has
+/// been spent. A free function so the two sides can be updated one at a time —
+/// reading `self.white.help_spent` while holding `&mut self.white` doesn't borrow-check.
+fn resize(al: &mut Allowance, gap: i32, casual: bool) {
+    let fresh = Allowance::sized(gap, casual);
+    al.help_max = fresh.help_max;
+    al.tb_max = fresh.tb_max;
+    al.help_left = if fresh.help_max < 0 { -1 } else { (fresh.help_max - al.help_spent).max(0) };
+}
+
+/// Hand-written rather than derived because `charged_ply` must start at -1, not 0.
+/// Derived Default gave it 0, which reads as "ply 0 is already paid for" — so the
+/// opening position of every human game handed out one free look.
+impl Default for Allowance {
+    fn default() -> Self {
+        Allowance { help_max: 0, help_left: 0, help_spent: 0, help_asked: 0, help_granted: 0, tb_max: 0, tb_used: 0, charged_ply: -1 }
+    }
+}
+
+impl Allowance {
+    fn sized(gap: i32, casual: bool) -> Self {
+        let h = help_tokens_for(gap, casual);
+        let t = takebacks_for(gap, casual);
+        Allowance { help_max: h, help_left: h, help_spent: 0, help_asked: 0, help_granted: 0, tb_max: t, tb_used: 0, charged_ply: -1 }
+    }
+    fn unlimited_help(&self) -> bool { self.help_max < 0 }
+    fn unlimited_tb(&self) -> bool { self.tb_max < 0 }
 }
 type Rooms = Arc<Mutex<HashMap<String, RoomState>>>;
 
@@ -401,6 +469,9 @@ async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
             pending_mode: None,
             ready_white: false,
             ready_black: false,
+            // Rebuilt below from the ratings on the row — see size_allowances().
+            white: Allowance::default(),
+            black: Allowance::default(),
         };
         out.push((id, rs));
     }
@@ -532,6 +603,18 @@ impl FromRef<AppState> for Store {
 static NEXT_ANON: AtomicU64 = AtomicU64::new(1);
 
 impl RoomState {
+    /// (Re)size both allowances from the seated players' ratings and the mode. Run
+    /// when the contract is signed and whenever the terms change, so the numbers
+    /// always match what both players agreed to. Never shrinks what's already been
+    /// spent — only the ceiling and the remainder move.
+    fn size_allowances(&mut self) {
+        let casual = self.mode == "casual";
+        let wr = self.seats.host.as_ref().map(|p| p.rating).unwrap_or(1200);
+        let br = self.seats.guest.as_ref().map(|p| p.rating).unwrap_or(1200);
+        let gap = wr - br;
+        resize(&mut self.white, gap, casual);
+        resize(&mut self.black, gap, casual);
+    }
     /// Are we still at the table? True before the first move until BOTH players
     /// have signed.
     ///
@@ -561,6 +644,8 @@ fn new_room_state() -> RoomState {
         pending_mode: None,
         ready_white: false,
         ready_black: false,
+        white: Allowance::default(),
+        black: Allowance::default(),
     }
 }
 
@@ -603,6 +688,18 @@ enum ClientMsg {
         #[serde(default)]
         ready: bool,
     },
+    /// Claim one help token for the position at `ply`. Charged once per ply, so
+    /// looking twice at the same move is free.
+    HelpSpend {
+        #[serde(default)]
+        ply: i32,
+    },
+    /// Out of help: ask the opponent for more. Relayed, never self-granted.
+    HelpRequest,
+    /// The opponent's answer to a help request.
+    HelpResponse {
+        accept: bool,
+    },
 }
 
 #[derive(Serialize)]
@@ -633,6 +730,16 @@ enum ServerMsg {
         /// Who has signed.
         ready_white: bool,
         ready_black: bool,
+        /// The agreed allowances. -1 = unlimited. The clients DISPLAY these; they
+        /// never derive their own, so the two boards cannot disagree about them.
+        help_white: i32,
+        help_black: i32,
+        help_max_white: i32,
+        help_max_black: i32,
+        tb_white: i32,
+        tb_black: i32,
+        tb_max_white: i32,
+        tb_max_black: i32,
     },
     Glass {
         side: String,
@@ -646,6 +753,16 @@ enum ServerMsg {
     Undo {
         accepted: bool,
         by: String,
+    },
+    /// `from` ("white"|"black") is out of help and asks the opponent for more.
+    HelpAsk {
+        from: String,
+    },
+    /// The answer. On yes, State carries the larger allowance.
+    HelpGrant {
+        accepted: bool,
+        by: String,
+        amount: i32,
     },
     /// `from` ("white"|"black") proposes switching the terms to `mode`.
     ModeAsk {
@@ -1484,7 +1601,13 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                         Ok(ClientMsg::UndoRequest) => {
                             let mut map = rooms.lock().await;
                             if let Some(rs) = map.get_mut(&room_code) {
-                                if rs.mode == "casual" && !rs.room.history.is_empty()
+                                // Takebacks were unlimited in casual and unavailable
+                                // otherwise. They are now an AGREED allowance, so a
+                                // match gets them too — and casual (unlimited) still
+                                // does. Refused once the agreement is used up.
+                                let al = if color == Color::White { &rs.white } else { &rs.black };
+                                let have = al.unlimited_tb() || al.tb_used < al.tb_max;
+                                if have && !rs.room.history.is_empty()
                                     && rs.room.resigned.is_none() && rs.pending_undo.is_none()
                                 {
                                     rs.pending_undo = Some(color);
@@ -1505,6 +1628,10 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                                                 let n = if rs.room.board.side == req { 2 } else { 1 };
                                                 let n = n.min(rs.room.history.len());
                                                 let ok = rs.room.undo(n);
+                                                if ok {
+                                                    let al = if req == Color::White { &mut rs.white } else { &mut rs.black };
+                                                    al.tb_used += 1;
+                                                }
                                                 let _ = rs.tx.send(json(&ServerMsg::Undo { accepted: true, by: color_str.to_string() }));
                                                 ok
                                             } else {
@@ -1535,6 +1662,8 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                                         }
                                         let both = rs.ready_white && rs.ready_black;
                                         if both && rs.room.last_uci.is_none() {
+                                            // The signed contract includes the allowances.
+                                            rs.size_allowances();
                                             let note = if rs.mode == "casual" {
                                                 "Both players signed the terms: CASUAL — full assistance for both sides, unrated."
                                             } else {
@@ -1555,6 +1684,71 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                             if both {
                                 persist_game(&store, &rooms, &room_code).await;
                             }
+                        }
+                        // Charge one help token for this position. Once per ply per
+                        // side, so looking twice at the same move is free. Refused
+                        // silently when the allowance is gone — the client already
+                        // knows, because it renders the server's own numbers.
+                        Ok(ClientMsg::HelpSpend { ply }) => {
+                            {
+                                let mut map = rooms.lock().await;
+                                if let Some(rs) = map.get_mut(&room_code) {
+                                    let al = if color == Color::White { &mut rs.white } else { &mut rs.black };
+                                    let unlimited = al.unlimited_help();
+                                    if al.charged_ply != ply && (unlimited || al.help_left > 0) {
+                                        al.charged_ply = ply;
+                                        al.help_spent += 1;
+                                        if !unlimited {
+                                            al.help_left = (al.help_left - 1).max(0);
+                                        }
+                                    }
+                                }
+                            }
+                            broadcast_state(&rooms, &room_code).await;
+                        }
+                        // Out of help: the opponent decides, exactly like a takeback.
+                        Ok(ClientMsg::HelpRequest) => {
+                            let mut map = rooms.lock().await;
+                            if let Some(rs) = map.get_mut(&room_code) {
+                                if rs.room.resigned.is_none() {
+                                    let al = if color == Color::White { &mut rs.white } else { &mut rs.black };
+                                    al.help_asked += 1;
+                                    let _ = rs.tx.send(json(&ServerMsg::HelpAsk { from: color_str.to_string() }));
+                                }
+                            }
+                        }
+                        // The answer. A grant is +2 — enough to change the game, not
+                        // enough to end the rationing. Logged either way: a refusal is
+                        // part of the record, not a private decision.
+                        Ok(ClientMsg::HelpResponse { accept }) => {
+                            {
+                                let mut map = rooms.lock().await;
+                                if let Some(rs) = map.get_mut(&room_code) {
+                                    // The ASKER is the other colour — you answer for them.
+                                    let asker_white = color != Color::White;
+                                    let amount = if accept { 2 } else { 0 };
+                                    {
+                                        let al = if asker_white { &mut rs.white } else { &mut rs.black };
+                                        if accept && !al.unlimited_help() {
+                                            al.help_max += amount;
+                                            al.help_left += amount;
+                                            al.help_granted += 1;
+                                        }
+                                    }
+                                    let note = if accept {
+                                        format!("{} granted {} more help tokens.", color_str, amount)
+                                    } else {
+                                        format!("{} refused the request for more help.", color_str)
+                                    };
+                                    rs.room.push_glass(color_str, &note);
+                                    let _ = rs.tx.send(json(&ServerMsg::Glass { side: color_str.to_string(), summary: note }));
+                                    let _ = rs.tx.send(json(&ServerMsg::HelpGrant {
+                                        accepted: accept, by: color_str.to_string(), amount,
+                                    }));
+                                }
+                            }
+                            broadcast_state(&rooms, &room_code).await;
+                            persist_game(&store, &rooms, &room_code).await;
                         }
                         // Ask to change the terms mid-game. Relayed, never applied —
                         // only the opponent's yes can change them.
@@ -1582,6 +1776,7 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                                             rs.pending_mode = None;
                                             if accept {
                                                 rs.mode = want.clone();
+                                                rs.size_allowances(); // casual is unlimited; a match is rationed
                                                 // The contract changed, so any
                                                 // signature on the old one is void:
                                                 // nobody agreed to THESE terms yet.
@@ -1659,6 +1854,14 @@ async fn broadcast_state(rooms: &Rooms, code: &str) {
             at_table: rs.table_open(),
             ready_white: rs.ready_white,
             ready_black: rs.ready_black,
+            help_white: rs.white.help_left,
+            help_black: rs.black.help_left,
+            help_max_white: rs.white.help_max,
+            help_max_black: rs.black.help_max,
+            tb_white: (rs.white.tb_max - rs.white.tb_used).max(0),
+            tb_black: (rs.black.tb_max - rs.black.tb_used).max(0),
+            tb_max_white: rs.white.tb_max,
+            tb_max_black: rs.black.tb_max,
         };
         let _ = rs.tx.send(json(&msg));
     }

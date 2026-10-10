@@ -1948,3 +1948,7 @@ main.game .strat-panel { display: none; }
 .pstrip .ps-pips .ps-budget { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto;
   font-size: 0.76rem; font-weight: 700; color: #9fb0c6; font-variant-numeric: tabular-nums;
   padding: 2px 7px; border-radius: 999px; background: rgba(255,255,255,0.06); white-space: nowrap; }
+
+/* Glassboard's advice inside the help request prompt. */
+.undo-prompt .hp-rec { display: block; margin-top: 5px; font-size: 0.8rem; line-height: 1.4; color: #9fb0c6;
+  padding-left: 9px; border-left: 2px solid rgba(126,224,214,0.5); }

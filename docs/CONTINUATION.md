@@ -5,7 +5,7 @@
 > travel with a `git clone`. This file + `docs/agent-memory/` carry everything a fresh
 > Claude session needs to continue exactly where the last one left off.
 >
-> **Last updated:** 2026-10-10.
+> **Last updated:** 2026-10-11.
 
 ## 0. First actions for a new session
 1. Read **`CLAUDE.md`** (operating agreement) and **`docs/VISION.md`** (the anchor).
