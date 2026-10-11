@@ -153,9 +153,13 @@
       bits.push(`<span class="gs-plan" title="${esc(top.idea || "")}">🧭 ${esc(top.name)}</span>`);
     }
     if (sr && sr.opponent) bits.push(`<span class="gs-opp" title="${esc(sr.opponent)}">🎯 ${esc(sr.opponent)}</span>`);
-    if (!bits.length) return "";
+    // The configured time control, shown INSIDE this existing fixed-height row.
+    // Deliberately not its own row: anything above the board that can appear or
+    // change height moves the board, which board sovereignty forbids.
+    const tc = ctx.timeControl ? `<span class="gs-tc" title="${esc(ctx.timeControlTitle || "")}">⏱ ${esc(ctx.timeControl)}</span>` : "";
+    if (!bits.length && !tc) return "";
     const phase = sr && sr.phase ? `<span class="gs-phase">${esc(sr.phase)}</span>` : "";
-    return `<div class="gs-row">${phase}${bits.join("")}<span class="gs-more">Plans ›</span></div>`;
+    return `<div class="gs-row">${phase}${tc}${bits.join("")}<span class="gs-more">Plans ›</span></div>`;
   }
 
   // ---- The PRIORITY LADDER (what the Glass Lens headlines this turn) -----------

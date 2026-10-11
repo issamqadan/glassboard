@@ -1952,3 +1952,26 @@ main.game .strat-panel { display: none; }
 /* Glassboard's advice inside the help request prompt. */
 .undo-prompt .hp-rec { display: block; margin-top: 5px; font-size: 0.8rem; line-height: 1.4; color: #9fb0c6;
   padding-left: 9px; border-left: 2px solid rgba(126,224,214,0.5); }
+
+
+/* ---- time-control picker (setup card only; the card already scrolls, so a long
+   preset list can never push the board) ---------------------------------------- */
+.tc-groups { display: flex; flex-direction: column; gap: 9px; }
+.tc-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tc-glabel { flex: 0 0 76px; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.07em;
+  text-transform: uppercase; color: #8ea0b8; }
+.tc-preset { border: 1px solid var(--line-2, rgba(255,255,255,0.14)); background: rgba(255,255,255,0.05);
+  color: #c3d0e6; border-radius: 9px; padding: 8px 12px; font-size: 0.86rem; font-weight: 700;
+  cursor: pointer; font-variant-numeric: tabular-nums; transition: all .14s; }
+.tc-preset:hover { color: #eef4fb; border-color: #5cc9ec; }
+.tc-preset.on { color: #04222d; background: linear-gradient(140deg, #5cc9ec, #3a97bd); border-color: transparent; }
+.tc-preset.noassist::after { content: " ·"; opacity: 0.6; }
+.tc-custom { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+.tc-custom label { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; color: #8ea0b8; }
+.tc-custom input { width: 92px; padding: 7px 9px; border-radius: 8px; background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14); color: #eef4fb; font-variant-numeric: tabular-nums; }
+.tc-note { margin-top: 9px; font-size: 0.8rem; line-height: 1.45; color: #9fb0c6; }
+.tc-note b { color: #e0be79; }
+.gs-row .gs-tc { flex: 0 0 auto; font-size: 0.74rem; font-weight: 700; color: #8ea0b8;
+  font-variant-numeric: tabular-nums; padding: 2px 7px; border-radius: 999px;
+  background: rgba(255,255,255,0.06); white-space: nowrap; }

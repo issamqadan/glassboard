@@ -254,6 +254,16 @@ impl Game {
         (strength_for_elo(elo).0 + 2).min(5).max(4)
     }
 
+    /// Can this side checkmate by ANY series of legal moves? Needed to adjudicate
+    /// flag-fall under FIDE 6.9: running out of time is a loss UNLESS the opponent
+    /// cannot possibly mate, in which case it is a draw. Shares the engine crate's
+    /// `can_mate` with the server, so a timed Play-AI game and a timed human game
+    /// reach the same verdict in the same position.
+    #[wasm_bindgen(js_name = canMate)]
+    pub fn can_mate_side(&self, white: bool) -> bool {
+        engine::can_mate(&self.board, if white { Color::White } else { Color::Black })
+    }
+
     /// "ongoing" | "checkmate" | "stalemate" | "fifty-move".
     pub fn status(&self) -> String {
         if generate_legal(&self.board).is_empty() {

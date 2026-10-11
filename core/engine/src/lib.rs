@@ -18,7 +18,7 @@ pub mod san;
 pub mod search;
 
 pub use board::*;
-pub use eval::{eval, material};
+pub use eval::{can_mate, eval, material};
 pub use fen::*;
 pub use movegen::{generate_legal, generate_pseudo, is_attacked, king_square};
 pub use perft::{perft, perft_divide};

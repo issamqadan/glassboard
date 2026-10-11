@@ -80,12 +80,16 @@
           </div>
         </div>
         <div class="setup-section">
-          <div class="setup-label">Time</div>
-          <div class="color-choice" id="timeChoice">
-            <button class="cchoice" data-min="0" type="button"><span class="cc-ic">∞</span><b>Untimed</b><small>no clock</small></button>
-            <button class="cchoice" data-min="5" type="button"><span class="cc-ic">⚡</span><b>5 min</b><small>blitz</small></button>
-            <button class="cchoice" data-min="10" type="button"><span class="cc-ic">🕐</span><b>10 min</b><small>rapid</small></button>
+          <div class="setup-label">Time control</div>
+          <!-- Grouped presets in the notation players already know: initial minutes
+               + increment seconds. Rendered from GBClock.CATEGORIES so the picker
+               and the clock can never disagree about what a preset means. -->
+          <div class="tc-groups" id="timeChoice"></div>
+          <div class="tc-custom" id="tcCustom" hidden>
+            <label>Minutes <input id="tcMin" type="number" min="1" max="180" value="10"></label>
+            <label>Increment (s) <input id="tcInc" type="number" min="0" max="180" value="0"></label>
           </div>
+          <div class="tc-note" id="tcNote"></div>
         </div>
         <div class="setup-section">
           <div class="setup-label">Your assistance</div>
@@ -279,6 +283,7 @@
     <script src="./pieceinfo.js"></script>
     <script src="./gb-ai-cast.js"></script>
     <script src="./strategies.js"></script>
+    <script src="./gb-clock.js"></script>
     <script src="./gb-terms.js"></script>
     <script src="./gb-resign.js"></script>
     <script src="./gb-help-budget.js"></script>

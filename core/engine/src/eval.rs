@@ -21,6 +21,39 @@ pub fn material(kind: PieceKind) -> i32 {
 /// Full static evaluation of `b`, side-to-move relative. Material + piece-square
 /// tables, plus cheap, high-value positional terms (bishop pair, pawn structure,
 /// rook files, king shield, tempo) so play is genuinely better at the same depth.
+/// Can `side` deliver checkmate by ANY series of legal moves — not "can they force
+/// it", but "is a mate position reachable at all, even with the opponent helping"?
+///
+/// This is the test FIDE 6.9 needs: when a player's clock runs out they lose,
+/// UNLESS their opponent cannot possibly checkmate, in which case the game is a
+/// draw. Flagging against a bare king is a draw, not a win.
+///
+/// A pawn, rook or queen always suffices (a pawn promotes). Two or more minors
+/// suffice — K+N+N and K+B+B can mate with the opponent's cooperation, which is
+/// what "any series of legal moves" permits. A lone king, K+N or K+B cannot mate
+/// no matter what the opponent does.
+///
+/// Lives in the engine crate rather than the WASM bindings because the SERVER
+/// adjudicates flag-fall for human games and must reach the same verdict. The
+/// existing `insufficient_material` in core/bindings is a different, both-sides
+/// test (an immediate draw by material) and is left alone.
+pub fn can_mate(b: &Board, side: Color) -> bool {
+    let mut minors = 0i32;
+    for s in 0..64u8 {
+        if let Some(p) = b.squares[s as usize] {
+            if p.color != side {
+                continue;
+            }
+            match p.kind {
+                PieceKind::King => {}
+                PieceKind::Knight | PieceKind::Bishop => minors += 1,
+                _ => return true, // pawn, rook or queen → mate is reachable
+            }
+        }
+    }
+    minors >= 2
+}
+
 pub fn eval(b: &Board) -> i32 {
     let mut score = 0i32; // from White's perspective first
 

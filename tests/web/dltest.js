@@ -4,6 +4,14 @@ var uciHistory = hist, makeOk = true, side = "black", status = "ongoing", legal 
 var busy = false, flagged = false, resigned = false, aiResigned = false, repetitionDraw = false;
 var replies = 0;
 function recordPosition() {}
+// applyEngineMove now credits the engine's Fischer increment on a COMPLETED move,
+// so the test supplies a real clock and asserts that too — an engine move must be
+// charged and incremented exactly like a human one.
+// gb-clock.js attaches to the global object (there is no `window` in jsc), so
+// GBClock is simply in scope after loading.
+load(SRC + 'gb-clock.js');
+var timedGame = true;
+var clock = GBClock.create(GBClock.control(5, 3), "black");
 function engineReply() { replies++; }
 function engineColor() { return "black"; }
 function uciToSquares(u) {
@@ -25,7 +33,19 @@ makeOk = false;
 print("  board REJECTS move    -> " + applyEngineMove("e2e4") + "   (makeMove's result used to be discarded)");
 makeOk = true;
 var before = hist.length;
+var tBefore = clock.blackMs;
 print("  legal move            -> " + applyEngineMove("e2e4") + "   (history +" + (hist.length - before) + ")");
+print("  engine got its +3s    : " + (clock.blackMs >= tBefore) + "  (now " + GBClock.fmt(clock.blackMs) + ")");
+print("  clock passed to you   : " + (clock.active === "white"));
+if (clock.active !== "white") print("  FAIL the engine's move did not hand the clock over");
+// A REJECTED move must not touch the clock at all.
+clock = GBClock.create(GBClock.control(5, 3), "black");
+makeOk = false;
+var w0 = clock.whiteMs, b0 = clock.blackMs, a0 = clock.active;
+applyEngineMove("e2e4");
+makeOk = true;
+print("  rejected move, clock  : untouched=" + (clock.whiteMs === w0 && clock.blackMs === b0 && clock.active === a0));
+if (!(clock.whiteMs === w0 && clock.blackMs === b0 && clock.active === a0)) print("  FAIL a rejected move changed the clock");
 
 print("\n--- anyLegalMove: the last resort ---");
 legal = {};

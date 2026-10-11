@@ -111,9 +111,10 @@ function persistAiGame(over) {
     helpSpent: helpSpent, helpEarned: helpEarned, helpAsked: helpAsked, helpGranted: helpGranted,
     tbMax: isFinite(tbMax) ? tbMax : null, tbUsed: tbUsed, tbAsked: tbAsked,
     minutes: setupMinutes,
+    increment: setupIncrement,
     timedGame: timedGame,
-    humanMs: humanMs,
-    engineMs: engineMs,
+    humanMs: clockMs("human"),
+    engineMs: clockMs("engine"),
     created: prev ? prev.created : Date.now(),
     updated: Date.now(),
   };
@@ -146,9 +147,13 @@ async function resumeAiGame(id) {
   // existed still gets ONE stable opponent, and the lobby agrees with us.
   aiPersona = window.GBAiCast.forGame(Object.assign({}, rec, { aiStyle: aiStyle }));
   setupMinutes = typeof rec.minutes === "number" ? rec.minutes : 0;
+  setupIncrement = typeof rec.increment === "number" ? rec.increment : 0;
   timedGame = !!rec.timedGame;
-  humanMs = typeof rec.humanMs === "number" ? rec.humanMs : setupMinutes * 60000;
-  engineMs = typeof rec.engineMs === "number" ? rec.engineMs : setupMinutes * 60000;
+  // Rebuild the clock and restore what each side had left. A resumed game must not
+  // hand anybody a fresh allocation of time.
+  clock = GBClock.create(setupControl(), game.sideToMove());
+  if (typeof rec.humanMs === "number") clock[humanColor === "white" ? "whiteMs" : "blackMs"] = rec.humanMs;
+  if (typeof rec.engineMs === "number") clock[engineColor() === "white" ? "whiteMs" : "blackMs"] = rec.engineMs;
   flagged = false; flagLoser = "";
   aiTokens = typeof rec.aiTokens === "number" ? rec.aiTokens : AI_TOKENS_MAX;
   aiLifelineLog = []; aiLastLifelineIdx = -9; momentSeen = {};
@@ -357,7 +362,7 @@ function rememberSetup() {
   try {
     localStorage.setItem(SETUP_KEY, JSON.stringify({
       elo: setupElo, mode: setupMode, rung: setupRung, color: setupColor,
-      minutes: setupMinutes, delivery: setupDelivery, style: setupStyle,
+      minutes: setupMinutes, increment: setupIncrement, delivery: setupDelivery, style: setupStyle,
     }));
   } catch {}
 }
@@ -365,7 +370,11 @@ let setupElo = typeof savedSetup.elo === "number" ? savedSetup.elo : 1500;   // 
 let setupMode = savedSetup.mode || "auto";        // "auto" | "off" | "full" | "custom"
 let setupRung = savedSetup.rung || "suggestion";  // chosen rung when custom
 let setupColor = savedSetup.color || "white";     // "white" | "black" | "random" — the side YOU play
-let setupMinutes = typeof savedSetup.minutes === "number" ? savedSetup.minutes : 0; // 0 = untimed
+let setupMinutes = typeof savedSetup.minutes === "number" ? savedSetup.minutes : GBClock.DEFAULT.minutes;
+// Fischer increment, in seconds. New here: the clock had a starting figure and no
+// per-move addition, so the whole "10+5" notation had nothing behind it.
+let setupIncrement = typeof savedSetup.increment === "number" ? savedSetup.increment : GBClock.DEFAULT.increment;
+const setupControl = () => GBClock.control(setupMinutes, setupIncrement);
 let setupDelivery = savedSetup.delivery || "open"; // how help arrives: "open" | "oncall" | "gentleman"
 let aiAssistOverride = "guided"; // the override applied to the live game
 // ASSISTANCE SIZED TO THE OPPONENT. Human games have always derived the rung from
@@ -391,7 +400,11 @@ function autoRungForOpponent() {
   return RUNG_BY_KEY[key] === "off" ? "awareness" : RUNG_BY_KEY[key];
 }
 const assistOverrideFor = () =>
-  setupMode === "off" ? "off"
+  // At bullet speed a full-strength suggestion costs up to 1.4s of a 1–2 minute
+  // clock, so assistance is unavailable in v1 rather than advertised and useless.
+  // The setup note says so explicitly; this is what enforces it.
+  !GBClock.assistAllowed(setupControl()) ? "off"
+  : setupMode === "off" ? "off"
   : setupMode === "full" ? "guided"
   : setupMode === "auto" ? autoRungForOpponent()
   : setupRung;
@@ -649,8 +662,14 @@ function leadsToRepetition(m) {
 }
 // Chess clock (optional). Each side's remaining ms ticks down on its turn; the
 // engine's think-time counts against its own clock. Running out = loss on time.
-let timedGame = false, humanMs = 0, engineMs = 0;
-let clockTimer = null, clockLast = 0, flagged = false, flagLoser = "";
+// The clock is now a single state machine (web/gb-clock.js) rather than two loose
+// counters plus ad-hoc arithmetic. humanMs/engineMs become views onto it, so the
+// rest of the file reads unchanged while the RULES live in one tested place.
+let clock = null;
+let timedGame = false;
+const clockSideFor = (who) => (who === "human" ? humanColor : engineColor());
+function clockMs(who) { return clock ? GBClock.remainingOf(clock, clockSideFor(who)) : 0; }
+let clockTimer = null, flagged = false, flagLoser = "";
 
 // How help ARRIVES this game (orthogonal to how MUCH help = the assist level):
 //   open      — always on screen (no "received" tally; we still log taps you take)
@@ -772,14 +791,7 @@ function showSetup() {
       colors.querySelectorAll(".cchoice").forEach((x) => x.classList.toggle("on", x === c));
     };
   });
-  const times = document.getElementById("timeChoice");
-  if (times) times.querySelectorAll(".cchoice").forEach((t) => {
-    t.classList.toggle("on", parseInt(t.dataset.min, 10) === setupMinutes);
-    t.onclick = () => {
-      setupMinutes = parseInt(t.dataset.min, 10);
-      times.querySelectorAll(".cchoice").forEach((x) => x.classList.toggle("on", x === t));
-    };
-  });
+  renderTimeChoice();
   const styles = document.getElementById("styleChoice");
   if (styles) styles.querySelectorAll(".cchoice").forEach((s) => {
     s.classList.toggle("on", s.dataset.style === setupStyle);
@@ -824,6 +836,67 @@ function syncDeliveryVisibility() {
   const sec = document.getElementById("deliverySection");
   if (sec) sec.hidden = setupMode === "off";
 }
+// The time-control picker. Built from GBClock.CATEGORIES, so the presets, the
+// clock and the assistance rule cannot drift apart. Lives entirely inside the
+// scrolling setup card — it adds no height to the game screen.
+function renderTimeChoice() {
+  const host = document.getElementById("timeChoice");
+  if (!host) return;
+  const cur = setupControl();
+  const rows = GBClock.CATEGORIES.map((c) => {
+    const btns = c.presets.map(([m, i]) => {
+      const on = m === setupMinutes && i === setupIncrement;
+      return `<button type="button" class="tc-preset${on ? " on" : ""}${c.assist === false ? " noassist" : ""}" ` +
+        `data-m="${m}" data-i="${i}" title="${m} minutes each${i ? `, +${i}s per move` : ", no increment"}${c.assist === false ? " · no assistance" : ""}">${GBClock.label(m, i)}</button>`;
+    }).join("");
+    return `<div class="tc-group"><span class="tc-glabel">${c.name}</span>${btns}</div>`;
+  }).join("");
+  const noClockOn = !cur.timed;
+  host.innerHTML = rows +
+    `<div class="tc-group"><span class="tc-glabel">Other</span>` +
+    `<button type="button" class="tc-preset${noClockOn ? " on" : ""}" data-m="0" data-i="0" title="No clock at all">∞ No clock</button>` +
+    `<button type="button" class="tc-preset" id="tcCustomBtn" title="Set your own">Custom…</button></div>`;
+  host.querySelectorAll(".tc-preset[data-m]").forEach((btn) => btn.onclick = () => {
+    setupMinutes = parseInt(btn.dataset.m, 10);
+    setupIncrement = parseInt(btn.dataset.i, 10);
+    const cu = document.getElementById("tcCustom"); if (cu) cu.hidden = true;
+    renderTimeChoice(); renderRungPicker();
+  });
+  const cb = document.getElementById("tcCustomBtn");
+  if (cb) cb.onclick = () => {
+    const cu = document.getElementById("tcCustom");
+    if (cu) {
+      cu.hidden = false;
+      const mi = document.getElementById("tcMin"), ii = document.getElementById("tcInc");
+      if (mi) mi.value = String(setupMinutes || 10);
+      if (ii) ii.value = String(setupIncrement || 0);
+      const apply = () => {
+        setupMinutes = Math.max(1, Math.min(180, parseInt(mi.value, 10) || 10));
+        setupIncrement = Math.max(0, Math.min(180, parseInt(ii.value, 10) || 0));
+        renderTimeNote(); renderRungPicker();
+      };
+      if (mi) mi.oninput = apply;
+      if (ii) ii.oninput = apply;
+    }
+  };
+  renderTimeNote();
+}
+// Say what the chosen control means — including, for bullet, that assistance is
+// OFF and why. An absent feature with no explanation reads as a bug.
+function renderTimeNote() {
+  const n = document.getElementById("tcNote");
+  if (!n) return;
+  const c = setupControl();
+  if (!c.timed) { n.innerHTML = "No clock — take as long as you like. Assistance is available."; return; }
+  const cat = GBClock.categoryOf(c);
+  const base = `<b>${c.label}</b> — ${c.minutes} minute${c.minutes === 1 ? "" : "s"} each` +
+    (c.increment ? `, plus ${c.increment}s after every move you complete` : ", no increment") +
+    ` · ${cat ? cat.name : ""}`;
+  n.innerHTML = GBClock.assistAllowed(c)
+    ? base + "."
+    : base + `. <b>Assistance is unavailable at this speed:</b> a full-strength suggestion takes up to 1.4 seconds, which is most of a ${c.minutes}-minute clock. This one is you alone.`;
+}
+
 function renderRungPicker() {
   const rp = document.getElementById("rungPicker");
   if (!rp) return;
@@ -1076,8 +1149,8 @@ function newGame() {
   GBResign.clear();
   assistFen = "";
   // Clock: from the chosen time control (kept across rematches). Untimed if 0.
-  timedGame = !firstGame && setupMinutes > 0;
-  humanMs = engineMs = setupMinutes * 60000;
+  timedGame = !firstGame && setupControl().timed;
+  clock = GBClock.create(setupControl(), game.sideToMove());
   flagged = false; flagLoser = "";
   mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; rateMoves = []; ratePending = []; lastRating = null; lastEval = null; evalTrail = [];
@@ -1154,7 +1227,8 @@ function onPositionChanged() {
   // requests are serialized — leaving it running would delay the next search (often
   // the opponent's own move) by its full movetime. Free the channel immediately.
   if (window.GBEngine && GBEngine.cancel) GBEngine.cancel("advice");
-  clockLast = Date.now(); // the side to move just changed — don't charge them the gap
+  // (clock handover is completeMove()'s job now — it charges the mover, credits the
+  // increment and switches sides in one step.)
   paint(); // instant: board, players, captured, material — before any deep search
 
   if (game.status() === "ongoing" && game.sideToMove() === humanColor) {
@@ -1467,7 +1541,12 @@ function renderOpening() {
   const inGame = !firstGame && game.status() === "ongoing";
   if (!inGame) { el.hidden = true; el.innerHTML = ""; el._h = ""; return; }
   el.hidden = false;
-  const html = GBAssistUI.stripHTML({ opening: currentOpening(), assistData, myColor: humanColor, oppColor: engineColor() }) || "<div class='gs-row gs-empty'></div>";
+  const ctl = timedGame ? setupControl() : null;
+  const html = GBAssistUI.stripHTML({
+    opening: currentOpening(), assistData, myColor: humanColor, oppColor: engineColor(),
+    timeControl: ctl ? ctl.label : "",
+    timeControlTitle: ctl ? `${ctl.minutes} minutes each${ctl.increment ? `, +${ctl.increment}s per completed move` : ", no increment"}` : "",
+  }) || "<div class='gs-row gs-empty'></div>";
   if (html !== el._h) { el.innerHTML = html; el._h = html; el.onclick = openPlanSheet; }
 }
 
@@ -1688,7 +1767,7 @@ function renderPlayers() {
     pips: (firstGame || aiLevel >= 3000) ? "" : pipRow(aiTokens, AI_TOKENS_MAX),
     pipsTitle: "opponent's lifelines remaining — its help, in the open",
     caps: capGlyphs(aiCap, humanColor, "opp"), lead: -youLead,
-    clock: showClock ? fmtClock(engineMs) : "", low: showClock && engineMs <= 10000,
+    clock: showClock ? GBClock.fmt(clockMs("engine")) : "", low: showClock && GBClock.pressure(clockMs("engine")) !== "normal",
     turn: turn === engineColor(), turnText: "thinking…",
   });
   const you = stripHTML_player({
@@ -1708,7 +1787,7 @@ function renderPlayers() {
       ? "help is unlimited this game"
       : `help tokens — ${helpLeft} of ${helpMax} left (safety warnings are always free)`,
     caps: capGlyphs(youCap, engineColor(), "you"), lead: youLead,
-    clock: showClock ? fmtClock(humanMs) : "", low: showClock && humanMs <= 10000,
+    clock: showClock ? GBClock.fmt(clockMs("human")) : "", low: showClock && GBClock.pressure(clockMs("human")) !== "normal",
     turn: turn === humanColor, turnText: "your move",
   });
   oppEl.hidden = false; youEl.hidden = false;
@@ -1843,36 +1922,31 @@ function criticalMoment() {
 }
 
 // ---- Chess clock ----------------------------------------------------------
-function fmtClock(ms) {
-  const t = Math.max(0, Math.ceil(ms / 1000));
-  const m = Math.floor(t / 60), s = t % 60;
-  return `${m}:${s < 10 ? "0" : ""}${s}`;
-}
 // Returning from a hidden tab: reset the reference so the away-time isn't charged.
-if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (!document.hidden) clockLast = Date.now(); });
+// Coming back from the background: settle immediately so the charge for the time
+// away lands at once rather than on the next 200ms tick.
+if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && clock && timedGame) { GBClock.settle(clock); renderClocks(); }
+});
 function stopClock() { if (clockTimer) { clearInterval(clockTimer); clockTimer = null; } }
 function startClock() {
   stopClock();
   if (!timedGame) return;
-  clockLast = Date.now();
+  if (clock) GBClock.resume(clock, game.sideToMove());
   clockTimer = setInterval(tickClock, 200);
 }
 function tickClock() {
-  if (!timedGame || flagged) { stopClock(); return; }
+  if (!timedGame || flagged || !clock) { stopClock(); return; }
   if (resigned || game.status() !== "ongoing") { stopClock(); return; }
-  const now = Date.now();
-  let dt = now - clockLast;
-  clockLast = now;
-  // Don't charge time the player didn't actually spend at the board: skip when the
-  // tab is hidden (backgrounded / screen locked) or when a tick gap is abnormally
-  // large (the timer was throttled/asleep). Foreground ticks are ~200ms, so real
-  // thinking still counts fully.
-  if (document.hidden || dt > 2000) dt = 0;
-  const side = game.sideToMove();
-  if (side === humanColor) humanMs = Math.max(0, humanMs - dt);
-  else engineMs = Math.max(0, engineMs - dt);
-  if ((side === humanColor ? humanMs : engineMs) <= 0) {
-    flagged = true; flagLoser = side; stopClock();
+  // The clock module charges the real monotonic interval. The old code discarded
+  // any delta while the tab was hidden or larger than 2s — which meant
+  // backgrounding the app stopped your clock. In a timed game it now keeps
+  // running (decided 2026-10-11), so the tick rate no longer affects accuracy
+  // either: settle() charges elapsed time, not ticks.
+  if (clock.active !== game.sideToMove()) GBClock.resume(clock, game.sideToMove());
+  GBClock.settle(clock);
+  if (clock.flagged) {
+    flagged = true; flagLoser = clock.flagged; stopClock();
     renderClocks();
     if (!firstGame) persistAiGame(true); // game's over → drop the saved slot
     paint(); // showGameOverIfNeeded picks up the flag
@@ -1881,25 +1955,13 @@ function tickClock() {
   renderClocks();
 }
 function renderClocks() {
-  // Clocks now live on each player's cockpit strip (on their own side of the board),
-  // so this standalone row is retired — but keep the function: the clock tick calls
-  // it, and it refreshes the strips.
+  // Clocks live on each player's cockpit strip, on their own side of the board, so
+  // the standalone row is retired. Everything after the early return used to be
+  // dead code behind `if (true) return;` — and it referenced humanMs/engineMs,
+  // which no longer exist, so re-enabling it would have thrown. Deleted.
   const box = document.getElementById("clocks");
-  if (box) { box.hidden = true; }
+  if (box) box.hidden = true;
   if (timedGame) renderPlayers();
-  if (!box) return;
-  if (true) return;
-  const you = document.getElementById("clkYou"), ai = document.getElementById("clkAi");
-  const over = flagged || resigned || game.status() !== "ongoing";
-  const active = over ? null : game.sideToMove();
-  if (you) {
-    you.textContent = "🧑 " + fmtClock(humanMs);
-    you.className = "clk" + (active === humanColor ? " active" : "") + (humanMs <= 10000 ? " low" : "");
-  }
-  if (ai) {
-    ai.textContent = aiEmoji() + " " + fmtClock(engineMs);
-    ai.className = "clk" + (active === engineColor() ? " active" : "") + (engineMs <= 10000 ? " low" : "");
-  }
 }
 
 // ---- Help delivery: is the move-answer shown right now? --------------------
@@ -2061,7 +2123,18 @@ function showGameOverIfNeeded() {
   if (rb) { rb.hidden = over; rb.textContent = "🏳 Tip your king"; rb.title = "Resign — your king goes over, the way players have always conceded"; }
   if (!over) { ov.style.display = "none"; mateKingSq = -1; return; }
   let winner = "", reason = "";
-  if (flagged) { winner = flagLoser === humanColor ? engineColor() : humanColor; reason = "time"; } // ran out of time
+  if (flagged) {
+    // FIDE 6.9: running out of time loses — UNLESS the opponent cannot checkmate by
+    // any series of legal moves, in which case it's a DRAW. Flagging against a bare
+    // king was previously recorded as a loss. canMate() is the engine crate's own
+    // test, shared with the server, so a timed AI game and a timed human game reach
+    // the same verdict in the same position.
+    const beneficiary = flagLoser === humanColor ? engineColor() : humanColor;
+    let theyCanMate = true;
+    try { theyCanMate = game.canMate(beneficiary === "white"); } catch {}
+    if (theyCanMate) { winner = beneficiary; reason = "time"; }
+    else { winner = ""; reason = "time (opponent cannot mate)"; } // drawn on the flag
+  }
   else if (aiResigned) { winner = humanColor; reason = "resignation"; } // the engine resigned → you win
   else if (resigned) { winner = engineColor(); reason = "resignation"; } // you resigned → the engine wins
   else if (st === "checkmate") { winner = game.sideToMove() === "white" ? "black" : "white"; reason = "checkmate"; }
@@ -3068,6 +3141,10 @@ function doPlay(from, to, promo, viaHelp) {
   legalTargets = [];
   renderPieceTip(null);
   if (!ok) { moveSound = null; history.pop(); paint(); return; } // illegal → undo the snapshot we pushed
+  // A COMPLETED legal move: your time is charged and your increment is credited.
+  // Deliberately after the legality check, so an illegal attempt can neither cost
+  // you time nor earn you increment.
+  if (timedGame && clock) GBClock.completeMove(clock, humanColor);
   lastMove = { from, to };
   uciHistory.push(sqName(from) + sqName(to) + (promo || "")); // for opening identification
   recordPosition(); // threefold check
@@ -3119,6 +3196,9 @@ function applyEngineMove(uci) {
   let ok = false;
   try { ok = !!game.makeMove(sq.from, sq.to, uci.length > 4 ? uci[4] : undefined); } catch { ok = false; }
   if (!ok) return false;
+  // The engine plays under the same clock — it is charged for its thinking and it
+  // earns the same increment.
+  if (timedGame && clock) GBClock.completeMove(clock, engineColor());
   lastMove = sq;
   uciHistory.push(uci);
   recordPosition(); // threefold check
