@@ -550,6 +550,18 @@ function showUndoPrompt() {
 }
 function hideUndoPrompt() { const p = el("undoPrompt"); if (p) p.hidden = true; }
 
+// Repaint the strips a few times a second so a running clock reads like one. Pure
+// presentation: it never changes state and never declares a flag.
+let clockPaintTimer = null;
+function startClockPaint() {
+  if (clockPaintTimer) { clearInterval(clockPaintTimer); clockPaintTimer = null; }
+  if (!state || !state.minutes || !state.clock_active) return;
+  clockPaintTimer = setInterval(() => {
+    if (!state || !state.clock_active || document.hidden) return;
+    renderPlayers();
+  }, 250);
+}
+
 // Still at the table? The server is authoritative; this just mirrors it.
 function atTable() { return !!(state && state.at_table); }
 
@@ -598,6 +610,7 @@ function renderTable() {
 function onState(msg) {
   undoPending = false; // any new position resolves a pending takeback request
   state = msg;
+  lastStateAt = GBClock.now(); // re-sync the smoothed display to this push
   game = Game.fromFen(msg.fen);
   game.setRatings(myElo(), oppElo());
   lastMove = msg.last ? uciToSquares(msg.last) : null;
@@ -640,6 +653,7 @@ function onState(msg) {
   if (!nowOver) { mateKingSq = -1; const ov = document.getElementById("overOverlay"); if (ov) ov.style.display = "none"; }
 
   renderTable();
+  startClockPaint();
   computeAssist();
   paint();
 
@@ -1222,6 +1236,20 @@ function renderCoach() {
 // Shared with Play-AI (GBAssistUI.capTrayHTML): grouped, counted, identical.
 // The piece letters already carry their colour in their case.
 function capGlyphsMP(chars, key) { return GBAssistUI.capTrayHTML(chars, null, key); }
+// The server sends remaining time at each state push. Between pushes we subtract
+// locally so a running clock looks like a clock — but this is presentation only:
+// `lastStateAt` resets on every push, so the display re-syncs constantly and can
+// never drift into claiming a flag the server hasn't declared.
+let lastStateAt = 0;
+function smoothedMs(side) {
+  if (!state || !state.minutes) return 0;
+  const base = side === "white" ? state.white_ms : state.black_ms;
+  if (typeof base !== "number") return 0;
+  if (state.clock_active !== side) return base;
+  const drift = lastStateAt ? Math.max(0, GBClock.now() - lastStateAt) : 0;
+  return Math.max(0, base - drift);
+}
+
 function renderPlayers() {
   const legacy = document.getElementById("players"); // retired: the cockpit replaces it
   if (legacy) { legacy.hidden = true; legacy.innerHTML = ""; }
@@ -1244,15 +1272,23 @@ function renderPlayers() {
   const S = window.GBAssistUI;
   if (!S) return;
   const opp = S.playerStripHTML({
+    clock: ctl ? GBClock.fmt(oppMs) : "", low: ctl && GBClock.pressure(oppMs) !== "normal",
     icon: `<span class="dot ${myColor === "white" ? "black" : "white"}"></span>${oppSeated ? "👤" : "⏳"}`,
     name: oppSeated ? oppName : "Waiting for opponent…", rating: oppSeated ? String(oppElo2 || "") : "",
     caps: capGlyphsMP(oppCap, "opp"), lead: -youLead,
     extra: oppSeated ? rivalryChip(oppName) : "", // keep the head-to-head record visible
     turn: turn && turn !== myColor, turnText: "their move",
   });
+  // THE CLOCK. Human games had none; these numbers are the SERVER's, smoothed
+  // locally between pushes so the display doesn't freeze between moves. The local
+  // estimate never decides anything — only the server can flag a player.
+  const ctl = state.minutes > 0;
+  const myMs = ctl ? smoothedMs(myColor) : 0;
+  const oppMs = ctl ? smoothedMs(myColor === "white" ? "black" : "white") : 0;
   const al = myAl();
   const budgetChip = (al && al.max) ? `<span class="ps-budget">🤝 ${GBHelpBudget.counter(Math.max(0, al.left || 0), al.max)}</span>` : "";
   const you = S.playerStripHTML({
+    clock: ctl ? GBClock.fmt(myMs) : "", low: ctl && GBClock.pressure(myMs) !== "normal",
     icon: `<span class="dot ${myColor}"></span>👤`,
     name: youName, rating: String(youElo || ""),
     // Your agreed allowance, shown exactly as in Play-AI (dots to five, then a
@@ -2005,6 +2041,7 @@ function simRefresh() {
     reason: over ? (st === "checkmate" ? "checkmate" : st) : "",
   };
   renderTable();
+  startClockPaint();
   computeAssist();
   paint();
   if (over) showGameOver({ winner: state.winner, reason: state.reason });

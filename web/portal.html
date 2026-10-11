@@ -522,7 +522,13 @@
     // What the host is posting: who they want, and the clock.
     let createWant = 'any';
     let createMinutes = 0;
-    const TIME_CHOICES = [[0, 'Untimed'], [5, '5 min'], [10, '10 min'], [30, '30 min']];
+    let createIncrement = 0;
+    // The same presets Play-AI offers, from the same module, now that the server
+    // actually RUNS them. Before this the lobby advertised "10 min" and produced an
+    // untimed game, because nothing on either side ran a clock.
+    const TIME_CHOICES = [[0, 0, '∞ No clock']].concat(
+      GBClock.presets().filter(p => ['blitz', 'rapid', 'classical'].indexOf(p.cat) >= 0)
+        .map(p => [p.minutes, p.increment, p.label]));
     function renderWantPick() {
       const host = document.getElementById('wantPick');
       if (!host) return;
@@ -535,9 +541,15 @@
     function renderTimePick() {
       const host = document.getElementById('timePick');
       if (!host) return;
-      host.innerHTML = TIME_CHOICES.map(([m, label]) =>
-        `<button type="button" class="time-opt${m === createMinutes ? ' on' : ''}" data-m="${m}">${label}</button>`).join('');
-      host.querySelectorAll('.time-opt').forEach(b => b.onclick = () => { createMinutes = +b.dataset.m; renderTimePick(); renderPostPreview(); });
+      // Bullet is omitted here on purpose: assistance is unavailable at that speed
+      // (v1), and a Glassboard game whose whole premise is unavailable isn't a
+      // sensible thing to offer a stranger on the Challenge Board.
+      host.innerHTML = TIME_CHOICES.map(([m, i, label]) =>
+        `<button type="button" class="time-opt${m === createMinutes && i === createIncrement ? ' on' : ''}" data-m="${m}" data-i="${i}">${label}</button>`).join('');
+      host.querySelectorAll('.time-opt').forEach(b => b.onclick = () => {
+        createMinutes = +b.dataset.m; createIncrement = +b.dataset.i;
+        renderTimePick(); renderPostPreview();
+      });
     }
     // Say plainly what posting this will advertise — no surprises after the fact.
     function renderPostPreview() {
@@ -547,8 +559,8 @@
       const w = GBTerms.wantOf(createWant);
       const lvl = createMode === 'casual' ? 'no rating' : (me ? me.rating : '');
       el.innerHTML = named
-        ? `A private invite for <b style="color:var(--text)">${escapeHtml(named)}</b> — ${createMode === 'casual' ? '🎈 Casual' : '⚔ Match'} · ${GBTerms.fmtTime(createMinutes)}. Only someone with the link can join.`
-        : `Posted to <b style="color:var(--text)">Open challenges</b> as <b style="color:var(--text)">${escapeHtml(me ? me.name : 'you')} ${lvl}</b>, looking for <b style="color:var(--text)">${w.ic} ${escapeHtml(w.label.toLowerCase())}</b> — ${createMode === 'casual' ? '🎈 Casual' : '⚔ Match'} · ${GBTerms.fmtTime(createMinutes)}. Anyone can take it.`;
+        ? `A private invite for <b style="color:var(--text)">${escapeHtml(named)}</b> — ${createMode === 'casual' ? '🎈 Casual' : '⚔ Match'} · ${GBTerms.fmtTime(createMinutes, createIncrement)}. Only someone with the link can join.`
+        : `Posted to <b style="color:var(--text)">Open challenges</b> as <b style="color:var(--text)">${escapeHtml(me ? me.name : 'you')} ${lvl}</b>, looking for <b style="color:var(--text)">${w.ic} ${escapeHtml(w.label.toLowerCase())}</b> — ${createMode === 'casual' ? '🎈 Casual' : '⚔ Match'} · ${GBTerms.fmtTime(createMinutes, createIncrement)}. Anyone can take it.`;
     }
     function openCreate() {
       if (!me) { openIdentity(); return; }
@@ -577,7 +589,8 @@
       if (!casual) { me.rating = you; saveMe(me); renderMe(); }
       const id = Math.random().toString(36).slice(2, 6) + Math.random().toString(36).slice(2, 5);
       const g = { id, oppName, myRating: you, status: 'waiting', created: Date.now(), mode: createMode,
-                  want: createWant, minutes: createMinutes, open: !document.getElementById('cOppName').value.trim() };
+                  want: createWant, minutes: createMinutes, increment: createIncrement,
+                  open: !document.getElementById('cOppName').value.trim() };
       const games = loadGames(); games.unshift(g); saveGames(games);
       registerGame(g);
       renderGames(); closeCreate();
@@ -594,7 +607,7 @@
       fetch(SERVER_HTTP + '/games', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: g.id, pid: me.id, name: me.name, rating: g.myRating, mode: g.mode || 'match',
-                                want: g.want || 'any', minutes: g.minutes || 0 })
+                                want: g.want || 'any', minutes: g.minutes || 0, increment: g.increment || 0 })
       }).catch(() => {});
     }
     // Poll the server for our games' status → notify when someone joins.
@@ -976,7 +989,7 @@
         <div class="ch-who">
           <div class="ch-name">${escapeHtml(host.name)} <span class="ch-lvl">${escapeHtml(String(lvl))}</span>
             <span class="mode-chip">${c.mode === 'casual' ? '🎈 Casual' : '⚔ Match'}</span>
-            <span class="ch-lvl">${GBTerms.fmtTime(c.minutes)}</span>
+            <span class="ch-lvl">${GBTerms.fmtTime(c.minutes, c.increment)}</span>
             <span class="ch-lvl">${chAge(c.started)}</span></div>
           <div class="ch-want">${w.ic} wants ${escapeHtml(w.label.toLowerCase())} — ${escapeHtml(w.blurb.toLowerCase())}</div>
           <div class="ch-conseq ${pv.tone}">${escapeHtml(pv.text)}</div>

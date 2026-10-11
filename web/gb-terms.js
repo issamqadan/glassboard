@@ -41,7 +41,9 @@
   };
   const wantOf = (w) => WANTS[w] || WANTS.any;
 
-  const fmtTime = (m) => (!m ? "untimed" : m + " min");
+  // Shows the agreed control the way players read it. `inc` is optional so older
+  // callers keep working; with it you get "5+3" instead of a bare "5 min".
+  const fmtTime = (m, inc) => (!m ? "untimed" : (inc ? m + "+" + inc : m + " min"));
 
   // THE CONTRACT. Given both sides, say exactly who gets what — the same sentence
   // the lobby shows before you commit and the board shows all game.

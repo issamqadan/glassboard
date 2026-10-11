@@ -62,6 +62,8 @@ struct RoomState {
     /// They stay meaningful after the seat fills (they're what was agreed to).
     want: String,
     minutes: i32,
+    /// Fischer increment in seconds, agreed with the time control.
+    increment: i32,
     /// A pending mode change — (who asked, what they asked for). Changing the terms
     /// mid-game needs the OPPONENT's yes, exactly like a takeback: the handicap is a
     /// mutual contract, so neither side may rewrite it alone.
@@ -81,6 +83,82 @@ struct RoomState {
     /// -1 means unlimited (casual).
     white: Allowance,
     black: Allowance,
+    /// THE AUTHORITATIVE CLOCK. Human games had none at all — the room stored a
+    /// `minutes` field (added for the Challenge Board) that nothing ran, so a
+    /// challenge posted as "10 min" produced an untimed game.
+    ///
+    /// Settled LAZILY: every read charges the elapsed time since the last touch.
+    /// That means no per-room background task, and a flag is detected the moment
+    /// anybody looks — including when neither player is connected, which is the
+    /// case that matters for a game that spans days.
+    clock: GameClock,
+}
+
+/// Mirrors web/gb-clock.js. The browser renders these numbers; it never derives
+/// them, so two clients cannot disagree about the clock they are both watching.
+#[derive(Clone)]
+struct GameClock {
+    initial_ms: i64,
+    increment_ms: i64,
+    white_ms: i64,
+    black_ms: i64,
+    /// Whose clock is running, if any.
+    active: Option<Color>,
+    /// Monotonic instant the active clock was last charged from.
+    since: std::time::Instant,
+}
+impl Default for GameClock {
+    fn default() -> Self {
+        GameClock { initial_ms: 0, increment_ms: 0, white_ms: 0, black_ms: 0, active: None, since: std::time::Instant::now() }
+    }
+}
+impl GameClock {
+    fn timed(&self) -> bool { self.initial_ms > 0 }
+    fn sized(minutes: i32, increment: i32) -> Self {
+        let ms = (minutes.max(0) as i64) * 60_000;
+        GameClock { initial_ms: ms, increment_ms: (increment.max(0) as i64) * 1000,
+                    white_ms: ms, black_ms: ms, active: None, since: std::time::Instant::now() }
+    }
+    fn remaining(&self, c: Color) -> i64 { if c == Color::White { self.white_ms } else { self.black_ms } }
+    fn set_remaining(&mut self, c: Color, ms: i64) {
+        if c == Color::White { self.white_ms = ms } else { self.black_ms = ms }
+    }
+    /// Charge the running clock for real elapsed time. Returns the colour that just
+    /// flagged, if any. Safe to call as often as you like — it always moves `since`
+    /// forward, so repeated calls can't double-charge.
+    fn settle(&mut self) -> Option<Color> {
+        let now = std::time::Instant::now();
+        let active = match self.active {
+            Some(c) if self.timed() => c,
+            _ => { self.since = now; return None; }
+        };
+        let dt = now.duration_since(self.since).as_millis() as i64;
+        self.since = now;
+        let left = (self.remaining(active) - dt).max(0);
+        self.set_remaining(active, left);
+        if left == 0 { self.active = None; return Some(active); }
+        None
+    }
+    /// A COMPLETED legal move: charge the mover, credit their increment, hand over.
+    /// A move that flags the clock earns no increment.
+    fn complete_move(&mut self, mover: Color) -> Option<Color> {
+        if !self.timed() { return None; }
+        if self.active == Some(mover) {
+            if let Some(f) = self.settle() { return Some(f); }
+        } else {
+            self.since = std::time::Instant::now();
+        }
+        self.set_remaining(mover, self.remaining(mover) + self.increment_ms);
+        self.active = Some(if mover == Color::White { Color::Black } else { Color::White });
+        self.since = std::time::Instant::now();
+        None
+    }
+    fn halt(&mut self) { self.settle(); self.active = None; }
+    fn resume(&mut self, side: Color) {
+        if !self.timed() { return; }
+        self.active = Some(side);
+        self.since = std::time::Instant::now();
+    }
 }
 
 /// Mirrors web/gb-help-budget.js — tokensFor() / takebacksFor(). Kept in step by
@@ -255,7 +333,9 @@ async fn build_store() -> Store {
                    guest_id TEXT, guest_name TEXT, guest_rating INT, \
                    glass TEXT NOT NULL DEFAULT '[]', started BIGINT NOT NULL, \
                    mode TEXT NOT NULL DEFAULT 'match', \
-                   want TEXT NOT NULL DEFAULT 'any', minutes INT NOT NULL DEFAULT 0)",
+                   want TEXT NOT NULL DEFAULT 'any', minutes INT NOT NULL DEFAULT 0, \
+                   increment INT NOT NULL DEFAULT 0, white_ms BIGINT NOT NULL DEFAULT 0, \
+                   black_ms BIGINT NOT NULL DEFAULT 0, flagged TEXT NOT NULL DEFAULT '')",
             )
             .execute(&pool)
             .await
@@ -270,6 +350,14 @@ async fn build_store() -> Store {
             let _ = sqlx::query("ALTER TABLE games ADD COLUMN IF NOT EXISTS minutes INT NOT NULL DEFAULT 0")
                 .execute(&pool)
                 .await;
+            for ddl in [
+                "ALTER TABLE games ADD COLUMN IF NOT EXISTS increment INT NOT NULL DEFAULT 0",
+                "ALTER TABLE games ADD COLUMN IF NOT EXISTS white_ms BIGINT NOT NULL DEFAULT 0",
+                "ALTER TABLE games ADD COLUMN IF NOT EXISTS black_ms BIGINT NOT NULL DEFAULT 0",
+                "ALTER TABLE games ADD COLUMN IF NOT EXISTS flagged TEXT NOT NULL DEFAULT ''",
+            ] {
+                let _ = sqlx::query(ddl).execute(&pool).await;
+            }
             // Per-player profile — the Player Model's learning signal.
             sqlx::query(
                 "CREATE TABLE IF NOT EXISTS profiles (\
@@ -357,6 +445,10 @@ struct GameRow {
     mode: String,
     want: String,
     minutes: i32,
+    increment: i32,
+    white_ms: i64,
+    black_ms: i64,
+    flagged: String,
 }
 fn snapshot(id: &str, rs: &RoomState) -> GameRow {
     let resigned = match rs.room.resigned {
@@ -379,6 +471,16 @@ fn snapshot(id: &str, rs: &RoomState) -> GameRow {
         mode: rs.mode.clone(),
         want: rs.want.clone(),
         minutes: rs.minutes,
+        increment: rs.increment,
+        // Remaining time is persisted, not the instant it was measured from — a
+        // restart must not hand either player a fresh allocation.
+        white_ms: rs.clock.white_ms,
+        black_ms: rs.clock.black_ms,
+        flagged: match rs.room.flagged {
+            Some(Color::White) => "white".to_string(),
+            Some(Color::Black) => "black".to_string(),
+            None => String::new(),
+        },
     }
 }
 async fn save_snapshot(pool: &sqlx::PgPool, g: GameRow) {
@@ -389,13 +491,14 @@ async fn save_snapshot(pool: &sqlx::PgPool, g: GameRow) {
     let gn = g.guest.as_ref().map(|p| p.name.clone());
     let gr = g.guest.as_ref().map(|p| p.rating);
     let _ = sqlx::query(
-        "INSERT INTO games (id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started,mode,want,minutes) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) \
-         ON CONFLICT (id) DO UPDATE SET fen=$2,last_uci=$3,resigned=$4,white_elo=$5,black_elo=$6,host_id=$7,host_name=$8,host_rating=$9,guest_id=$10,guest_name=$11,guest_rating=$12,glass=$13,mode=$15,want=$16,minutes=$17",
+        "INSERT INTO games (id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started,mode,want,minutes,increment,white_ms,black_ms,flagged) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) \
+         ON CONFLICT (id) DO UPDATE SET fen=$2,last_uci=$3,resigned=$4,white_elo=$5,black_elo=$6,host_id=$7,host_name=$8,host_rating=$9,guest_id=$10,guest_name=$11,guest_rating=$12,glass=$13,mode=$15,want=$16,minutes=$17,increment=$18,white_ms=$19,black_ms=$20,flagged=$21",
     )
     .bind(g.id).bind(g.fen).bind(g.last_uci).bind(g.resigned).bind(g.white_elo).bind(g.black_elo)
     .bind(hi).bind(hn).bind(hr).bind(gi).bind(gn).bind(gr).bind(g.glass).bind(g.started).bind(g.mode)
-    .bind(g.want).bind(g.minutes)
+    .bind(g.want).bind(g.minutes).bind(g.increment)
+    .bind(g.white_ms).bind(g.black_ms).bind(g.flagged)
     .execute(pool)
     .await;
 }
@@ -418,7 +521,7 @@ async fn delete_game_db(store: &Store, id: &str) {
 /// Reload all saved games into fresh RoomStates on boot (so games survive restarts).
 async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
     let rows = match sqlx::query(
-        "SELECT id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started,mode,want,minutes FROM games",
+        "SELECT id,fen,last_uci,resigned,white_elo,black_elo,host_id,host_name,host_rating,guest_id,guest_name,guest_rating,glass,started,mode,want,minutes,increment,white_ms,black_ms,flagged FROM games",
     )
     .fetch_all(pool)
     .await
@@ -454,6 +557,11 @@ async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
             black_elo: row.get("black_elo"),
             last_uci: row.get("last_uci"),
             resigned,
+            flagged: match row.get::<Option<String>, _>("flagged").unwrap_or_default().as_str() {
+                "white" => Some(engine::Color::White),
+                "black" => Some(engine::Color::Black),
+                _ => None,
+            },
             glass,
             history: Vec::new(), // not persisted; a fresh boot can't take back pre-restart moves
         };
@@ -466,12 +574,27 @@ async fn load_all_games(pool: &sqlx::PgPool) -> Vec<(String, RoomState)> {
             pending_undo: None,
             want: row.get::<Option<String>, _>("want").unwrap_or_else(|| "any".to_string()),
             minutes: row.get::<Option<i32>, _>("minutes").unwrap_or(0),
+            increment: row.get::<Option<i32>, _>("increment").unwrap_or(0),
             pending_mode: None,
             ready_white: false,
             ready_black: false,
             // Rebuilt below from the ratings on the row — see size_allowances().
             white: Allowance::default(),
             black: Allowance::default(),
+            clock: {
+                let mins = row.get::<Option<i32>, _>("minutes").unwrap_or(0);
+                let mut c = GameClock::sized(mins, row.get::<Option<i32>, _>("increment").unwrap_or(0));
+                if mins > 0 {
+                    c.white_ms = row.get::<Option<i64>, _>("white_ms").unwrap_or(c.initial_ms);
+                    c.black_ms = row.get::<Option<i64>, _>("black_ms").unwrap_or(c.initial_ms);
+                    // Whoever is to move owns the running clock after a restart. The
+                    // gap while the server was down is NOT charged — we have no
+                    // trustworthy measure of it, and inventing one could flag a
+                    // player for our downtime.
+                    c.resume(engine::parse_fen(&fen).side);
+                }
+                c
+            },
         };
         out.push((id, rs));
     }
@@ -603,6 +726,19 @@ impl FromRef<AppState> for Store {
 static NEXT_ANON: AtomicU64 = AtomicU64::new(1);
 
 impl RoomState {
+    /// Bring the clock up to date and record a flag if one just fell. Called before
+    /// EVERY read of room state, which is what makes a lazy clock correct: the
+    /// elapsed time is charged whenever anybody looks, so a game whose clock ran
+    /// out while both players were away resolves the instant it is next observed —
+    /// with no per-room background task.
+    fn tick_clock(&mut self) {
+        if self.room.flagged.is_some() || self.room.resigned.is_some() { self.clock.halt(); return; }
+        if let Some(f) = self.clock.settle() {
+            self.room.flagged = Some(f);
+        }
+        if self.room.outcome().0 { self.clock.halt(); }
+    }
+
     /// (Re)size both allowances from the seated players' ratings and the mode. Run
     /// when the contract is signed and whenever the terms change, so the numbers
     /// always match what both players agreed to. Never shrinks what's already been
@@ -641,11 +777,13 @@ fn new_room_state() -> RoomState {
         pending_undo: None,
         want: "any".to_string(),
         minutes: 0,
+        increment: 0,
         pending_mode: None,
         ready_white: false,
         ready_black: false,
         white: Allowance::default(),
         black: Allowance::default(),
+        clock: GameClock::default(),
     }
 }
 
@@ -730,6 +868,15 @@ enum ServerMsg {
         /// Who has signed.
         ready_white: bool,
         ready_black: bool,
+        /// The authoritative clock. The clients render these numbers and smooth
+        /// between pushes; they never compute their own remaining time.
+        white_ms: i64,
+        black_ms: i64,
+        /// Whose clock is running: "white" | "black" | "" (nobody's).
+        clock_active: String,
+        /// The agreed time control, so both players can see what they signed.
+        minutes: i32,
+        increment: i32,
         /// The agreed allowances. -1 = unlimited. The clients DISPLAY these; they
         /// never derive their own, so the two boards cannot disagree about them.
         help_white: i32,
@@ -842,6 +989,9 @@ struct CreateReq {
     /// Clock per side in minutes; 0 = untimed.
     #[serde(default)]
     minutes: i32,
+    /// Fischer increment in seconds.
+    #[serde(default)]
+    increment: i32,
 }
 
 #[derive(Serialize)]
@@ -898,6 +1048,7 @@ async fn create_game(
                 rs.want = b.want.clone();
             }
             rs.minutes = b.minutes.clamp(0, 180);
+            rs.increment = b.increment.clamp(0, 180);
         }
         rs.seats.status().to_string()
     };
@@ -948,6 +1099,8 @@ struct OpenChallenge {
     mode: String,
     /// Clock per side in minutes; 0 = untimed.
     minutes: i32,
+    /// Fischer increment in seconds.
+    increment: i32,
     started: u64,
 }
 
@@ -996,6 +1149,7 @@ async fn list_open(
                 want: rs.want.clone(),
                 mode: rs.mode.clone(),
                 minutes: rs.minutes,
+                increment: rs.increment,
                 started: rs.started,
             })
         })
@@ -1012,7 +1166,11 @@ async fn list_games(
     Query(q): Query<HashMap<String, String>>,
 ) -> Json<Vec<GameSummary>> {
     let player = q.get("player").cloned().unwrap_or_default();
-    let map = rooms.lock().await;
+    let mut map = rooms.lock().await;
+    // Settle every room first: without this a game whose clock ran out while
+    // nobody was connected would still be listed as "in progress".
+    for rs in map.values_mut() { rs.tick_clock(); }
+    let map = map;
     let mut out = Vec::new();
     for (id, rs) in map.iter() {
         let host_is = rs.seats.host.as_ref().map(|h| h.id == player).unwrap_or(false);
@@ -1546,6 +1704,16 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                                     let before = rs.room.board;
                                     let played_to = uci_to_sq(&uci);
                                     if rs.room.apply_move(color, &uci).is_ok() {
+                                        // A COMPLETED legal move: charge the mover,
+                                        // credit the increment, hand the clock over.
+                                        // INSIDE the accepted branch and the same
+                                        // lock as the move, so an illegal attempt can
+                                        // neither cost time, earn an increment, nor
+                                        // pass the clock to the opponent.
+                                        if let Some(f) = rs.clock.complete_move(color) {
+                                            rs.room.flagged = Some(f);
+                                        }
+                                        if rs.room.outcome().0 { rs.clock.halt(); }
                                         let after = rs.room.board;
                                         Some((
                                             left_piece_hanging(&after, color),
@@ -1662,8 +1830,12 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
                                         }
                                         let both = rs.ready_white && rs.ready_black;
                                         if both && rs.room.last_uci.is_none() {
-                                            // The signed contract includes the allowances.
+                                            // The signed contract includes the allowances AND the clock.
                                             rs.size_allowances();
+                                            if rs.minutes > 0 {
+                                                rs.clock = GameClock::sized(rs.minutes, rs.increment);
+                                                rs.clock.resume(Color::White); // White is on the move
+                                            }
                                             let note = if rs.mode == "casual" {
                                                 "Both players signed the terms: CASUAL — full assistance for both sides, unrated."
                                             } else {
@@ -1836,7 +2008,10 @@ async fn handle(socket: WebSocket, rooms: Rooms, store: Store) {
 }
 
 async fn broadcast_state(rooms: &Rooms, code: &str) {
-    let map = rooms.lock().await;
+    let mut map = rooms.lock().await;
+    // Settle first: the numbers we are about to send must be current, and a flag
+    // that fell since the last look must take effect before the outcome is read.
+    if let Some(rs) = map.get_mut(code) { rs.tick_clock(); }
     if let Some(rs) = map.get(code) {
         let (_, winner, reason) = rs.room.outcome();
         let msg = ServerMsg::State {
@@ -1854,6 +2029,15 @@ async fn broadcast_state(rooms: &Rooms, code: &str) {
             at_table: rs.table_open(),
             ready_white: rs.ready_white,
             ready_black: rs.ready_black,
+            white_ms: rs.clock.white_ms,
+            black_ms: rs.clock.black_ms,
+            clock_active: match rs.clock.active {
+                Some(Color::White) => "white".to_string(),
+                Some(Color::Black) => "black".to_string(),
+                None => String::new(),
+            },
+            minutes: rs.minutes,
+            increment: rs.increment,
             help_white: rs.white.help_left,
             help_black: rs.black.help_left,
             help_max_white: rs.white.help_max,

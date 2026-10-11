@@ -23,6 +23,8 @@ pub struct Room {
     pub last_uci: Option<String>,
     /// Set when a player resigns — that colour loses.
     pub resigned: Option<Color>,
+    /// Set when a player's clock runs out — that colour flagged.
+    pub flagged: Option<Color>,
     /// Full glass-box history for this game (replayed to anyone who joins).
     pub glass: Vec<GlassEntry>,
     /// UCI move history — so a takeback (casual, by agreement) can revert moves.
@@ -45,6 +47,7 @@ impl Room {
             black_elo: 1500,
             last_uci: None,
             resigned: None,
+            flagged: None,
             glass: Vec::new(),
             history: Vec::new(),
         }
@@ -119,6 +122,25 @@ impl Room {
 
     /// Game outcome: (over, winner "white"|"black"|"" for draw, reason).
     pub fn outcome(&self) -> (bool, &'static str, &'static str) {
+        // A flag ends the game before anything on the board matters — but FIDE 6.9
+        // makes it a DRAW when the beneficiary cannot checkmate by any series of
+        // legal moves (flagging against a bare king is not a win). Same
+        // engine::can_mate the WASM core uses, so a timed human game and a timed
+        // Play-AI game reach the same verdict in the same position.
+        if let Some(c) = self.flagged {
+            let beneficiary = match c {
+                Color::White => Color::Black,
+                Color::Black => Color::White,
+            };
+            if !engine::can_mate(&self.board, beneficiary) {
+                return (true, "", "timeout (opponent cannot mate)");
+            }
+            let winner = match c {
+                Color::White => "black",
+                Color::Black => "white",
+            };
+            return (true, winner, "timeout");
+        }
         if let Some(c) = self.resigned {
             let winner = match c {
                 Color::White => "black",
