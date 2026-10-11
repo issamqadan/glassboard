@@ -5,6 +5,78 @@
 
 ---
 
+## 0. Vision check — what the brief leaves out
+
+Issam asked (2026-10-11) whether this brief changes the game's vision. Checked
+against [VISION.md](VISION.md) line by line. The answer matters, so it is recorded
+here rather than in chat.
+
+**The brief does not contradict the vision. It is silent on the thing that defines
+the product**, which over a long redesign is how a product drifts.
+
+Read the brief closely and assistance is a private service between one player and
+the app: *"Recommend a suitable next move · Explain the reasoning · Allow the
+player to accept, inspect, or dismiss."* Nowhere in nine parts and seven user
+journeys does the opponent see any of it. There is no mention of:
+
+- **the glass box** — guardrail #1, "no hidden help, ever; any assistance a player
+  receives must be visible to their opponent". This is the entire premise:
+  *"Chess, in the open."*
+- **the handicap** — assistance sized to the rating gap, which is what makes an
+  unequal game fair and is the one thing the POC exists to prove.
+- **symmetry** — the opponent is rationed too, asks for more, and can refuse you.
+- **the ladder down** — guardrail #4, that help should fade as you improve.
+
+Implemented literally, Glassboard becomes a very good chess app with a very good
+private coach. That is a different product, and a crowded one.
+
+**Where the brief is right and sharpens the vision:**
+
+- Strategy as persistent, reassessed game state is *exactly* guardrail #4 ("prefer
+  designs that help players improve"). A plan you can follow and have re-explained
+  teaches more than a move ever will. Its own line — *"a move tells the player what
+  to do; a strategy teaches the player what they are trying to achieve"* — could
+  have come from VISION.md.
+- Separating domain state from presentation state is what fixes the plan-erasure
+  bug in §1.3. Good engineering, and it serves the product.
+- Board-primary, mobile-first matches the board-sovereignty doctrine in
+  [GAME-UX.md](GAME-UX.md).
+- Conventional time controls are overdue and vision-neutral.
+
+**The guardrail attached to every item in this plan, therefore:**
+
+> Each assistance surface must remain visible to the opponent and stay sized to the
+> agreed handicap. Nothing in this redesign may make help private, unmetered, or
+> asymmetric.
+
+Concretely, during Steps 1–3: the glass-box log, the shared assistance contract at
+The Table, the gap-sized credits and the symmetric asking all stay exactly as they
+are. **No step may be implemented in a way that detaches assistance from the
+opponent's view.** If the visual redesign later needs space, the glass box is not
+where it comes from.
+
+## 0b. Device coverage is a hard constraint, not a goal
+
+Also asked: does this keep working on every screen? Treated as a non-negotiable,
+because it is one (vision non-negotiable #5, device-agnostic and first-class), and
+because it has already broken twice — a 824px board on a 393px-tall iPhone in
+landscape, and 740px on a 640px-tall unfolded foldable.
+
+Rules for this work:
+
+- **Steps 1–3 add ZERO new above-board chrome.** The clocks already live inside the
+  cockpit strips, which are fixed at 38px; the time control is shown inside an
+  existing fixed-height row. No new row, no height change, so the board cannot move
+  and nothing new can be clipped.
+- `scripts/check-board-stability.sh` (9 invariants) must pass at every increment,
+  and runs on pre-commit.
+- The board keeps its two-axis cap `min(100vw−28, max(248, 100dvh−300))`, verified
+  across phone portrait/landscape, foldable folded/unfolded, and tablet.
+- The time-control picker lives in the full-screen setup card, which already
+  scrolls — so a long preset list cannot push the board anywhere.
+
+---
+
 ## 1. Current-state assessment
 
 Verified by reading the code, not by reading the UI. Three findings change the scope.
