@@ -1975,3 +1975,6 @@ main.game .strat-panel { display: none; }
 .gs-row .gs-tc { flex: 0 0 auto; font-size: 0.74rem; font-weight: 700; color: #8ea0b8;
   font-variant-numeric: tabular-nums; padding: 2px 7px; border-radius: 999px;
   background: rgba(255,255,255,0.06); white-space: nowrap; }
+/* A plan the position has moved away from: still the player's, visibly flagged. */
+.glass-lens .gl-planrow.reassess .gl-plan { color: #e0be79; border-color: rgba(224,190,121,0.5); }
+.glass-lens .gl-planrow.reassess .gl-stepnow { color: #e0be79; }

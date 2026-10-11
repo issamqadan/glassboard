@@ -364,6 +364,73 @@ Rules:
 
 ---
 
+## 6b. Explore vs Follow — the board as the teaching surface
+
+Added at Issam's request (2026-10-11). **Proposal only; not implemented in the
+correctness phase.**
+
+Two genuinely different interactions, and keeping them apart is the whole point.
+
+### Explore Strategy — a rehearsal, never the game
+
+A stepped walkthrough **on the board**, in an isolated preview state. Previous /
+Next / Exit. Each step shows its objective and why it matters, drawn as arrows and
+tinted squares on the real board.
+
+Hard requirements:
+
+- **Nothing real moves.** No move is played, no clock is charged, no credit is
+  consumed, the position is untouched. The preview renders over a cloned board.
+- **It must not look like the game.** The illustrative layer uses a visibly
+  different treatment from live assistance — dashed arrows, a muted board wash, and
+  a persistent `REHEARSAL` chip. The existing Lens preview already uses dashed teal
+  precisely so a preview can't be mistaken for a real move; this extends that rule.
+- **Never implies a forced line.** Each step is labelled with its condition
+  (*"if they defend with …Nf6"*), and the exit copy says plainly that the opponent
+  chooses too.
+
+### Follow Strategy — live, conditional, reassessed
+
+Activation during play, which is what §6's lifecycle now implements:
+the objective on the board, moves recommended that serve it, reassessment after
+the opponent moves, and the plan **preserved** when it is temporarily not
+recommended (NEEDS-REASSESS, not deleted).
+
+### The rule that keeps both honest
+
+> An illustrative step is **not** a legal-move claim about the current position.
+> Explore steps are rendered from the strategy's stored demo line; a live
+> recommendation is rendered from a search of the actual position. They never share
+> a visual treatment, and an Explore step is never playable with one tap.
+
+The learned-strategy entries already carry `demoFen` + `demoUci` for exactly this,
+and the strategy page already replays them from their own position — so Explore is
+mostly *moving that capability onto the game board*, not new machinery.
+
+### Does this remove the need for the half-board sheet?
+
+**Partly, and it improves the mobile answer.** For *Explore*, yes: a rehearsal
+wants the whole board plus a one-line step strip and three controls — a sheet would
+cover the thing being taught. So Explore should be a **full-board mode with a
+28–34px step strip**, not a sheet.
+
+For *Follow*, no. A live plan still needs somewhere to say *why this move serves
+the objective* while you look at the position, and that is the dock's single line
+with the sheet for depth. Two surfaces for two jobs:
+
+| | Explore | Follow |
+|---|---|---|
+| Board | whole board, rehearsal wash | live position |
+| Controls | ‹ Prev · step 2/5 · Next › · Exit | the dock's Move/Strategy row |
+| Vertical cost | ~32px strip (replaces the dock while active) | 76px dock |
+| Clocks | hidden (nothing is running) | both visible |
+| Credits | none, ever | existing rules only |
+
+Net effect on the mobile budget: Explore is *cheaper* than the dock it temporarily
+replaces, so it fits inside the Option A envelope with room to spare.
+
+---
+
 ## 7. Component architecture
 
 Reuse is the default. New modules only where a genuine concept is missing.

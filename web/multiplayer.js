@@ -59,7 +59,37 @@ let budgetSpent = 0;
 let revealedSugg = false, revealedBest = false, helpWasAvailable = false;
 let lastRevealFen = "";
 const casualMode = () => (state && state.mode === "casual") || gameMode === "casual";
-let pickedStrategyId = null;
+// THE ACTIVE PLAN — same lifecycle module as Play-AI. Line ~1761 of this file had
+// the identical deletion bug: a repaint erased the player's plan whenever the
+// engine's candidate list moved on.
+//
+// The plan is the PLAYER's own intention, not part of the shared contract, so it
+// is kept per-room on this device. No protocol change: the opponent doesn't need
+// to approve what you're trying to do, and the glass box already shows them every
+// piece of help you actually take.
+let stratState = GBStrategyState.create();
+const planKey = () => "gb_plan_" + ((new URLSearchParams(location.search).get("room")) || "x");
+const activePlanId = () => (GBStrategyState.isLive(stratState) ? stratState.id : null);
+function savePlan() {
+  try {
+    const j = GBStrategyState.toJSON(stratState);
+    if (j) localStorage.setItem(planKey(), JSON.stringify(j)); else localStorage.removeItem(planKey());
+  } catch {}
+}
+function loadPlan() {
+  try { stratState = GBStrategyState.fromJSON(JSON.parse(localStorage.getItem(planKey()))); }
+  catch { stratState = GBStrategyState.create(); }
+}
+function setActivePlan(id) {
+  const ply = (state && state.fen) ? plyFromFen(state.fen) : 0;
+  if (!id) { stratState = GBStrategyState.create(); savePlan(); return; }
+  const sr = assistData && assistData.strategy;
+  const cand = ((sr && sr.strategies) || []).find((x) => x.id === id) || { id };
+  stratState = GBStrategyState.isLive(stratState) && stratState.id !== id
+    ? GBStrategyState.replace(stratState, cand, ply)
+    : GBStrategyState.activate(GBStrategyState.create(), cand, ply);
+  savePlan();
+}
 let lastStratRelay = null;
 let forceAssist = null; // testing: force an assist rung even when you're stronger
 let gameMode = "match"; // "match" (declared handicap) | "casual" (free, both sides assisted)
@@ -424,6 +454,7 @@ function onMessage(msg) {
   switch (msg.t) {
     case "joined": {
       myColor = msg.color;
+      loadPlan(); // a reload or a reconnect keeps the plan you were following
       // You followed an invite link (host=... with no mine=1) but the server seated
       // you as WHITE — meaning this pid already holds the host seat. That happens
       // when you open your OWN invite link: one browser is one player, so the link
@@ -897,7 +928,7 @@ function computeAssist() {
   if (fold) fold.open = false;
   const myTurn = state && state.status === "ongoing" && state.turn === myColor;
   const followingPlan = assistData && assistData.strategy && assistData.strategy.strategies
-    && assistData.strategy.strategies.some((s) => s.id === pickedStrategyId);
+    && assistData.strategy.strategies.some((s) => s.id === activePlanId());
   // Safety never waits: in check, a mate threat, or losing real material → help shows at once.
   const urgent = assistData && (assistData.inCheck || assistData.mateThreat || (threats[0] && threats[0].loss >= 200));
   if (myTurn && assistData && (assistData.candidates || []).length) {
@@ -1038,7 +1069,7 @@ function renderPlanDock() {
   const sr = assistData && assistData.strategy;
   if (!sr || !sr.strategies || !sr.strategies.length) { dock.hidden = true; dock.innerHTML = ""; return; }
   dock.hidden = false;
-  const picked = sr.strategies.find((s) => s.id === pickedStrategyId);
+  const picked = sr.strategies.find((s) => s.id === activePlanId());
   if (!picked) {
     const chips = sr.strategies.slice(0, 3).map((s) =>
       `<button class="pd-pick" data-id="${s.id}" style="--sc:${STRAT_COLOR[s.id] || "#5cc9ec"}"><span class="pd-cic">${STRAT_ICON[s.id] || "◆"}</span>${escapeHtml(s.name)}</button>`).join("");
@@ -1058,7 +1089,7 @@ function renderPlanDock() {
       `<span class="pd-note">${escapeHtml(picked.moveNote)}</span></div>`;
   dock.querySelector("#pdMove").onclick = () => { const q = uciToSquares(picked.moveUci); if (q) sendMove(q.from, q.to); };
   dock.querySelector("#pdSteps").onclick = () => openStepsSheet(picked);
-  dock.querySelector("#pdX").onclick = () => { pickedStrategyId = null; renderStrategy(); renderAssist(); renderPlanDock(); };
+  dock.querySelector("#pdX").onclick = () => { setActivePlan(null); renderStrategy(); renderAssist(); renderPlanDock(); };
 }
 function openStepsSheet(picked) {
   const t = document.getElementById("stepsSheetTitle");
@@ -1535,7 +1566,7 @@ function mpOpenPlanSheet() {
     (S ? S.categories : Object.keys(byCat)).forEach((cat) => {
       const items = byCat[cat]; if (!items || !items.length) return;
       html += `<div class="ps-sec">${escapeHtml(cat)}</div>` + items.map((x) =>
-        `<button class="ps-item${x.id === pickedStrategyId ? " on" : ""}" data-id="${x.id}" style="--sc:${STRAT_COLOR[x.id] || "#5cc9ec"}">` +
+        `<button class="ps-item${x.id === activePlanId() ? " on" : ""}" data-id="${x.id}" style="--sc:${STRAT_COLOR[x.id] || "#5cc9ec"}">` +
         `<span class="ps-ic">${STRAT_ICON[x.id] || "◆"}</span><span class="ps-t"><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.idea || "")}</small></span></button>`).join("");
     });
   }
@@ -1548,13 +1579,13 @@ function mpOpenPlanSheet() {
         (cx ? `<span class="ps-cx cx-${cx}">${cx}</span>` : "") + `</a>`;
     }).join("");
   }
-  if (pickedStrategyId || followBook) html += `<button class="ps-clear" data-act="clear" type="button">✕ Clear active plan</button>`;
+  if (activePlanId() || followBook) html += `<button class="ps-clear" data-act="clear" type="button">✕ Clear active plan</button>`;
   body.innerHTML = html;
-  body.querySelectorAll(".ps-item[data-id]").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; followBook = false; sh.style.display = "none"; paint(); });
+  body.querySelectorAll(".ps-item[data-id]").forEach((b) => b.onclick = () => { setActivePlan(b.dataset.id); followBook = false; sh.style.display = "none"; paint(); });
   const bk = body.querySelector('.ps-item[data-act="book"]');
-  if (bk) bk.onclick = () => { followBook = !followBook; if (followBook) pickedStrategyId = null; sh.style.display = "none"; paint(); };
+  if (bk) bk.onclick = () => { followBook = !followBook; if (followBook) setActivePlan(null); sh.style.display = "none"; paint(); };
   const clr = body.querySelector(".ps-clear");
-  if (clr) clr.onclick = () => { pickedStrategyId = null; followBook = false; sh.style.display = "none"; paint(); };
+  if (clr) clr.onclick = () => { setActivePlan(null); followBook = false; sh.style.display = "none"; paint(); };
   sh.style.display = "grid";
 }
 
@@ -1582,7 +1613,7 @@ function renderGlassLens() {
     return;
   }
   const sr = a.strategy;
-  const picked = sr && sr.strategies && sr.strategies.find((x) => x.id === pickedStrategyId);
+  const picked = sr && sr.strategies && sr.strategies.find((x) => x.id === activePlanId());
   const p = window.GBAssistUI ? GBAssistUI.pickPriority({
     assistData: a, recommended: mpRecommended(),
     picked: picked ? Object.assign({ verb: GBAssistUI.verbFor(picked.id) }, picked) : null,
@@ -1604,7 +1635,7 @@ function renderGlassLens() {
   const pl = el2("mpLensPlan"); if (pl) pl.onclick = () => openStepsSheet(picked);
   const pls = el2("mpLensPlans"); if (pls) pls.onclick = mpOpenPlanSheet;
   el.querySelectorAll(".gl-planpick, .gl-planrec").forEach((b) => b.onclick = () => {
-    pickedStrategyId = b.dataset.id; followBook = false; paint();
+    setActivePlan(b.dataset.id); followBook = false; paint();
   });
 }
 // The plan row: your active plan, or a one-tap PROACTIVE recommendation for this
@@ -1655,7 +1686,7 @@ function renderAssist() {
   if (a.level === "off") add(`<div class="none">You're the higher-rated side — you play unassisted (that's the fair part). <b>Your opponent</b> is getting the help, and every bit of it shows in the <b>Glass-box</b> below.<br><span style="color:#7f92ab">Want to use plans + assistance yourself? Start a <b>Casual</b> game (both sides get it), or <a href="./index.html" style="color:var(--accent)">Play the AI ↗</a>.</span></div>`);
   // Surface the picked strategy's move at the top of the list.
   const sr = a.strategy;
-  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === activePlanId());
   if (picked && picked.moveUci) {
     const q = uciToSquares(picked.moveUci);
     const sm = document.createElement("div");
@@ -1758,8 +1789,11 @@ function renderStrategy() {
     return;
   }
   if (wrap) wrap.hidden = false;
-  if (pickedStrategyId && !sr.strategies.some((s) => s.id === pickedStrategyId)) pickedStrategyId = null;
-  const picked = sr.strategies.find((s) => s.id === pickedStrategyId);
+  // WAS a deletion. observe() records that the position has drifted away from the
+  // plan and never clears the player's choice.
+  GBStrategyState.observe(stratState, sr.strategies, state ? plyFromFen(state.fen) : 0);
+  savePlan();
+  const picked = sr.strategies.find((s) => s.id === activePlanId());
   const phaseEl = document.getElementById("stratPhase");
   if (phaseEl) phaseEl.textContent = sr.phase;
   if (host) {
@@ -1771,7 +1805,7 @@ function renderStrategy() {
     }
     sr.strategies.forEach((s) => {
       const card = document.createElement("div");
-      card.className = "scard" + (s.id === pickedStrategyId ? " on" : "");
+      card.className = "scard" + (s.id === activePlanId() ? " on" : "");
       card.style.setProperty("--sc", STRAT_COLOR[s.id] || "#5cc9ec");
       card.innerHTML = `<span class="sic">${STRAT_ICON[s.id] || "◆"}</span>` +
         `<div><div class="sname">${escapeHtml(s.name)}</div><div class="sidea">${escapeHtml(s.idea)}</div></div>`;
@@ -1813,7 +1847,7 @@ function linkPlanPanels(picked) {
   if (mp) mp.textContent = picked ? "→ " + picked.name : "";
 }
 function pickStrategy(id) {
-  pickedStrategyId = id;
+  setActivePlan(id);
   renderStrategy();
   renderAssist();
   const sr = assistData && assistData.strategy;
@@ -1971,7 +2005,7 @@ function moveProvenance(from, to) {
   const cands = a.candidates || [];
   if (cands.some((c) => c.from === from && c.to === to)) return "followed";
   const sr = a.strategy;
-  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === activePlanId());
   if (picked && picked.moveUci && picked.moveUci.slice(0, 4) === sqName(from) + sqName(to)) return "followed";
   return "own"; // played something the assistance didn't suggest
 }

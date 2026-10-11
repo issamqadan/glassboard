@@ -105,6 +105,7 @@ function persistAiGame(over) {
     helpReceived: helpReceived,
     // The allowance travels with the game. Infinity can't be JSON-encoded, so the
     // "nothing is rationed" case is stored as a flag and rebuilt on resume.
+    strategy: GBStrategyState.toJSON(stratState), // the plan belongs to the game
     helpFree: helpUnlimited,
     helpMax: isFinite(helpMax) ? helpMax : null,
     helpLeft: isFinite(helpLeft) ? helpLeft : null,
@@ -179,7 +180,8 @@ async function resumeAiGame(id) {
   if (window.GBAssistUI && GBAssistUI.capTrayReset) GBAssistUI.capTrayReset();
   selected = null; legalTargets = []; lastMove = null; busy = false; resigned = false; aiResigned = false; aiHopeless = 0; mateKingSq = -1;
   indepOwn = 0; indepFollowed = 0; moveReview = []; rateMoves = []; ratePending = []; lastRating = null; lastEval = null; evalTrail = [];
-  pickedStrategyId = null; followBook = false; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
+  stratState = GBStrategyState.fromJSON(rec.strategy); // a resumed game keeps its plan
+  followBook = false; budgetSpent = 0; helpWasAvailable = false; animMoveKey = null;
   // Per-GAME guards that newGame() resets and this path did not. Each one is a
   // latch, so inheriting it from the previous game silently disables a feature for
   // the whole of this one:
@@ -1161,7 +1163,7 @@ function newGame() {
   resigned = false;
   aiResigned = false; aiHopeless = 0;
   scored = false; lastScore = null; capturedLesson = null;
-  pickedStrategyId = null;
+  setActivePlan(null);
   followBook = false;
   budgetSpent = 0;
   helpWasAvailable = false;
@@ -1481,13 +1483,13 @@ function renderPlanDock() {
   const sr = assistData && assistData.strategy;
   if (firstGame || !sr || !sr.strategies || !sr.strategies.length) { dock.hidden = true; dock.innerHTML = ""; return; }
   dock.hidden = false;
-  const picked = sr.strategies.find((s) => s.id === pickedStrategyId);
+  const picked = sr.strategies.find((s) => s.id === activePlanId());
   if (!picked) {
     const chips = sr.strategies.slice(0, 3).map((s) =>
       `<button class="pd-pick" data-id="${s.id}" style="--sc:${STRAT_COLOR[s.id] || "#5cc9ec"}"><span class="pd-cic">${STRAT_ICON[s.id] || "◆"}</span>${escapeHtml(s.name)}</button>`).join("");
     dock.style.removeProperty("--sc");
     dock.innerHTML = `<div class="pd-lead">🧭 Pick a plan</div><div class="pd-chips">${chips}</div>`;
-    dock.querySelectorAll(".pd-pick").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; paint(); renderAssist(); });
+    dock.querySelectorAll(".pd-pick").forEach((b) => b.onclick = () => { setActivePlan(b.dataset.id); paint(); renderAssist(); });
     return;
   }
   const doneN = picked.steps.filter((s) => s.done).length;
@@ -1500,7 +1502,7 @@ function renderPlanDock() {
       `<span class="pd-pips" title="${doneN}/${picked.steps.length} steps">${pips}</span>` +
       `<button class="pd-steps" id="pdSteps">Steps</button><button class="pd-x" id="pdX" title="Drop this plan" aria-label="Drop this plan">✕</button></div>`;
   dock.querySelector("#pdSteps").onclick = () => openStepsSheet(picked);
-  dock.querySelector("#pdX").onclick = () => { pickedStrategyId = null; paint(); renderAssist(); };
+  dock.querySelector("#pdX").onclick = () => { setActivePlan(null); paint(); renderAssist(); };
 }
 function openStepsSheet(picked) {
   const t = document.getElementById("stepsSheetTitle");
@@ -2361,7 +2363,21 @@ function reviewHtml() {
 const STRAT_ICON = { save_piece: "🛡", win_material: "⚔", develop: "♞", center: "▦", attack_king: "⚔", simplify: "♟", passer: "⏫", iso_attack: "◎", minority_attack: "⇉", iqp_attack: "◈", open_file: "▤", pawn_storm: "⛰", fianchetto: "◹", outpost: "⚑", rook_seventh: "⇥", improve: "↗", pawn_break: "⚡" };
 const STRAT_COLOR = { save_piece: "#f2b03a", win_material: "#f2707e", develop: "#5cc9ec", center: "#7ee0d6", attack_king: "#f2707e", simplify: "#e0be79", passer: "#5cc9ec", iso_attack: "#f2707e", minority_attack: "#7ee0d6", iqp_attack: "#7ee0d6", open_file: "#7ee0d6", pawn_storm: "#f2707e", fianchetto: "#e0be79", outpost: "#7ee0d6", rook_seventh: "#f2707e", improve: "#9fc0ff", pawn_break: "#e0be79" };
 const PLAN_COLOR = { dev: "#5cc9ec", attack: "#f2707e", support: "#7ee0d6", castle: "#e0be79" };
-let pickedStrategyId = null;
+// THE ACTIVE PLAN lives in gb-strategy-state.js — part of the game, not a render
+// artefact. `pickedStrategyId` is gone entirely rather than kept as an alias: one
+// name for one piece of state, so nothing can hold a stale copy.
+let stratState = GBStrategyState.create();
+const activePlanId = () => (GBStrategyState.isLive(stratState) ? stratState.id : null);
+// The player chose (or dropped) a plan. The only way the active plan changes.
+function setActivePlan(id) {
+  const ply = uciHistory.length;
+  if (!id) { stratState = GBStrategyState.create(); return; }
+  const sr = assistData && assistData.strategy;
+  const cand = ((sr && sr.strategies) || []).find((x) => x.id === id) || { id };
+  stratState = GBStrategyState.isLive(stratState) && stratState.id !== id
+    ? GBStrategyState.replace(stratState, cand, ply)
+    : GBStrategyState.activate(GBStrategyState.create(), cand, ply);
+}
 let followBook = false; // "follow the book" — surface the chosen opening's line while in book
 // Beginner "what does this move do?" explanations. Default ON (a total beginner needs
 // them); persisted so a stronger player who turns them off stays off.
@@ -2405,8 +2421,11 @@ function renderStrategy() {
     return;
   }
   if (wrap) wrap.hidden = false;
-  if (pickedStrategyId && !sr.strategies.some((s) => s.id === pickedStrategyId)) pickedStrategyId = null;
-  const picked = sr.strategies.find((s) => s.id === pickedStrategyId);
+  // WAS: `if (picked && !candidates.includes(picked)) setActivePlan(null);` —
+  // a repaint deleted the player's plan whenever the engine's candidate list moved
+  // on. observe() records that the position has drifted and NEVER clears it.
+  GBStrategyState.observe(stratState, sr.strategies, uciHistory.length);
+  const picked = sr.strategies.find((s) => s.id === activePlanId());
   const phaseEl = document.getElementById("stratPhase");
   if (phaseEl) phaseEl.textContent = sr.phase;
   if (host) {
@@ -2414,10 +2433,10 @@ function renderStrategy() {
     if (sr.opponent) { const o = document.createElement("div"); o.className = "opp-read"; o.innerHTML = `<span>👁</span><span>${escapeHtml(sr.opponent)}</span>`; host.appendChild(o); }
     sr.strategies.forEach((s) => {
       const card = document.createElement("div");
-      card.className = "scard" + (s.id === pickedStrategyId ? " on" : "");
+      card.className = "scard" + (s.id === activePlanId() ? " on" : "");
       card.style.setProperty("--sc", STRAT_COLOR[s.id] || "#5cc9ec");
       card.innerHTML = `<span class="sic">${STRAT_ICON[s.id] || "◆"}</span><div><div class="sname">${escapeHtml(s.name)}</div><div class="sidea">${escapeHtml(s.idea)}</div></div>`;
-      card.addEventListener("click", () => { pickedStrategyId = s.id; renderStrategy(); renderAssist(); });
+      card.addEventListener("click", () => { setActivePlan(s.id); renderStrategy(); renderAssist(); });
       host.appendChild(card);
     });
     if (picked) {
@@ -2628,7 +2647,7 @@ function approxSan(uci) {
 function pickPriority() {
   if (!window.GBAssistUI) return null;
   const sr = assistData && assistData.strategy;
-  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === activePlanId());
   return GBAssistUI.pickPriority({
     assistData, recommended: sfBest,            // Play-AI feeds Stockfish at full strength
     picked: picked ? Object.assign({ verb: STRAT_VERB[picked.id] || "plan" }, picked) : null,
@@ -2657,20 +2676,28 @@ function clearPreview() { if (previewedMove) { previewedMove = null; } }
 // of tokens) the entire strategy surface disappeared.
 function planRowHTML() {
   const sr = assistData && assistData.strategy, strategies = (sr && sr.strategies) || [];
-  const picked = strategies.find((s) => s.id === pickedStrategyId);
+  // Render from the STORED plan, not from the candidate list — otherwise a plan the
+  // engine isn't currently offering would vanish from the row even though the
+  // player is still following it.
+  const live = GBStrategyState.isLive(stratState);
+  const picked = live
+    ? (strategies.find((s) => s.id === stratState.id) || { id: stratState.id, name: stratState.name, idea: stratState.objective, steps: stratState.steps })
+    : null;
   const bookOp = (followBook && bookNextMove()) ? currentOpening() : null;
   const plansBtn = `<button class="gl-plansbtn" id="lensPlans" type="button" title="Pick a strategy">🧭 Plans</button>`;
   if (picked) {
-    // Step progress, so following a plan reads as a sequence you're working through
-    // rather than a label. This is what "the assistance follows the strategy" looks
-    // like move to move.
+    // Step progress from the engine's own done-flags — never an invented
+    // percentage, because a strategy is a conditional plan and not a script.
     const steps = picked.steps || [];
     const doneN = steps.filter((x) => x.done).length;
     const pips = steps.map((x, i) => `<span class="gl-pip${x.done ? " done" : i === doneN ? " now" : ""}"></span>`).join("");
-    const now = steps[doneN];
-    return `<div class="gl-planrow"><button class="gl-plan" id="lensPlan" type="button" title="${escapeHtml((now && now.text) || picked.idea || "")}">` +
-      `🧭 ${escapeHtml(picked.name)}</button><span class="gl-pips" title="${doneN} of ${steps.length} steps done">${pips}</span>` +
-      (now ? `<span class="gl-stepnow" title="the step you're on">${escapeHtml(now.text || "")}</span>` : "") +
+    const reassess = GBStrategyState.needsReassess(stratState);
+    const line = GBStrategyState.statusLine(stratState, uciHistory.length);
+    return `<div class="gl-planrow${reassess ? " reassess" : ""}">` +
+      `<button class="gl-plan" id="lensPlan" type="button" title="${escapeHtml(picked.idea || "")}">` +
+      `${reassess ? "⚠" : "🧭"} ${escapeHtml(picked.name)}</button>` +
+      (steps.length ? `<span class="gl-pips" title="${doneN} of ${steps.length} steps done">${pips}</span>` : "") +
+      (line ? `<span class="gl-stepnow" title="${escapeHtml(line)}">${escapeHtml(line)}</span>` : "") +
       `${plansBtn}</div>`;
   }
   if (bookOp) return `<div class="gl-planrow"><span class="gl-planlab book">📖 ${escapeHtml(bookOp.name)}</span>${plansBtn}</div>`;
@@ -2749,11 +2776,11 @@ function renderGlassLens() {
 function bindPlanRow(el) {
   if (!el) return;
   const sr = assistData && assistData.strategy;
-  const picked = ((sr && sr.strategies) || []).find((x) => x.id === pickedStrategyId);
+  const picked = ((sr && sr.strategies) || []).find((x) => x.id === activePlanId());
   const pl = document.getElementById("lensPlan");
   if (pl) pl.onclick = () => { if (picked) openStepsSheet(picked); else openPlanSheet(); };
   const pls = document.getElementById("lensPlans"); if (pls) pls.onclick = openPlanSheet;
-  el.querySelectorAll(".gl-planpick, .gl-planrec").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; followBook = false; paint(); });
+  el.querySelectorAll(".gl-planpick, .gl-planrec").forEach((b) => b.onclick = () => { setActivePlan(b.dataset.id); followBook = false; paint(); });
 }
 
 // The Strategy picker — a bottom sheet of plans that FIT this position, filtered by
@@ -2783,7 +2810,7 @@ function openPlanSheet() {
     (S ? S.categories : Object.keys(byCat)).forEach((cat) => {
       const items = byCat[cat]; if (!items || !items.length) return;
       html += `<div class="ps-sec">${escapeHtml(cat)}</div>` + items.map((s) =>
-        `<button class="ps-item${s.id === pickedStrategyId ? " on" : ""}" data-id="${s.id}" style="--sc:${STRAT_COLOR[s.id] || "#5cc9ec"}">` +
+        `<button class="ps-item${s.id === activePlanId() ? " on" : ""}" data-id="${s.id}" style="--sc:${STRAT_COLOR[s.id] || "#5cc9ec"}">` +
         `<span class="ps-ic">${STRAT_ICON[s.id] || "◆"}</span><span class="ps-t"><b>${escapeHtml(s.name)}</b><small>${escapeHtml(s.idea || "")}</small></span></button>`).join("");
     });
   }
@@ -2797,11 +2824,11 @@ function openPlanSheet() {
         (cx ? `<span class="ps-cx cx-${cx}">${cx}</span>` : "") + `</a>`;
     }).join("");
   }
-  if (pickedStrategyId || followBook) html += `<button class="ps-clear" data-act="clear" type="button">✕ Clear active plan</button>`;
+  if (activePlanId() || followBook) html += `<button class="ps-clear" data-act="clear" type="button">✕ Clear active plan</button>`;
   body.innerHTML = html;
-  body.querySelectorAll(".ps-item[data-id]").forEach((b) => b.onclick = () => { pickedStrategyId = b.dataset.id; followBook = false; sh.style.display = "none"; paint(); });
-  const bk = body.querySelector('.ps-item[data-act="book"]'); if (bk) bk.onclick = () => { followBook = !followBook; if (followBook) pickedStrategyId = null; sh.style.display = "none"; paint(); };
-  const clr = body.querySelector('.ps-clear'); if (clr) clr.onclick = () => { pickedStrategyId = null; followBook = false; sh.style.display = "none"; paint(); };
+  body.querySelectorAll(".ps-item[data-id]").forEach((b) => b.onclick = () => { setActivePlan(b.dataset.id); followBook = false; sh.style.display = "none"; paint(); });
+  const bk = body.querySelector('.ps-item[data-act="book"]'); if (bk) bk.onclick = () => { followBook = !followBook; if (followBook) setActivePlan(null); sh.style.display = "none"; paint(); };
+  const clr = body.querySelector('.ps-clear'); if (clr) clr.onclick = () => { setActivePlan(null); followBook = false; sh.style.display = "none"; paint(); };
   sh.style.display = "grid";
 }
 
@@ -2879,7 +2906,7 @@ function renderAssist() {
   // If a strategy is picked, surface its move at the top of the list so the
   // plan and the concrete move live in one place.
   const sr = a.strategy;
-  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === pickedStrategyId);
+  const picked = sr && sr.strategies && sr.strategies.find((s) => s.id === activePlanId());
   if (picked && picked.moveUci) {
     const q = uciSquares(picked.moveUci);
     const sm = document.createElement("div");
