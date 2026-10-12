@@ -2194,3 +2194,52 @@ main.game .strat-panel { display: none; }
 .glass-lens .gl-plan-now { font-size: 0.82rem; line-height: 1.4; color: #b9c7db; }
 .glass-lens .gl-plan-now b { color: #7ee0d6; }
 .plan-panel.chooser .pc-prog { color: #7ee0d6; }
+
+
+/* The chooser occupies the guidance card's slot, so opening it never pushes the
+   options off the bottom of a phone. Rows are two lines, not four. */
+.plan-panel.chooser .pp-choice { padding: 10px 11px; }
+.plan-panel.chooser .pp-choice .pc-txt b { display: flex; align-items: baseline; gap: 8px; }
+.plan-panel.chooser .pc-prog { font-size: 0.7rem; font-weight: 800; color: #7ee0d6;
+  background: rgba(126,224,214,0.14); padding: 1px 6px; border-radius: 999px;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.plan-panel.chooser .pp-choice .pc-txt small { display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden; }
+
+
+/* ---- MOBILE: the page never scrolls; the card area does ---------------------
+   Desktop has done this since the rail existed — main.game is a fixed-height flex
+   column and the panel scrolls INTERNALLY, so the page itself never moves. Mobile
+   never got the same treatment, which is why guidance kept ending up below the
+   fold no matter how much was shaved off it: the board plus five chrome rows plus
+   a card simply do not fit a 660px phone, and no amount of trimming creates the
+   missing ~120px.
+   So the board and the strips take their fixed space, and the guidance card gets
+   whatever height is left and scrolls within itself. The top of the card — the
+   plan, its objective and the recommendation — is therefore ALWAYS visible,
+   whatever the content below it is doing. */
+@media (max-width: 860px) {
+  main.game {
+    height: calc(100vh - 108px);            /* app nav + bottom tab bar */
+    height: calc(100dvh - 108px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 0;
+  }
+  main.game .layout { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  main.game .board-col { flex: 0 0 auto; }
+  /* the card area takes the remainder and scrolls inside itself */
+  main.game .panels {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px;
+  }
+  /* The board reserves enough that the card's first ~140px — the plan, its current
+     objective AND the move button — is visible on every phone measured, without
+     the page ever scrolling. Tall phones are width-capped anyway, so this only
+     binds on short ones. */
+  main.game .board-wrap {
+    width: min(100%, calc(100vw - 28px), max(248px, calc(100vh - 390px)));
+    width: min(100%, calc(100vw - 28px), max(248px, calc(100dvh - 390px)));
+  }
+}

@@ -56,7 +56,7 @@ planPickerOpen = true;
 h = render();
 want("open chooser lists the plans", /Choose a strategy/.test(h) && /Develop & Castle/.test(h) && /Take the centre/.test(h));
 want("each plan shows its idea", /Get your pieces out/.test(h));
-want("and how much of it the position already meets", /already met in this position/.test(h));
+want("and how much of it the position already meets", /\d+\/\d+ met/.test(h));
 want("no move is offered here", h.indexOf("ppPlay") < 0 && h.indexOf("Nc3") < 0);
 want("no overlay", !/sheet-overlay/.test(h));
 

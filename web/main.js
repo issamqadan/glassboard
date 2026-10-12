@@ -1619,10 +1619,9 @@ function renderPlanPanel() {
       const dn = st2.filter((y) => y.done).length;
       return `<button class="pp-choice${picked && x.id === picked.id ? " on" : ""}" data-id="${x.id}">` +
         `<span class="pc-ic">${STRAT_ICON[x.id] || "◆"}</span>` +
-        `<span class="pc-txt"><b>${escapeHtml(x.name)}</b>` +
-        `<small>${escapeHtml(x.idea || "")}</small>` +
-        (st2.length ? `<small class="pc-prog">${dn} of ${st2.length} already met in this position</small>` : "") +
-        `</span></button>`;
+        `<span class="pc-txt"><b>${escapeHtml(x.name)}` +
+        (st2.length ? `<span class="pc-prog">${dn}/${st2.length} met</span>` : "") + `</b>` +
+        `<small>${escapeHtml(x.idea || "")}</small></span></button>`;
     }).join("") +
     (picked ? `<button class="pp-choice drop" data-id=""><span class="pc-ic">✕</span>` +
       `<span class="pc-txt"><b>No plan</b><small>Play without one</small></span></button>` : "") +
@@ -2745,6 +2744,11 @@ function clearPreview() { if (previewedMove) { previewedMove = null; } }
 function renderGlassLens() {
   const el = document.getElementById("glassLens");
   if (!el) return;
+  // While the chooser is open it takes THIS card's place rather than appearing
+  // below it. Opening it used to append a second card under the guidance card,
+  // which pushed the options off the bottom of a phone — you had to scroll to see
+  // what you were choosing between. One card, one slot.
+  if (planPickerOpen) { el.hidden = true; el.innerHTML = ""; return; }
   const active = !firstGame && game.status() === "ongoing" && game.sideToMove() === humanColor && assistData && (assistData.candidates || []).length;
   if (!active) { el.hidden = true; el.innerHTML = ""; return; }
   el.hidden = false;
