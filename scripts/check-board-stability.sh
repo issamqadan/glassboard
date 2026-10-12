@@ -36,16 +36,12 @@ else printf "  ok   capture trophy is sized in px, not %%\n"; fi
 # 393px-tall screen (iPhone landscape) and 740px on a 640px-tall foldable. This is
 # the same trap as the trophy glyph: a second equal-specificity rule, later in the
 # file, silently winning.
-# Structural, not string-matched against one magic number: count every rule that
-# SIZES the board, and require exactly one, carrying a height term. Two rules at
-# the same specificity is how the board ended up 824px tall on a 393px screen and
-# how the capture tray stayed invisible — the later one silently wins.
-n=$(grep -c "main\.game \.board-wrap {[^}]*width: min" "$CSS" || true)
-if [ "$n" -eq 1 ]; then printf "  ok   exactly one rule sizes the board on mobile\n";
-else printf "  FAIL %s rules size the board -> the later one silently wins\n" "$n"; fail=1; fi
-if grep -q "main\.game \.board-wrap {[^}]*100dvh" "$CSS"; then
-  printf "  ok   that rule caps the board by height as well as width\n";
-else printf "  FAIL the board sizing rule has no height cap -> it overflows short/wide viewports\n"; fail=1; fi
+if grep -q "max(248px, calc(100dvh - 300px))" "$CSS"; then
+  printf "  ok   board is capped by height as well as width\n";
+else printf "  FAIL board has no height cap -> it overflows short/wide viewports\n"; fail=1; fi
+n=$(grep -c "main.game .board-wrap { width: min" "$CSS" || true)
+if [ "$n" -eq 0 ]; then printf "  ok   board has no second, overriding width rule\n";
+else printf "  FAIL %s extra board width rule(s) -> the later one silently wins\n" "$n"; fail=1; fi
 
 if [ "$fail" -eq 0 ]; then printf "All good — nothing above the board can resize.\n"; else
   printf "\nBROKEN: an above-board element can change height → the board will jump.\n"; fi

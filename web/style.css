@@ -1784,10 +1784,11 @@ main.game .strat-panel { display: none; }
      usable floor on very short screens — the page may scroll, but nothing is
      mis-laid-out. */
   main.game .board-wrap, main.game .board-col > * { max-width: calc(100vw - 28px); }
-  /* Width cap only here; the HEIGHT cap and the single sizing rule live in the
-     fixed-height mobile block at the end of this file. One rule, one reserve. */
-  main.game .board-wrap { max-width: calc(100vw - 28px); height: auto;
-    aspect-ratio: 1 / 1; margin-inline: auto; }
+  main.game .board-wrap {
+    width: min(100%, calc(100vw - 28px), max(248px, calc(100vh - 300px)));
+    width: min(100%, calc(100vw - 28px), max(248px, calc(100dvh - 300px)));
+    max-width: calc(100vw - 28px);
+    height: auto; aspect-ratio: 1 / 1; margin-inline: auto; }
   /* Every flex row inside the game may wrap and may shrink. */
   /* The Lens sits BELOW the board, so it may wrap freely. The gamebar and the
      cockpit strips sit ABOVE it and must stay exactly one fixed-height line. */
@@ -2137,7 +2138,12 @@ main.game .strat-panel { display: none; }
    sizing rule, and deliberately in a narrower media query so the two can never
    both apply at the same viewport — two same-specificity width rules is how the
    capture tray stayed invisible for three rounds. */
-
+@media (max-width: 860px) and (max-height: 700px) {
+  main.game .board-wrap {
+    width: min(100%, calc(100vw - 28px), max(248px, calc(100vh - 360px)));
+    width: min(100%, calc(100vw - 28px), max(248px, calc(100dvh - 360px)));
+  }
+}
 
 
 /* ---- MOBILE: the two desktop panels become two TABS -------------------------
@@ -2206,34 +2212,3 @@ main.game .strat-panel { display: none; }
 
 
 
-
-
-/* ---- MOBILE GAME SCREEN: fixed height, card scrolls inside ------------------
-   VERIFIED IN A RENDERER (scripts/render-mobile.py) at 360x640, 393x660, 393x760
-   and 430x800 before shipping — the previous three attempts at this were measured
-   with arithmetic and shipped broken.
-   The game screen owns exactly the space between the app nav and the bottom tab
-   bar. The board and strips take their fixed height; the guidance card takes the
-   remainder and scrolls INSIDE itself, so its top — the plan, the objective and
-   the move button — is always on screen and nothing is laid out behind the tab
-   bar. */
-@media (max-width: 860px) {
-  main.game {
-    height: calc(100vh - 108px);
-    height: calc(100dvh - 108px);          /* app nav 56 + tab bar 52 */
-    max-height: calc(100dvh - 108px);
-    display: flex; flex-direction: column;
-    overflow: hidden;
-    padding: 6px 10px 0;
-  }
-  main.game .layout { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
-    gap: 6px; width: 100%; max-width: 100%; min-width: 0; }
-  main.game .board-col { flex: 0 0 auto; width: 100%; max-width: 100%; min-width: 0; }
-  main.game .panels { flex: 1 1 auto; min-height: 0; overflow-y: auto;
-    -webkit-overflow-scrolling: touch; display: flex; flex-direction: column;
-    gap: 6px; margin: 0; padding-bottom: 6px; }
-  /* Sized so the card always gets a readable slice. This is the ONLY board width
-     rule for small screens — the short-screen variant below narrows the viewport
-     range rather than competing at the same one. */
-  main.game .board-wrap { width: min(100%, calc(100vw - 28px), max(240px, calc(100dvh - 430px))); }
-}
