@@ -2134,10 +2134,14 @@ main.game .strat-panel { display: none; }
 /* Short screens give the board a little back so the assist block clears the fold.
    The board stays square and still never moves DURING a game — this only changes
    how much height it reserves at a given viewport. */
+/* Short screens reserve more for the guidance card. Kept as the ONLY other board
+   sizing rule, and deliberately in a narrower media query so the two can never
+   both apply at the same viewport — two same-specificity width rules is how the
+   capture tray stayed invisible for three rounds. */
 @media (max-width: 860px) and (max-height: 700px) {
   main.game .board-wrap {
-    width: min(100%, calc(100vw - 28px), max(248px, calc(100vh - 380px)));
-    width: min(100%, calc(100vw - 28px), max(248px, calc(100dvh - 380px)));
+    width: min(100%, calc(100vw - 28px), max(248px, calc(100vh - 360px)));
+    width: min(100%, calc(100vw - 28px), max(248px, calc(100dvh - 360px)));
   }
 }
 
@@ -2207,43 +2211,4 @@ main.game .strat-panel { display: none; }
   -webkit-box-orient: vertical; overflow: hidden; }
 
 
-/* ---- MOBILE: the page never scrolls; the card area does ---------------------
-   Desktop has done this since the rail existed — main.game is a fixed-height flex
-   column and the panel scrolls INTERNALLY, so the page itself never moves. Mobile
-   never got the same treatment, which is why guidance kept ending up below the
-   fold no matter how much was shaved off it: the board plus five chrome rows plus
-   a card simply do not fit a 660px phone, and no amount of trimming creates the
-   missing ~120px.
-   So the board and the strips take their fixed space, and the guidance card gets
-   whatever height is left and scrolls within itself. The top of the card — the
-   plan, its objective and the recommendation — is therefore ALWAYS visible,
-   whatever the content below it is doing. */
-@media (max-width: 860px) {
-  main.game {
-    height: calc(100vh - 108px);            /* app nav + bottom tab bar */
-    height: calc(100dvh - 108px);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    padding-bottom: 0;
-  }
-  main.game .layout { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
-    width: 100%; max-width: 100%; min-width: 0; }
-  /* A flex column stretches to its widest child, and `overflow: hidden` then CLIPS
-     rather than shrinks — which is how the board ended up cut off at the right
-     edge. Pin every level to the viewport width so nothing can push it wider. */
-  main.game .board-col { flex: 0 0 auto; width: 100%; max-width: 100%; min-width: 0; align-self: stretch; }
-  /* the card area takes the remainder and scrolls inside itself */
-  main.game .panels {
-    flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
-    display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px;
-  }
-  /* The board reserves enough that the card's first ~140px — the plan, its current
-     objective AND the move button — is visible on every phone measured, without
-     the page ever scrolling. Tall phones are width-capped anyway, so this only
-     binds on short ones. */
-  main.game .board-wrap {
-    width: min(100%, calc(100vw - 28px), max(248px, calc(100vh - 390px)));
-    width: min(100%, calc(100vw - 28px), max(248px, calc(100dvh - 390px)));
-  }
-}
+
