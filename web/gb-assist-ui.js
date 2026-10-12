@@ -242,7 +242,7 @@
   //   array's letter case when not given.
   // key: identity for the pop animation ("you" / "opp"). Without it, nothing pops —
   //   which is what we want for a re-render caused by the clock ticking.
-  function capTrayHTML(caps, color, key) {
+  function capTrayHTML(caps, color, key, o) {
     const counts = {};
     let col = color;
     if (Array.isArray(caps)) {
@@ -259,11 +259,17 @@
     col = col === "white" ? "white" : "black";
     const prev = key ? trayPrev[key] : null;
     if (key) trayPrev[key] = counts;
-    let html = "", total = 0;
+    let html = "", total = 0, shown = 0, hidden = 0;
+    // A phone strip has room for about four chips. Clipping them silently is how
+    // this feature came to look missing three times; past the limit we say "+2"
+    // so the player knows there is more and can tap for the full list.
+    const limit = o && o.limit ? o.limit : 4;
     for (const k of CAP_ORDER) {
       const n = counts[k] || 0;
       if (!n) continue;
       total += n;
+      if (shown >= limit) { hidden += n; continue; }
+      shown++;
       // Pop only a piece whose count actually went UP since the last tray we built.
       const grew = prev && n > (prev[k] || 0);
       const glyph = typeof global.pieceSVG === "function"
@@ -272,6 +278,7 @@
       html += `<span class="cap-pc ${col}${grew ? " pop" : ""}" title="${n} ${CAP_NAME[k]}${n > 1 ? "s" : ""} taken">` +
         glyph + (n > 1 ? `<i class="cap-n">${n}</i>` : "") + `</span>`;
     }
+    if (hidden) html += `<span class="cap-more" title="${hidden} more taken">+${hidden}</span>`;
     return total ? `<span class="cap-tray" aria-label="${total} piece${total > 1 ? "s" : ""} taken">${html}</span>` : "";
   }
   // Reset the pop memory — a new game must not pop every trophy on its first paint.

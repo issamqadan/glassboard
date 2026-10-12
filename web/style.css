@@ -1152,7 +1152,7 @@ main.game #coach { display: none; }
 /* THE CAPTURE TRAY — the trophies. Grouped with a count, so five pawns are one
    chip and the tray stays narrow enough to survive on a phone. Takes the leftover
    room, shrinks only after the name has given up everything it can. */
-.pstrip .ps-caps { flex: 1 1 auto; min-width: 0; display: inline-flex; align-items: center; overflow: hidden; }
+.pstrip .ps-caps { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; overflow: hidden; }
 .pstrip .ps-caps .cap-tray { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; }
 .pstrip .ps-caps .cap-pc { height: 19px; display: inline-flex; align-items: center; flex: 0 0 auto;
   padding: 0 4px 0 2px; border-radius: 6px; background: rgba(255,255,255,0.05); }
@@ -1978,3 +1978,67 @@ main.game .strat-panel { display: none; }
 /* A plan the position has moved away from: still the player's, visibly flagged. */
 .glass-lens .gl-planrow.reassess .gl-plan { color: #e0be79; border-color: rgba(224,190,121,0.5); }
 .glass-lens .gl-planrow.reassess .gl-stepnow { color: #e0be79; }
+
+
+/* ---- THE STRIP IS OVER-SUBSCRIBED ON A PHONE -------------------------------
+   Measured: name + rating + help chip + lead + clock + turn text + padding and
+   gaps need ~454px of a ~369px strip on a 393px device. The captured pieces slot
+   was therefore collapsing to zero — which is why the trophies read as missing
+   three separate times, and why tuning flex-shrink twice never fixed it: no
+   amount of shrinking creates 85px.
+   So on a phone, two genuinely redundant things give way instead:
+     • the rating — the opponent's level is chosen at setup and is in the
+       strategy strip above the board
+     • the turn text — a ticking clock plus a lit strip already say whose move it is
+   That frees ~184px, which is room for four trophy chips and a "+N". No height
+   changes, so the board does not move. */
+@media (max-width: 860px) {
+  main.game .pstrip .ps-rating { display: none; }
+  main.game .pstrip.has-clock .ps-turn { display: none; }
+  main.game .pstrip .ps-caps { flex: 0 0 auto; }   /* trophies never collapse */
+}
+.pstrip .ps-caps .cap-more { flex: 0 0 auto; font-size: 0.7rem; font-weight: 800; color: #8ea0b8;
+  padding: 0 4px; font-variant-numeric: tabular-nums; }
+/* Tighter chips: the pill background was costing width for decoration. */
+.pstrip .ps-caps .cap-pc { padding: 0 2px 0 0; background: none; }
+
+/* Very narrow phones (<=380px: iPhone SE, small Android) need ~24px more before
+   the trophies fit. Taken from spacing and the name, not from the trophies. */
+@media (max-width: 380px) {
+  main.game .pstrip { gap: 6px; padding: 0 8px; }
+  main.game .pstrip .ps-id { max-width: 5.2em; }   /* the name ellipsises sooner */
+}
+
+
+/* ---- THE PLAN PANEL — beside the board, never over it ----------------------
+   Replaces a full-screen dimming modal. Picking a strategy used to black out the
+   game behind a dialog, which disconnected the plan from the position it is about
+   and meant every step re-opened the same overlay. */
+.plan-panel { margin: 10px 0 0; padding: 12px 13px; border-radius: 14px;
+  background: linear-gradient(150deg, rgba(126,224,214,0.10), rgba(255,255,255,0.03));
+  border: 1px solid rgba(126,224,214,0.32); }
+.plan-panel.reassess { border-color: rgba(224,190,121,0.5);
+  background: linear-gradient(150deg, rgba(224,190,121,0.12), rgba(255,255,255,0.03)); }
+.plan-panel .pp-head { display: flex; align-items: center; gap: 8px; }
+.plan-panel .pp-head b { color: #eef4fb; font-size: 0.96rem; flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-panel .pp-ic { font-size: 16px; }
+.plan-panel .pp-prog { flex: 0 0 auto; font-size: 0.76rem; font-weight: 800; color: #7ee0d6;
+  font-variant-numeric: tabular-nums; padding: 2px 8px; border-radius: 999px; background: rgba(126,224,214,0.14); }
+.plan-panel.reassess .pp-prog { color: #e0be79; background: rgba(224,190,121,0.16); }
+.plan-panel .pp-x { flex: 0 0 auto; background: none; border: 0; color: #7f92ab; cursor: pointer; font-size: 0.9rem; padding: 2px 4px; }
+.plan-panel .pp-idea { margin: 8px 0 0; font-size: 0.86rem; line-height: 1.5; color: #c3d0e6; }
+.plan-panel .pp-warn { margin: 8px 0 0; font-size: 0.82rem; line-height: 1.45; color: #e0be79; }
+.plan-panel .pp-steps { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.plan-panel .pp-step { display: flex; align-items: flex-start; gap: 9px; font-size: 0.86rem; line-height: 1.4; color: #93a2b8; }
+.plan-panel .pp-step .pp-dot { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; display: grid;
+  place-items: center; font-size: 11px; font-weight: 800; border: 1.5px solid rgba(255,255,255,0.16); color: #5d6c8c; }
+.plan-panel .pp-step.done { color: #7f92ab; }
+.plan-panel .pp-step.done .pp-dot { background: #2fa96b; border-color: #2fa96b; color: #04220f; }
+.plan-panel .pp-step.now { color: #eef4fb; font-weight: 600; }
+.plan-panel .pp-step.now .pp-dot { border-color: #7ee0d6; color: #7ee0d6; box-shadow: 0 0 0 3px rgba(126,224,214,0.14); }
+.plan-panel .pp-play { margin-top: 11px; width: 100%; padding: 11px; border-radius: 11px; cursor: pointer;
+  background: rgba(126,224,214,0.16); color: #aef0e6; border: 1px solid rgba(126,224,214,0.5); font-weight: 700; }
+.plan-panel .pp-play:hover { background: rgba(126,224,214,0.26); }
+/* The retired modal must not come back by accident. */
+#stepsSheet { display: none !important; }

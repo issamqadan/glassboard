@@ -1497,6 +1497,7 @@ function paint() {
     renderStrategy();
     renderPlanDock();
     renderGlassLens();
+  renderPlanPanel(null);
     renderBoardAdvice();
     renderMoveList();
     renderCaptured();
@@ -1541,22 +1542,50 @@ function renderPlanDock() {
   dock.querySelector("#pdSteps").onclick = () => openStepsSheet(picked);
   dock.querySelector("#pdX").onclick = () => { setActivePlan(null); paint(); renderAssist(); };
 }
-function openStepsSheet(picked) {
-  const t = document.getElementById("stepsSheetTitle");
-  if (t) t.textContent = (STRAT_ICON[picked.id] || "◆") + " " + picked.name;
-  const b = document.getElementById("stepsSheetBody");
-  if (b) b.innerHTML =
-    `<div class="ss-idea">${escapeHtml(picked.idea)}</div>` +
-    `<div class="ss-steps">${picked.steps.map((st) => `<div class="ss-step ${st.done ? "done" : ""}"><span class="ss-dot">${st.done ? "✓" : "•"}</span><span>${escapeHtml(st.text)}</span></div>`).join("")}</div>` +
-    (showAnswer()
-      ? `<button class="ss-play" id="ssPlay">Play next — ${escapeHtml(picked.moveSan || picked.moveUci)}</button>`
-      : `<button class="ss-play" id="ssAsk">${helpDelivery === "gentleman" ? "🤝 Request the move" : "🔔 Reveal the move"}</button>`);
-  const p = document.getElementById("ssPlay");
-  if (p) p.onclick = () => { const sh = document.getElementById("stepsSheet"); if (sh) sh.style.display = "none"; const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); };
-  const pa = document.getElementById("ssAsk");
-  if (pa) pa.onclick = () => { const sh = document.getElementById("stepsSheet"); if (sh) sh.style.display = "none"; askForHelp(); };
-  const sh = document.getElementById("stepsSheet");
-  if (sh) sh.style.display = "grid";
+// THE PLAN, INLINE. This used to raise a full-screen dimming modal over the board:
+// you picked a plan and the game went dark behind a dialog, which is the opposite
+// of connecting the plan to the position. It is now a panel beside the board
+// (desktop) or under the Lens (mobile). The board stays lit, stays interactive,
+// and keeps showing the plan's move as an arrow while you read the steps.
+let planPanelOpen = false;
+function openStepsSheet(picked) { planPanelOpen = true; renderPlanPanel(picked); }
+function closePlanPanel() { planPanelOpen = false; renderPlanPanel(null); }
+function renderPlanPanel(pickedArg) {
+  const el = document.getElementById("planPanel");
+  if (!el) return;
+  const sr = assistData && assistData.strategy;
+  const live = GBStrategyState.isLive(stratState);
+  const picked = pickedArg || (live
+    ? (((sr && sr.strategies) || []).find((x) => x.id === stratState.id)
+       || { id: stratState.id, name: stratState.name, idea: stratState.objective, steps: stratState.steps })
+    : null);
+  if (!planPanelOpen || !picked) { el.hidden = true; el.innerHTML = ""; return; }
+  const steps = picked.steps || [];
+  const doneN = steps.filter((x) => x.done).length;
+  const reassess = GBStrategyState.needsReassess(stratState);
+  el.hidden = false;
+  el.className = "plan-panel" + (reassess ? " reassess" : "");
+  el.innerHTML =
+    `<div class="pp-head"><span class="pp-ic">${STRAT_ICON[picked.id] || "◆"}</span>` +
+      `<b>${escapeHtml(picked.name)}</b>` +
+      `<span class="pp-prog">${doneN}/${steps.length || 0}</span>` +
+      `<button class="pp-x" id="ppClose" title="Collapse">✕</button></div>` +
+    `<p class="pp-idea">${escapeHtml(picked.idea || "")}</p>` +
+    (reassess ? `<p class="pp-warn">⚠ ${escapeHtml(GBStrategyState.statusLine(stratState, uciHistory.length))}</p>` : "") +
+    `<ol class="pp-steps">` + steps.map((st, i) => {
+      const state = st.done ? "done" : i === doneN ? "now" : "todo";
+      return `<li class="pp-step ${state}"><span class="pp-dot">${st.done ? "✓" : i === doneN ? "▸" : ""}</span>` +
+        `<span>${escapeHtml(st.text || "")}</span></li>`;
+    }).join("") + `</ol>` +
+    (picked.moveUci
+      ? (showAnswer()
+          ? `<button class="pp-play" id="ppPlay">▶ Play the next step — ${escapeHtml(picked.moveSan || picked.moveUci)}</button>`
+          : `<button class="pp-play" id="ppAsk">${helpDelivery === "gentleman" ? "🤝 Request the move" : "🔔 Reveal the move"}</button>`)
+      : "");
+  const x = document.getElementById("ppClose"); if (x) x.onclick = closePlanPanel;
+  const p = document.getElementById("ppPlay");
+  if (p) p.onclick = () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); };
+  const pa = document.getElementById("ppAsk"); if (pa) pa.onclick = askForHelp;
 }
 
 // Name the opening in play (from the strategy catalog) and show its professional
@@ -1832,6 +1861,11 @@ function renderPlayers() {
   oppEl.hidden = false; youEl.hidden = false;
   if (oppEl._h !== opp) { oppEl.innerHTML = opp; oppEl._h = opp; }
   if (youEl._h !== you) { youEl.innerHTML = you; youEl._h = you; }
+  
+  // Marks a strip that is showing a clock, so the CSS can drop the now-redundant
+  // turn text on a phone and give that width to the captured pieces.
+  oppEl.classList.toggle("has-clock", !!showClock);
+  youEl.classList.toggle("has-clock", !!showClock);
   oppEl.classList.toggle("active", turn === engineColor());
   youEl.classList.toggle("active", turn === humanColor);
   oppEl.onclick = () => { const f = document.getElementById("setupFold"); if (f) f.open = true;
@@ -2413,6 +2447,7 @@ let stratState = GBStrategyState.create();
 const activePlanId = () => (GBStrategyState.isLive(stratState) ? stratState.id : null);
 // The player chose (or dropped) a plan. The only way the active plan changes.
 function setActivePlan(id) {
+  planPanelOpen = !!id; // choosing a plan opens its steps beside the board
   const ply = uciHistory.length;
   if (!id) { stratState = GBStrategyState.create(); return; }
   const sr = assistData && assistData.strategy;

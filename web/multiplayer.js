@@ -1334,6 +1334,11 @@ function renderPlayers() {
   oppEl.hidden = false; youEl.hidden = false;
   if (oppEl._h !== opp) { oppEl.innerHTML = opp; oppEl._h = opp; }
   if (youEl._h !== you) { youEl.innerHTML = you; youEl._h = you; }
+  
+  // Marks a strip that is showing a clock, so the CSS can drop the now-redundant
+  // turn text on a phone and give that width to the captured pieces.
+  oppEl.classList.toggle("has-clock", !!ctl);
+  youEl.classList.toggle("has-clock", !!ctl);
   oppEl.classList.toggle("active", !!turn && turn !== myColor);
   youEl.classList.toggle("active", turn === myColor);
 }

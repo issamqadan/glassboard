@@ -181,6 +181,11 @@
           <!-- Glass Lens: the "what matters now" recommendation (assistance-first). On
                desktop it heads the right panel; on mobile it sits right under the board. -->
           <div id="glassLens" class="glass-lens" hidden></div>
+          <!-- THE PLAN PANEL. Was a full-screen dimming modal over the board, which
+               disconnected the plan from the position it is about. It is an inline
+               panel now: on desktop it sits in this rail beside the board, on mobile
+               directly under the Lens. The board is never covered and never dimmed. -->
+          <div id="planPanel" class="plan-panel" hidden></div>
           <!-- Coach: transient safety net — speaks only for real danger/opportunity. -->
           <div id="coach" class="coach" aria-live="polite" hidden></div>
           <!-- Move list with PROVENANCE — each of your moves is tagged own vs assisted,
