@@ -1268,6 +1268,7 @@ function onPositionChanged() {
   freeCaptures = [];
   assistData = null;
   revealedBest = false; // deeper help must be re-revealed (and re-paid) each position
+  planPickerOpen = false; // choosing is a moment, not a mode you can be stuck in
   planRevealed = false; // and the plan's move is re-revealed per position too
   // Open Hand shows the answer unasked, so it is charged for the position the
   // moment that position arrives — that's what "counts down as it's offered" means.
@@ -1592,6 +1593,16 @@ function activePlanLive() {
     || { id: stratState.id, name: stratState.name, idea: stratState.objective, steps: stratState.steps, stale: true };
 }
 
+// The single source of truth for "is the chooser on screen?". Both the guidance
+// card and the chooser consult it, so they cannot both decide the other one is
+// showing and leave the player with nothing.
+function chooserWillRender() {
+  if (!planPickerOpen) return false;
+  const sr = assistData && assistData.strategy;
+  const list = (sr && sr.strategies) || [];
+  return !!(list.length && !firstGame && game && game.status() === "ongoing" && game.sideToMove() === humanColor);
+}
+
 function renderPlanPanel() {
   const el = document.getElementById("planPanel");
   if (!el) return;
@@ -1608,7 +1619,7 @@ function renderPlanPanel() {
   // This element is now ONLY the strategy chooser, opened from "Change strategy"
   // in the guidance card. Everything else about the plan — name, progress,
   // objective, and the single recommendation it serves — lives in that one card.
-  if (!inGame || !list.length || !planPickerOpen) { el.hidden = true; el.innerHTML = ""; return; }
+  if (!chooserWillRender()) { el.hidden = true; el.innerHTML = ""; return; }
   el.hidden = false;
   el.className = "plan-panel chooser";
   el.innerHTML =
@@ -2746,9 +2757,14 @@ function renderGlassLens() {
   if (!el) return;
   // While the chooser is open it takes THIS card's place rather than appearing
   // below it. Opening it used to append a second card under the guidance card,
-  // which pushed the options off the bottom of a phone — you had to scroll to see
-  // what you were choosing between. One card, one slot.
-  if (planPickerOpen) { el.hidden = true; el.innerHTML = ""; return; }
+  // which pushed the options off the bottom of a phone.
+  //
+  // Guarded by chooserWillRender(): hiding this card unconditionally produced a
+  // COMPLETELY BLANK assist area whenever the chooser had nothing to show — the
+  // engine offers no plans in some positions, planPickerOpen is module state that
+  // survived across moves, and so both cards hid each other. Never hide this one
+  // unless something is genuinely taking its place.
+  if (planPickerOpen && chooserWillRender()) { el.hidden = true; el.innerHTML = ""; return; }
   const active = !firstGame && game.status() === "ongoing" && game.sideToMove() === humanColor && assistData && (assistData.candidates || []).length;
   if (!active) { el.hidden = true; el.innerHTML = ""; return; }
   el.hidden = false;

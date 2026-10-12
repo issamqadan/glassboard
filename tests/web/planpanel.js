@@ -128,3 +128,23 @@ want("the slice actually found the function", lens.length > 500 && branches >= 3
 want("every branch renders the plan header", branches === withHead && branches > 0);
 want("the control is delegated, not re-bound per render", /addEventListener\("click"[\s\S]{0,200}lensChange/.test(src));
 want("no per-render onclick for it remains", !/getElementById\("lensChange"\)/.test(src));
+
+print("\n--- the two cards can never both be hidden (the blank-screen bug) ---");
+// planPickerOpen is module state that survives moves. When the chooser was open
+// but the engine offered NO plans, the guidance card hid itself for a chooser that
+// then rendered nothing — a completely empty assist area.
+var src2 = readFile("web/main.js");
+want("the guidance card only yields to a chooser that will render",
+     /if \(planPickerOpen && chooserWillRender\(\)\)/.test(src2));
+want("both cards consult the SAME predicate",
+     (src2.match(/chooserWillRender\(\)/g) || []).length >= 2);
+want("the chooser closes when the position moves on", /planPickerOpen = false; \/\/ choosing is a moment/.test(src2));
+// and drive it: chooser open, engine offers nothing -> the chooser must stand down
+planPickerOpen = true;
+assistData = { strategy: { strategies: [] } };
+var blank = render();
+want("chooser renders nothing when there is nothing to choose", EL.hidden === true);
+want("...so the guidance card is free to show", chooserWillRender() === false);
+assistData = { strategy: { strategies: [PLAN, OTHER] } };
+want("with plans available, the chooser does take over", chooserWillRender() === true);
+planPickerOpen = false;

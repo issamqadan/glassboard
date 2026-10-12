@@ -2227,8 +2227,12 @@ main.game .strat-panel { display: none; }
     flex-direction: column;
     padding-bottom: 0;
   }
-  main.game .layout { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-  main.game .board-col { flex: 0 0 auto; }
+  main.game .layout { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+    width: 100%; max-width: 100%; min-width: 0; }
+  /* A flex column stretches to its widest child, and `overflow: hidden` then CLIPS
+     rather than shrinks — which is how the board ended up cut off at the right
+     edge. Pin every level to the viewport width so nothing can push it wider. */
+  main.game .board-col { flex: 0 0 auto; width: 100%; max-width: 100%; min-width: 0; align-self: stretch; }
   /* the card area takes the remainder and scrolls inside itself */
   main.game .panels {
     flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
