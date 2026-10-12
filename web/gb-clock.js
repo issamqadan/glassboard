@@ -119,6 +119,46 @@
     return s;
   }
 
+  // ---- time management for a SEARCH ---------------------------------------
+  // How long may an engine think on this move, given what's left on the clock?
+  //
+  // Needed because the opponent's think-time was a fixed per-level figure (up to
+  // 1400ms) that knew nothing about its own clock, so in a short game it would
+  // happily spend itself into a flag. The same applies to the ADVICE search, which
+  // runs on the player's turn and therefore on the player's time — the advisor must
+  // never be the reason somebody flags.
+  //
+  //  remainingMs — what this side has left
+  //  incrementMs — credited after the move, so part of it is safe to spend now
+  //  ceilingMs   — the level's normal think-time (the strength setting)
+  //  movesPlayed — used to estimate how much game is left
+  //  floorMs     — never go below this; a legal move still has to come out
+  //
+  // Returns the ceiling unchanged when there is no clock, so an untimed game plays
+  // at exactly the strength it always did.
+  function searchBudget(o) {
+    o = o || {};
+    const ceiling = Math.max(1, o.ceilingMs || 1000);
+    const remaining = Number(o.remainingMs);
+    if (!isFinite(remaining) || remaining <= 0) return ceiling; // untimed
+    const floor = Math.max(1, o.floorMs == null ? 40 : o.floorMs);
+    const inc = Math.max(0, o.incrementMs || 0);
+    // Reserve a little for sending the move and painting it — losing on time
+    // because of our own plumbing would be indefensible.
+    const safety = 150;
+    const usable = Math.max(0, remaining - safety);
+    if (usable <= floor) return floor;
+    // Expected moves still to play. Shrinks as the game goes on, which is what
+    // makes the budget self-correcting: spend too freely early and the divisor
+    // tightens later.
+    const movesToGo = Math.max(10, 36 - Math.floor((o.movesPlayed || 0) / 2));
+    // Most of the increment is safe to spend: it comes straight back.
+    let budget = usable / movesToGo + inc * 0.8;
+    budget = Math.min(budget, ceiling);          // never stronger than the level
+    budget = Math.min(budget, usable * 0.25);    // never blow a quarter of the clock on one move
+    return Math.max(floor, Math.floor(budget));
+  }
+
   // ---- presentation --------------------------------------------------------
   // Under ten seconds, tenths matter and players expect to see them.
   function fmt(ms) {
@@ -135,6 +175,6 @@
 
   global.GBClock = {
     CATEGORIES, DEFAULT, presets, control, untimed, categoryOf, assistAllowed,
-    create, settle, completeMove, halt, resume, remainingOf, fmt, pressure, now, label,
+    create, settle, completeMove, halt, resume, remainingOf, fmt, pressure, now, label, searchBudget,
   };
 })(typeof window !== "undefined" ? window : this);

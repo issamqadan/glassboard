@@ -331,6 +331,27 @@ function pickStyleMove(cands, style, aiWhite, skill) {
   }
   return bestMv;
 }
+// How long the OPPONENT may think on this move. aiBoost() stays pure — it is the
+// strength setting — and the clock is applied here, at the call site, so the
+// ADVICE search (which also reads aiBoost) doesn't inherit the opponent's clock.
+//
+// Untimed games are unaffected: searchBudget returns the ceiling unchanged, so the
+// opponent plays at exactly the strength it always did. In a timed game it now
+// plays faster as its own clock drains, which is both correct and realistic.
+function engineThinkMs(ceilingMs) {
+  if (!timedGame || !clock) return ceilingMs;
+  GBClock.settle(clock); // budget against the clock NOW, not as of the last tick
+  return GBClock.searchBudget({
+    remainingMs: clockMs("engine"),
+    incrementMs: clock.control.incrementMs,
+    ceilingMs, movesPlayed: uciHistory.length,
+    // Stockfish needs a little room to return anything at all; below this it can
+    // come back empty, and an empty reply is what the turn-progress watchdog is
+    // for — better not to rely on it every move.
+    floorMs: 80,
+  });
+}
+
 function opponentMove(fen, usedLifeline, baseElo) {
   const rustFallback = () => askEngine("bestMove", { fen, elo: usedLifeline ? 3000 : baseElo, rand: usedLifeline ? 0 : Math.random() });
   if (firstGame || !window.GBEngine) return rustFallback();
@@ -339,13 +360,15 @@ function opponentMove(fen, usedLifeline, baseElo) {
   // Styled opponent: pick among near-best candidates by personality. Full-strength
   // lifelines and the Balanced style just play the single best move.
   if (!usedLifeline && aiStyle !== "balanced" && GBEngine.bestMoves) {
-    const opts = { skill: b.skill, movetime: b.movetime, multipv: 4 };
+    const opts = { skill: b.skill, movetime: engineThinkMs(b.movetime), multipv: 4 };
     if (moves) opts.moves = moves;
     return GBEngine.bestMoves(fen, opts)
       .then((cands) => pickStyleMove(cands, aiStyle, engineColor() === "white", b.skill) || rustFallback())
       .catch(rustFallback);
   }
-  const opts = usedLifeline ? { skill: 20, movetime: 900 } : { skill: b.skill, movetime: b.movetime, depth: b.depth };
+  const opts = usedLifeline
+    ? { skill: 20, movetime: engineThinkMs(900) }   // even a lifeline can't outspend its clock
+    : { skill: b.skill, movetime: engineThinkMs(b.movetime), depth: b.depth };
   if (moves) opts.moves = moves;
   return GBEngine.bestMove(fen, opts).then((u) => u || rustFallback()).catch(rustFallback);
 }
@@ -708,7 +731,21 @@ let resigned = false;
 // it stays an even fight).
 function adviceMovetime() {
   const oppMt = aiBoost(parseInt(engineEloEl.value, 10)).movetime || 500;
-  return Math.max(500, Math.min(1400, Math.round(oppMt * 1.25)));
+  const ceiling = Math.max(500, Math.min(1400, Math.round(oppMt * 1.25)));
+  // The advice search happens on YOUR turn, so it spends YOUR clock. At full time
+  // that's fine; with three seconds left a 1400ms think is 47% of what you have.
+  // The advisor must never be the reason you flag — so it is budgeted from your
+  // own remaining time, exactly as the opponent is budgeted from its own.
+  //
+  // Consequence, stated rather than hidden: under real time pressure the advice is
+  // shallower. That is what a clock does, and it is the player's time to spend.
+  if (!timedGame || !clock) return ceiling;
+  GBClock.settle(clock);
+  return GBClock.searchBudget({
+    remainingMs: clockMs("human"),
+    incrementMs: clock.control.incrementMs,
+    ceilingMs: ceiling, movesPlayed: uciHistory.length, floorMs: 60,
+  });
 }
 // Assistance search depth — a notch deeper than the opponent's, so following the
 // help lifts you above it (the handicap made real). Derived from the AI level.
@@ -1930,7 +1967,13 @@ function criticalMoment() {
 if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => {
   if (!document.hidden && clock && timedGame) { GBClock.settle(clock); renderClocks(); }
 });
-function stopClock() { if (clockTimer) { clearInterval(clockTimer); clockTimer = null; } }
+function stopClock() {
+  if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+  // Halt the state machine too, or a later settle() would charge time for a game
+  // that has already ended. startClock() resumes it immediately, so the
+  // stop-then-start path is unaffected.
+  if (clock) GBClock.halt(clock);
+}
 function startClock() {
   stopClock();
   if (!timedGame) return;
