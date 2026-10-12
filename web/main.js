@@ -1039,6 +1039,35 @@ async function main() {
   // Heartbeat for the safety net above: a dropped engine reply recovers on its own
   // even when nothing else happens to nudge the game.
   setInterval(() => { if (!document.hidden) ensureTurnProgress(); }, 4000);
+  // WHAT THIS DEVICE ACTUALLY REPORTS. The mobile layout has now been "fixed"
+  // three times against a guessed viewport; this measures it instead. It also
+  // reports which breakpoint won and whether the layout really is a column,
+  // because "the board is pushed to the left" is what a ROW looks like.
+  (function layoutReadout() {
+    const el = document.getElementById("layoutInfo");
+    if (!el) return;
+    const paint = () => {
+      const w = window.innerWidth, h = window.innerHeight;
+      const lay = document.querySelector("main.game .layout");
+      const dir = lay ? getComputedStyle(lay).flexDirection : "?";
+      const panels = document.querySelector("main.game .panels");
+      const pw = panels ? Math.round(panels.getBoundingClientRect().width) : 0;
+      const bw = document.querySelector("main.game .board-wrap");
+      const bww = bw ? Math.round(bw.getBoundingClientRect().width) : 0;
+      const bx = bw ? Math.round(bw.getBoundingClientRect().left) : 0;
+      const bp = w <= 640 ? "phone" : w <= 860 ? "mobile" : "DESKTOP";
+      el.textContent = `📐 ${w}×${h} · ${bp} · layout:${dir} · board ${bww}px @x${bx} · panel ${pw}px`;
+      el.dataset.bad = (dir !== "column" && w <= 900) ? "1" : "";
+    };
+    paint();
+    window.addEventListener("resize", paint);
+    window.addEventListener("orientationchange", () => setTimeout(paint, 250));
+    setInterval(paint, 2000);
+    el.onclick = () => {
+      try { navigator.clipboard.writeText(el.textContent); } catch {}
+      showMoment(`<span class="mo-ic">📐</span><span class="mo-txt"><b>Layout copied</b><small>${escapeHtml(el.textContent)}</small></span>`, "you");
+    };
+  })();
   detectFirstGame();
   const nh = document.getElementById("newHereLink");
   if (nh) nh.hidden = firstGame; // hidden while the guided game is running

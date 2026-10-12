@@ -2212,3 +2212,8 @@ main.game .strat-panel { display: none; }
 
 
 
+
+/* Device/layout readout in the settings menu — diagnostics, not decoration. */
+.layout-info { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.68rem;
+  color: #8ea0b8; cursor: pointer; line-height: 1.5; word-break: break-word; }
+.layout-info[data-bad="1"] { color: #f2a6ae; }

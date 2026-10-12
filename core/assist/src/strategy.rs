@@ -73,6 +73,20 @@ fn minor_home(color: Color) -> [Square; 4] {
         Color::Black => [57, 62, 58, 61], // b8, g8, c8, f8
     }
 }
+/// How many pieces of these kinds `color` still has anywhere on the board. Needed
+/// so a step can report "1 of 2 out" truthfully even after one has been traded.
+fn piece_count(b: &Board, color: Color, kinds: &[PieceKind]) -> i32 {
+    let mut n = 0;
+    for sq in 0..64u8 {
+        if let Some(p) = b.squares[sq as usize] {
+            if p.color == color && kinds.contains(&p.kind) {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
 fn undeveloped(b: &Board, color: Color, kinds: &[PieceKind]) -> i32 {
     let mut n = 0;
     for &sq in minor_home(color).iter() {
@@ -84,6 +98,18 @@ fn undeveloped(b: &Board, color: Color, kinds: &[PieceKind]) -> i32 {
     }
     n
 }
+/// "Develop your knights" / "Develop your knights — 1 of 2 out". Strictly derived
+/// from the position: `have` is what is still on the board, `undev` how many of
+/// those sit on their home square.
+fn develop_text(what: &str, have: i32, undev: i32) -> String {
+    let out = have - undev;
+    if undev == 0 || out <= 0 || have <= 1 {
+        format!("Develop your {}", what)
+    } else {
+        format!("Develop your {} — {} of {} out", what, out, have)
+    }
+}
+
 fn king_home(color: Color) -> Square {
     if color == Color::White { 4 } else { 60 }
 }
@@ -460,8 +486,13 @@ pub fn strategize(b: &Board, ranked: &[(Move, i32)]) -> StrategyRead {
             arrows,
             rings,
             vec![
-                step("Develop your knights", undev_kn == 0),
-                step("Develop your bishops", undev_bi == 0),
+                // A step was `done` only when BOTH minors of a type were out, so
+                // after 1.Nc3 the plan still read 0/3 and nothing appeared to be
+                // following the strategy at all. The flag still means "objective
+                // met", but the TEXT now reports the real count from the board, so
+                // a half-finished objective visibly moves.
+                step(&develop_text("knights", piece_count(b, side, &[PieceKind::Knight]), undev_kn), undev_kn == 0),
+                step(&develop_text("bishops", piece_count(b, side, &[PieceKind::Bishop]), undev_bi), undev_bi == 0),
                 step("Castle your king", castled),
             ],
         ));

@@ -135,6 +135,10 @@
               <button id="resignBtn" class="menu-item menu-act danger" title="Resign" type="button" hidden>🏳 Resign</button>
               <div class="menu-sep"></div>
               <span id="offlinePill" class="menu-item offline-pill" title="Saved on this device and playable offline — no wifi needed" hidden>✈️ Works offline</span>
+              <!-- A readout of what this device actually reports. Three layout fixes
+                   failed because the viewport was being guessed at from screenshots
+                   rather than measured; tap it and read the numbers out. -->
+              <span id="layoutInfo" class="menu-item layout-info" title="Tap to copy — tells Claude exactly what this device reports"></span>
               <a id="newHereLink" class="menu-item" href="./index.html?first=1" title="A guided game teaches you as you play">👋 New to chess?</a>
               <div class="menu-sep"></div>
               <label>You (White) <input id="humanElo" type="number" value="1200" min="100" max="3200" /></label>
