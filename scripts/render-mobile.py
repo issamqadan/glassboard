@@ -19,7 +19,7 @@ import os
 import subprocess
 import sys
 
-W_H = [(393, 660), (393, 760), (430, 800), (360, 640)]
+W_H = [(393, 660), (430, 800), (360, 640)]
 
 BOARD_SQUARES = "".join(
     f'<div class="sq {"light" if (r + c) % 2 else "dark"}">'
@@ -27,37 +27,75 @@ BOARD_SQUARES = "".join(
     for r in range(8) for c in range(8)
 )
 
-def page(w, h, chooser_open):
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from importlib import import_module
+resolve_css = import_module("resolve-css").resolve_css
+RAW = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "..", "web", "style.css")).read()
+
+
+def page(w, h, state):
+    """state: "peek" | "choose" | "guide" — the three sheet states."""
     """One device frame: the game screen as it is actually composed."""
     APP_NAV, TAB_BAR, RESERVE = 56, 52, 430
     gameh = h - APP_NAV - TAB_BAR
-    boardw = min(w - 28, max(240, h - RESERVE))
-    card = (
-        '<div id="planPanel" class="plan-panel chooser">'
-        '<div class="pp-head"><span class="pp-ic">🧭</span><b>Choose a strategy</b>'
-        '<button class="pp-x">✕</button></div>'
-        '<div class="pp-choices open">'
-        '<button class="pp-choice"><span class="pc-ic">♘</span><span class="pc-txt">'
-        '<b>Develop &amp; Castle<span class="pc-prog">0/3 met</span></b>'
-        '<small>Get your last pieces into the game and tuck your king away.</small></span></button>'
-        '<button class="pp-choice"><span class="pc-ic">✚</span><span class="pc-txt">'
-        '<b>Seize the Centre<span class="pc-prog">0/3 met</span></b>'
-        '<small>Plant a pawn in the middle — central space cramps your opponent.</small></span></button>'
-        '</div></div>'
-    ) if chooser_open else (
+    # the real board rule: two media queries, the <=700px-tall one reserving more
+    reserve = 360 if h <= 700 else 300
+    boardw = min(w - 28, max(248, h - reserve))
+    sheeth = h - 232  # the real max-height: calc(100dvh - 232px)
+    # The stylesheet is RESOLVED for this exact device: @media flattened, vh/vw and
+    # env() substituted. Without this the renderer silently used desktop CSS.
+    appcss = resolve_css(RAW, w, h)
+
+    guide = (
         '<div id="glassLens" class="glass-lens">'
-        '<div class="gl-plan-head"><span class="gp-ic">♘</span>'
+        '<div class="gl-plan-head"><span class="gp-ic">&#9822;</span>'
         '<b class="gp-name">Develop &amp; Castle</b><span class="gp-prog">1/3</span>'
-        '<button class="gp-change">Change strategy</button></div>'
-        '<div class="gl-plan-bar"><span style="width:33%"></span></div>'
+        '<button class="gp-change" id="lensChange">Change strategy</button></div>'
         '<div class="gl-plan-now"><b>Now:</b> Develop your bishops</div>'
+        '<div class="gl-plan-bar"><span style="width:33%"></span></div>'
+        '<ol class="gl-steps open">'
+        '<li class="gl-step done"><span class="gs-dot">&#10003;</span><span>Develop your knights</span></li>'
+        '<li class="gl-step now"><span class="gs-dot">&#9656;</span><span>Develop your bishops</span></li>'
+        '<li class="gl-step todo"><span class="gs-dot"></span><span>Castle your king</span></li></ol>'
+        '<button class="gl-steps-toggle">Hide the plan &#9650;</button>'
         '<div class="gl-r1"><span class="gl-label">Build your position</span>'
         '<span class="gl-tag t-best">Best move</span>'
-        '<button class="gl-explain">💡</button><button class="gl-log">📜</button></div>'
-        '<div class="gl-why">Grabs space in the centre.</div>'
-        '<div class="gl-actions"><button class="gl-play">▶ e4</button>'
-        '<button class="gl-show">👁</button><button class="gl-more">⋯</button></div>'
+        '<button class="gl-explain">&#128161;</button><button class="gl-log">&#128220;</button></div>'
+        '<div class="gl-why">The engine rates this highest here.</div>'
+        '<div class="gl-actions"><button class="gl-playmove">&#9654; e4</button>'
+        '<button class="gl-show">&#128065;</button><button class="gl-more">&#8943;</button></div>'
+        '<button class="gl-planalt">&#129517; Play your plan instead &#8212; Nc3'
+        '<small>advances &#8220;Develop your knights&#8221;</small></button>'
         '</div>'
+    )
+    chooser = (
+        '<div id="planPanel" class="plan-panel chooser">'
+        '<div class="pp-head"><span class="pp-ic">&#129517;</span><b>Choose a strategy</b>'
+        '<button class="pp-x">&#10005;</button></div>'
+        '<div class="pp-choices open">'
+        '<button class="pp-choice"><span class="pc-ic">&#9816;</span><span class="pc-txt">'
+        '<b>Develop &amp; Castle<span class="pc-prog">0/3 met</span></b>'
+        '<small>Get your last pieces into the game and tuck your king away.</small></span></button>'
+        '<button class="pp-choice"><span class="pc-ic">&#9635;</span><span class="pc-txt">'
+        '<b>Seize the Centre<span class="pc-prog">0/3 met</span></b>'
+        '<small>Plant a pawn in the middle &#8212; central space cramps your opponent.</small></span></button>'
+        '<button class="pp-choice"><span class="pc-ic">&#9876;</span><span class="pc-txt">'
+        '<b>Attack the King<span class="pc-prog">0/4 met</span></b>'
+        '<small>Aim your pieces at the enemy king and open a line.</small></span></button>'
+        '</div></div>'
+    )
+    body = {"peek": guide, "choose": chooser, "guide": guide}[state]
+    opencls = "peek" if state == "peek" else "open"
+    chev = "&#9662;" if state != "peek" else "&#9652;"
+    card = (
+        f'<div id="assistSheet" class="assist-sheet {opencls}">'
+        '<div class="as-head"><span class="as-grip"></span>'
+        '<button class="as-peek"><span class="ap-main"><span class="ap-ic">&#9822;</span>'
+        f'<b>Develop &amp; Castle</b><span class="ap-prog">1/3</span><span class="ap-chev">{chev}</span></span>'
+        '<span class="ap-now">Develop your bishops</span></button>'
+        '<button class="as-quick">&#9654; e4</button></div>'
+        f'<div class="as-body">{body}</div></div>'
     )
     strip = ('<div class="pstrip {cls} has-clock"><span class="ps-id">'
              '<span class="dot {dot}"></span>{icon} <b>{name}</b></span>'
@@ -68,18 +106,20 @@ def page(w, h, chooser_open):
             '<span class="cap-pc black">♞</span><span class="cap-more">+2</span></span>')
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="../../web/style.css">
+<style>{appcss}</style>
 <style>
-  /* dvh resolves against QuickLook's viewport, not this frame, so the viewport
-     maths is substituted with the exact px this device would compute. The flex
-     and overflow structure under test is unchanged. */
+  /* main.game's own height still measures the WINDOW, so it is pinned to what
+     this device leaves between the app nav and the tab bar. */
   .frame main.game {{ height: {gameh}px; max-height: {gameh}px; }}
   .frame main.game .board-wrap {{ width: {boardw}px; }}
+  /* position:fixed must resolve against the DEVICE FRAME, not QuickLook's window,
+     so the frame is made a containing block (transform, below). */
+  .frame .assist-sheet {{ max-height: {sheeth}px; }}
 </style>
 <style>
   /* the device frame itself — NOT app CSS */
   html,body{{margin:0;background:#05070c}}
-  .frame{{width:{w}px;height:{h}px;overflow:hidden;position:relative;
+  .frame{{width:{w}px;height:{h}px;overflow:hidden;position:relative;transform:translate(0);
     border:2px solid #ff3b30;margin:6px;background:var(--bg,#0e1420)}}
   .frame .lbl{{position:absolute;right:2px;top:2px;z-index:99;background:#ff3b30;color:#fff;
     font:10px/1.4 -apple-system,sans-serif;padding:1px 5px;border-radius:3px}}
@@ -93,7 +133,7 @@ def page(w, h, chooser_open):
   .sq{{aspect-ratio:1;display:grid;place-items:center;font-size:13px}}
   .sq.light{{background:#b6c0d0}} .sq.dark{{background:#3b465c}}
 </style></head><body>
-<div class="frame"><span class="lbl">{w}x{h} {'chooser' if chooser_open else 'playing'}</span>
+<div class="frame"><span class="lbl">{w}x{h} {state}</span>
   <div class="appnav">Glassboard</div>
   <main class="game">
     <div class="gamebar"><div class="gb-actions">
@@ -106,9 +146,7 @@ def page(w, h, chooser_open):
         <div class="board-wrap"><div class="board">{BOARD_SQUARES}</div></div>
         {strip.format(cls='you', dot='white', icon='👤', name='You', caps=caps)}
       </div>
-      <aside class="panels">{card}
-        <div class="moves-card"><b style="color:#eef4fb">Moves</b></div>
-      </aside>
+      <aside class="panels">{card}</aside>
     </div>
   </main>
   <div class="tabbar"><span>Lobby</span><span>Play AI</span><span>Learn</span><span>Strategies</span><span>More</span></div>
@@ -120,11 +158,11 @@ def main():
     os.makedirs(out, exist_ok=True)
     made = []
     for w, h in W_H:
-        for chooser in (False, True):
-            name = f"m{w}x{h}{'-chooser' if chooser else ''}.html"
+        for state in ("peek", "choose", "guide"):
+            name = f"m{w}x{h}-{state}.html"
             path = os.path.join(out, name)
             with open(path, "w") as f:
-                f.write(page(w, h, chooser))
+                f.write(page(w, h, state))
             made.append(path)
     # QuickLook renders at a requested max dimension; ask for enough to read text.
     subprocess.run(["qlmanage", "-t", "-s", "900", "-o", out] + made,

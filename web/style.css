@@ -2235,3 +2235,98 @@ main.game .strat-panel { display: none; }
   cursor: pointer; font-size: 0.75rem; font-weight: 700; color: #9fb0c6;
   background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); }
 .glass-lens .gl-steps-toggle:hover { color: #eef4fb; border-color: #7ee0d6; }
+
+/* The plan's own move, offered as a secondary action when the engine prefers
+   something else. Visibly not the primary button — choosing it is a deliberate
+   override, not a nudge. */
+.glass-lens .gl-planalt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  width: 100%; margin-top: 7px; padding: 9px 12px; border-radius: 10px; cursor: pointer;
+  font-size: 0.86rem; font-weight: 700; color: #cfe0dd;
+  background: rgba(126,224,214,0.08); border: 1px dashed rgba(126,224,214,0.45); }
+.glass-lens .gl-planalt small { font-weight: 500; font-size: 0.74rem; color: #93a2b8; }
+.glass-lens .gl-planalt:hover { background: rgba(126,224,214,0.16); border-style: solid; }
+
+
+/* ======= THE ASSISTANCE SHEET =================================================
+   One persistent surface for the whole strategy experience on a phone:
+     PEEK  — the plan, its progress, the current objective, and the move to play
+     CHOOSE — the same sheet opens upward with the strategy choices
+     GUIDE  — choosing replaces the choices IN PLACE with the step-by-step guide
+
+   DESKTOP IS UNTOUCHED BY DESIGN. `display: contents` removes the wrapper's box
+   entirely, so the Lens and the chooser remain direct flow children of .panels
+   and the right rail lays out exactly as it did before this element existed.
+   Nothing below this line applies above 860px.
+
+   It also deliberately does NOT resize the board. Three mobile regressions here
+   came from changing the board/layout containers; the sheet is one fixed-position
+   element and the existing board rule already leaves room for it:
+     393x660 -> 56 nav + 52 bar + 44 strip + 300 board + 44 strip + 52 tabs + 76
+     sheet = 624 of 660. 430x800 and 360x640 clear it by more. */
+.assist-sheet { display: contents; }
+.assist-sheet .as-head { display: none; }
+
+@media (max-width: 860px) {
+  .assist-sheet {
+    display: flex; flex-direction: column;
+    position: fixed; left: 0; right: 0; z-index: 46;
+    /* Above the tab bar, and above the iOS home indicator / Safari bottom bar.
+       dvh elsewhere handles the collapsing URL bar; this handles the safe area. */
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - 232px);
+    padding: 0 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, rgba(16,22,34,0.97), rgba(10,14,22,0.99));
+    border-top: 1px solid rgba(126,224,214,0.26);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -16px 40px -12px rgba(0,0,0,0.8);
+    transition: max-height .22s ease;
+  }
+  /* collapsed: only the head is on screen */
+  .assist-sheet.peek { max-height: none; }
+  .assist-sheet.peek .as-body { display: none; }
+
+  .assist-sheet .as-head { display: flex; align-items: center; gap: 8px;
+    position: relative; padding: 12px 2px 8px; flex: 0 0 auto; }
+  .assist-sheet .as-grip { position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
+    width: 38px; height: 4px; border-radius: 999px; background: rgba(255,255,255,0.22); }
+  .assist-sheet .as-peek { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column;
+    align-items: flex-start; gap: 1px; padding: 0; cursor: pointer;
+    background: none; border: 0; text-align: left; color: #eef4fb; }
+  .assist-sheet .as-peek .ap-main { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0;
+    font-size: 0.92rem; font-weight: 800; }
+  .assist-sheet .as-peek .ap-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .assist-sheet .as-peek .ap-prog { flex: 0 0 auto; font-size: 0.72rem; font-weight: 800; padding: 1px 7px;
+    border-radius: 999px; background: rgba(126,224,214,0.16); color: #7ee0d6; font-variant-numeric: tabular-nums; }
+  .assist-sheet .as-peek .ap-chev { flex: 0 0 auto; margin-left: auto; color: #8ea0b8; font-size: 0.8rem; }
+  .assist-sheet .as-peek .ap-now { font-size: 0.78rem; color: #9fb0c6; width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The move stays one tap away even while collapsed — "reachable without page
+     scrolling" has to include the thing you actually came here to do. */
+  .assist-sheet .as-quick { flex: 0 0 auto; padding: 9px 13px; border-radius: 10px; border: 0; cursor: pointer;
+    font-size: 0.9rem; font-weight: 800; color: #04222d; font-variant-numeric: tabular-nums;
+    background: linear-gradient(140deg, #7ee0d6, #4fb8ac); }
+  .assist-sheet.open .as-quick { display: none; }
+
+  /* Open: the choices / guide scroll INSIDE the sheet, never the page. */
+  .assist-sheet .as-body { flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: 4px; }
+  .assist-sheet.open { max-height: calc(100dvh - 232px); }
+
+  /* The sheet's own head already states the plan, its progress and the current
+     objective, so the guide must not repeat them one line below — that read as two
+     competing headers. The guide keeps only what the head does NOT carry: the
+     Change-strategy control, the progress bar, and the objectives themselves. */
+  .assist-sheet.open .glass-lens .gl-plan-head .gp-ic,
+  .assist-sheet.open .glass-lens .gl-plan-head .gp-name,
+  .assist-sheet.open .glass-lens .gl-plan-head .gp-prog,
+  .assist-sheet.open .glass-lens .gl-plan-now { display: none; }
+  .assist-sheet.open .glass-lens .gl-plan-head { justify-content: flex-end; margin-bottom: 2px; }
+
+  /* Inside the sheet the panels are plain content — the sheet owns the chrome. */
+  main.game .assist-sheet .glass-lens, main.game .assist-sheet .plan-panel {
+    margin: 0 0 6px; border-radius: 12px; }
+
+  /* Reserve the collapsed sheet's height so the page's own content can always
+     clear it, and so nothing underneath is permanently unreachable. */
+  main.game { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+}

@@ -1051,6 +1051,7 @@ function paint() {
   renderCaptured();
   renderOpening();
   renderGlassLens();
+  renderAssistSheet();
   renderCoach();
   renderAssist();
   renderStrategy();
@@ -1594,6 +1595,37 @@ function mpOpenPlanSheet() {
   sh.style.display = "grid";
 }
 
+// THE ASSISTANCE SHEET in a human game. Same module, same peek line, same states
+// as Play-AI — the standing rule is that anything added to one shows up in the
+// other, and the last surface that was written twice disagreed within a week.
+// The chooser here is the existing strategy sheet; the sheet's job is to keep the
+// plan, its progress and the current objective on screen without a page scroll.
+let sheetOpen = false;
+function renderAssistSheet() {
+  const sheet = el2("assistSheet");
+  if (!sheet || !window.GBAssistSheet) return;
+  const sr = assistData && assistData.strategy;
+  const live = ((sr && sr.strategies) || []).find((x) => x && x.id === activePlanId()) || null;
+  const mine = !!(state && state.status === "ongoing" && state.turn === myColor && !atTable());
+  let p = null;
+  if (window.GBAssistUI && assistData) {
+    const picked = live;
+    try {
+      p = GBAssistUI.pickPriority({
+        assistData, recommended: mpRecommended(),
+        picked: picked ? Object.assign({ verb: GBAssistUI.verbFor(picked.id) }, picked) : null,
+        opening: mpOpening(), history: mpHistory(), pieceNameAt, sqName,
+      });
+    } catch { p = null; }
+  }
+  GBAssistSheet.render({
+    sheet, peek: el2("asPeek"), quick: el2("asQuick"),
+    state: stratState, live, ply: state && state.fen ? plyFromFen(state.fen) : 0,
+    open: sheetOpen, move: p && p.move && !p.analyzing && mine ? p.move : null,
+    onToggle: () => { sheetOpen = !sheetOpen; paint(); },
+    onQuick: (m) => sendMove(m.from, m.to),
+  });
+}
 function renderGlassLens() {
   const el = el2("glassLens");
   if (!el) return;

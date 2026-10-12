@@ -1547,6 +1547,7 @@ function paint() {
     renderPlanDock();
     renderGlassLens();
   renderPlanPanel();
+    renderAssistSheet();
     renderBoardAdvice();
     renderMoveList();
     renderCaptured();
@@ -1635,6 +1636,40 @@ function chooserWillRender() {
   return !!(list.length && !firstGame && game && game.status() === "ongoing" && game.sideToMove() === humanColor);
 }
 
+// ---- THE ASSISTANCE SHEET (mobile) ------------------------------------------
+// PEEK -> CHOOSE -> GUIDE on ONE surface. This function only maintains state and
+// the peek line; WHAT is inside the sheet is still renderGlassLens() (the guide)
+// and renderPlanPanel() (the chooser) — the same code desktop uses, so the two
+// can never drift. On desktop the wrapper is `display: contents` and the head is
+// hidden, which makes every line below inert there.
+let sheetOpen = false;
+function toggleSheet(open) {
+  sheetOpen = open == null ? !sheetOpen : !!open;
+  // Opening onto a live plan should land you ON the guide, not on a collapsed
+  // one-liner you have to expand again.
+  if (sheetOpen && GBStrategyState.isLive(stratState)) planExpanded = true;
+  if (!sheetOpen) planPickerOpen = false;   // collapsing also cancels the chooser
+  paint();
+}
+
+function renderAssistSheet() {
+  const sheet = document.getElementById("assistSheet");
+  if (!sheet || !window.GBAssistSheet) return;
+  // Asking for the chooser is a deliberate act: it always opens the sheet.
+  if (chooserWillRender()) sheetOpen = true;
+  let pr = null;
+  try { pr = pickPriority(); } catch {}
+  const playable = pr && pr.move && !firstGame &&
+    game.status() === "ongoing" && game.sideToMove() === humanColor;
+  GBAssistSheet.render({
+    sheet, peek: document.getElementById("asPeek"), quick: document.getElementById("asQuick"),
+    state: stratState, live: activePlanLive(), ply: uciHistory.length, open: sheetOpen,
+    move: playable ? pr.move : null,
+    onToggle: () => toggleSheet(),
+    onQuick: (m) => playMove(m.from, m.to, true),
+  });
+}
+
 function renderPlanPanel() {
   const el = document.getElementById("planPanel");
   if (!el) return;
@@ -1670,7 +1705,10 @@ function renderPlanPanel() {
       `<span class="pc-txt"><b>No plan</b><small>Play without one</small></span></button>` : "") +
     `</div>`;
   const x = document.getElementById("ppClose");
-  if (x) x.onclick = () => { planPickerOpen = false; renderPlanPanel(); };
+  // paint(), not renderPlanPanel(): closing the chooser has to re-render the GUIDE
+  // too, or the card it was replacing never comes back. Same bug as the Change
+  // control had — a panel that re-renders only itself leaves the other stale.
+  if (x) x.onclick = () => { planPickerOpen = false; paint(); };
   el.querySelectorAll(".pp-choice").forEach((btn) => btn.onclick = () => {
     setActivePlan(btn.dataset.id || null);
     planPickerOpen = false;
@@ -2891,6 +2929,23 @@ function renderGlassLens() {
   // clear button — tap ▶ to play it. The plan (pick or steps) folds in here too, so
   // NOTHING else needs to sit below the board — no scrolling to find help.
   const planRow = ""; // strategy lives in the plan panel now — one surface, not three
+  // Is the plan's move different from what's being recommended? If so it becomes a
+  // labelled alternative below the primary action.
+  let offPlanMove = null, offPlanSan = "", offPlanNote = "", offPlanStep = "";
+  if (GBStrategyState.isLive(stratState)) {
+    const lp2 = activePlanLive();
+    const pm = lp2 && lp2.moveUci;
+    if (pm && p.move && p.move.uci && pm.slice(0, 4) !== p.move.uci.slice(0, 4)) {
+      const q = uciSquares(pm);
+      if (q) {
+        offPlanMove = q;
+        offPlanSan = lp2.moveSan || pm;
+        offPlanNote = lp2.moveNote || "";
+        const steps2 = (lp2.steps || []).filter((x) => !x.done);
+        offPlanStep = (steps2[0] && steps2[0].text) || lp2.name || "your plan";
+      }
+    }
+  }
   const meaning = explainMoves ? moveMeaning(p.move) : "";
   el.className = "glass-lens kind-" + p.kind;
   el.innerHTML = glIdentityRow() + planHead +
@@ -2903,8 +2958,20 @@ function renderGlassLens() {
       `<button class="gl-playmove" id="lensPlay" type="button">▶ ${escapeHtml(p.move.san || "Play")}</button>` +
       `<button class="gl-show" id="lensShow" type="button" title="Show on the board">👁</button>` +
       `<button class="gl-more" id="lensMore" type="button">⋯</button>` +
-    `</div>` + planRow;
+    `</div>` +
+    // THE PLAN'S OWN MOVE, as a clearly labelled alternative. Without it, choosing
+    // a strategy and then being offered only an OFF-PLAN move leaves you with
+    // nothing to do about the plan you just chose — "I am stuck, what next".
+    // It is the second action, never the primary one: the engine's pick stays on
+    // top because overriding it is the player's deliberate choice, not a nudge.
+    (offPlanMove
+      ? `<button class="gl-planalt" id="lensPlanMove" type="button" title="${escapeHtml(offPlanNote)}">` +
+          `🧭 Play your plan instead — ${escapeHtml(offPlanSan)}` +
+          `<small>advances “${escapeHtml(offPlanStep)}”</small></button>`
+      : "") + planRow;
   document.getElementById("lensPlay").onclick = () => playMove(p.move.from, p.move.to, true);
+  const lpm = document.getElementById("lensPlanMove");
+  if (lpm && offPlanMove) lpm.onclick = () => playMove(offPlanMove.from, offPlanMove.to, true);
   document.getElementById("lensShow").onclick = () => previewMove(p.move);
   document.getElementById("lensMore").onclick = () => openAltSheet(p);
   document.getElementById("lensLog").onclick = openGlassSheet;

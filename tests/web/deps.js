@@ -22,7 +22,7 @@ var MODULES = {
   GBRecap: "gb-recap.js", GBCapture: "gb-capture.js", GBStrategies: "strategies.js",
   GBTerms: "gb-terms.js", GBHelpBudget: "gb-help-budget.js", GBResign: "gb-resign.js",
   GBAiCast: "gb-ai-cast.js", GBClock: "gb-clock.js", GBStrategyState: "gb-strategy-state.js",
-  GBRating: "rating.js", GBTheme: "theme.js",
+  GBRating: "rating.js", GBTheme: "theme.js", GBAssistSheet: "gb-assist-sheet.js",
 };
 var bad = 0, checked = 0;
 Object.keys(PAGES).forEach(function (page) {

@@ -43,6 +43,22 @@ n=$(grep -c "main.game .board-wrap { width: min" "$CSS" || true)
 if [ "$n" -eq 0 ]; then printf "  ok   board has no second, overriding width rule\n";
 else printf "  FAIL %s extra board width rule(s) -> the later one silently wins\n" "$n"; fail=1; fi
 
+# The renderer is only trustworthy if its CSS resolver is. Without this, mobile
+# renders silently fall back to the DESKTOP stylesheet and "verified in WebKit"
+# means nothing — which is how three mobile regressions shipped.
+if python3 scripts/resolve-css.py --self-test > /dev/null 2>&1; then
+  printf "  ok   mobile CSS resolver is sound (renders really use mobile rules)\n"
+else printf "  FAIL the CSS resolver is broken -> mobile renders are not mobile\n"; fail=1; fi
+
+# The sheet must stay anchored to the visible screen, above the tab bar.
+if grep -q "bottom: calc(52px + env(safe-area-inset-bottom" "$CSS"; then
+  printf "  ok   assistance sheet clears the tab bar and the safe area\n";
+else printf "  FAIL the sheet is not anchored above the tab bar/safe area\n"; fail=1; fi
+if grep -q ".assist-sheet { display: contents; }" "$CSS"; then
+  printf "  ok   desktop keeps the sheet boxless (right rail unchanged)\n";
+else printf "  FAIL the sheet has a box on desktop -> the rail layout changes\n"; fail=1; fi
+
+
 if [ "$fail" -eq 0 ]; then printf "All good — nothing above the board can resize.\n"; else
   printf "\nBROKEN: an above-board element can change height → the board will jump.\n"; fi
 exit $fail

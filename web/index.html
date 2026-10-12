@@ -182,14 +182,29 @@
           <div id="planDock" class="plan-dock" hidden></div>
         </div>
         <aside class="panels">
-          <!-- Glass Lens: the "what matters now" recommendation (assistance-first). On
-               desktop it heads the right panel; on mobile it sits right under the board. -->
-          <div id="glassLens" class="glass-lens" hidden></div>
-          <!-- THE PLAN PANEL. Was a full-screen dimming modal over the board, which
-               disconnected the plan from the position it is about. It is an inline
-               panel now: on desktop it sits in this rail beside the board, on mobile
-               directly under the Lens. The board is never covered and never dimmed. -->
-          <div id="planPanel" class="plan-panel" hidden></div>
+                    <!-- THE ASSISTANCE SHEET. On DESKTOP this element is `display: contents` —
+               it has no box, so the Lens and the chooser lay out in this rail
+               exactly as they always have. On MOBILE it becomes a bottom sheet
+               anchored above the tab bar: PEEK (plan + objective + the move) →
+               CHOOSE → GUIDE, all in the one sheet, never a second panel below
+               the board and never a page scroll to reach it. -->
+          <div id="assistSheet" class="assist-sheet peek">
+            <div class="as-head" id="asHead">
+              <span class="as-grip" aria-hidden="true"></span>
+              <button class="as-peek" id="asPeek" type="button" aria-expanded="false"></button>
+              <button class="as-quick" id="asQuick" type="button" hidden></button>
+            </div>
+            <div class="as-body" id="asBody">
+  <!-- Glass Lens: the "what matters now" recommendation (assistance-first). On
+                 desktop it heads the right panel; on mobile it sits right under the board. -->
+            <div id="glassLens" class="glass-lens" hidden></div>
+            <!-- THE PLAN PANEL. Was a full-screen dimming modal over the board, which
+                 disconnected the plan from the position it is about. It is an inline
+                 panel now: on desktop it sits in this rail beside the board, on mobile
+                 directly under the Lens. The board is never covered and never dimmed. -->
+            <div id="planPanel" class="plan-panel" hidden></div>
+            </div>
+          </div>
           <!-- Coach: transient safety net — speaks only for real danger/opportunity. -->
           <div id="coach" class="coach" aria-live="polite" hidden></div>
           <!-- Move list with PROVENANCE — each of your moves is tagged own vs assisted,
@@ -294,6 +309,7 @@
     <script src="./strategies.js"></script>
     <script src="./gb-clock.js"></script>
     <script src="./gb-strategy-state.js"></script>
+    <script src="./gb-assist-sheet.js"></script>
     <script src="./gb-terms.js"></script>
     <script src="./gb-resign.js"></script>
     <script src="./gb-help-budget.js"></script>
