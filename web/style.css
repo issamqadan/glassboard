@@ -2217,3 +2217,21 @@ main.game .strat-panel { display: none; }
 .layout-info { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.68rem;
   color: #8ea0b8; cursor: pointer; line-height: 1.5; word-break: break-word; }
 .layout-info[data-bad="1"] { color: #f2a6ae; }
+
+/* THE GUIDE inside the guidance card: every objective, done / current / to come. */
+.glass-lens .gl-steps { list-style: none; margin: 8px 0 0; padding: 0; display: none;
+  flex-direction: column; gap: 6px; }
+.glass-lens .gl-steps.open { display: flex; }
+.glass-lens .gl-step { display: flex; align-items: flex-start; gap: 8px; font-size: 0.82rem;
+  line-height: 1.4; color: #93a2b8; }
+.glass-lens .gl-step .gs-dot { flex: 0 0 auto; width: 17px; height: 17px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 10px; font-weight: 800;
+  border: 1.5px solid rgba(255,255,255,0.16); color: #5d6c8c; }
+.glass-lens .gl-step.done { color: #7f92ab; }
+.glass-lens .gl-step.done .gs-dot { background: #2fa96b; border-color: #2fa96b; color: #04220f; }
+.glass-lens .gl-step.now { color: #eef4fb; font-weight: 600; }
+.glass-lens .gl-step.now .gs-dot { border-color: #7ee0d6; color: #7ee0d6; box-shadow: 0 0 0 3px rgba(126,224,214,0.14); }
+.glass-lens .gl-steps-toggle { margin-top: 8px; width: 100%; padding: 6px; border-radius: 8px;
+  cursor: pointer; font-size: 0.75rem; font-weight: 700; color: #9fb0c6;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); }
+.glass-lens .gl-steps-toggle:hover { color: #eef4fb; border-color: #7ee0d6; }

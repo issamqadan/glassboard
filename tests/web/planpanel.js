@@ -126,7 +126,7 @@ print("  branches that set the card's HTML : " + branches);
 print("  branches that include the plan     : " + withHead);
 want("the slice actually found the function", lens.length > 500 && branches >= 3);
 want("every branch renders the plan header", branches === withHead && branches > 0);
-want("the control is delegated, not re-bound per render", /addEventListener\("click"[\s\S]{0,200}lensChange/.test(src));
+want("the control is delegated, not re-bound per render", /addEventListener\("click"[\s\S]{0,600}lensChange/.test(src));
 want("no per-render onclick for it remains", !/getElementById\("lensChange"\)/.test(src));
 
 print("\n--- the two cards can never both be hidden (the blank-screen bug) ---");
@@ -148,3 +148,14 @@ want("...so the guidance card is free to show", chooserWillRender() === false);
 assistData = { strategy: { strategies: [PLAN, OTHER] } };
 want("with plans available, the chooser does take over", chooserWillRender() === true);
 planPickerOpen = false;
+
+
+print("\n--- selecting a plan opens its GUIDE, and the arrow matches the button ---");
+var src3 = readFile("web/main.js");
+want("choosing a plan expands its steps", /planExpanded = !!btn\.dataset\.id/.test(src3));
+want("the guidance card renders every objective", /gl-steps/.test(src3) && /gl-step \$\{state\}/.test(src3));
+want("done / current / upcoming are distinguished", /st3\.done \? "done" : i === dn \? "now" : "todo"/.test(src3));
+want("the Change control re-renders BOTH cards", /planPickerOpen = !planPickerOpen;[\s\S]{0,400}paint\(\);/.test(src3));
+want("plan arrows are suppressed when the plan move isn't the recommendation",
+     /recUci\.slice\(0, 4\) !== planUci\.slice\(0, 4\)[\s\S]{0,400}ov\.innerHTML = ""/.test(src3));
+want("the steps toggle is delegated too", /closest\("#lensSteps"\)/.test(src3));

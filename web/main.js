@@ -1184,13 +1184,16 @@ async function main() {
   // onclick was destroyed for up to 1.4s at a time while the advice search ran.
   // Tapping in that window did nothing at all.
   document.addEventListener("click", (ev) => {
+    const st = ev.target && ev.target.closest ? ev.target.closest("#lensSteps") : null;
+    if (st) { ev.preventDefault(); planExpanded = !planExpanded; paint(); return; }
     const t = ev.target && ev.target.closest ? ev.target.closest("#lensChange") : null;
     if (!t) return;
     ev.preventDefault();
     planPickerOpen = !planPickerOpen;
-    renderPlanPanel();
-    const pp = document.getElementById("planPanel");
-    if (pp && !pp.hidden && pp.scrollIntoView) pp.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    // paint(), not renderPlanPanel() alone: the guidance card has to re-render too
+    // or it stays on screen and the chooser APPENDS below it — which is exactly
+    // what "it adds another card" looked like.
+    paint();
   });
 
   const ay = document.getElementById("aiAskYes"), an = document.getElementById("aiAskNo");
@@ -1671,6 +1674,9 @@ function renderPlanPanel() {
   el.querySelectorAll(".pp-choice").forEach((btn) => btn.onclick = () => {
     setActivePlan(btn.dataset.id || null);
     planPickerOpen = false;
+    // Choosing a plan OPENS ITS GUIDE. Previously it closed the chooser and left
+    // you looking at the general recommendation card, which is not a guide.
+    planExpanded = !!btn.dataset.id;
     paint();
   });
 }
@@ -2565,10 +2571,26 @@ function planArrow(fromSq, toSq, color, i) {
     `<line x1="${sx}" y1="${sy}" x2="${bx}" y2="${by}" stroke="${color}" stroke-width="14" stroke-linecap="round" opacity="0.92"/>` +
     `<polygon points="${tx},${ty} ${bx + px * w},${by + py * w} ${bx - px * w},${by - py * w}" fill="${color}"/></g>`;
 }
+// Draw the plan's own arrows ONLY when the plan's move is the one being
+// recommended. Otherwise the board showed a blue arrow for Nc3 while the card's
+// button said "▶ e4" — two different moves on screen at once, and the player has
+// no way to know which the Play button will make. An annotation must always refer
+// to the action it sits beside.
 function drawPlan(strat) {
   const ov = document.getElementById("planOverlay");
   if (!ov) return;
   if (!strat) { ov.innerHTML = ""; return; }
+  // What is actually being recommended right now?
+  let recUci = "";
+  try { const pr = pickPriority(); recUci = (pr && pr.move && pr.move.uci) || ""; } catch {}
+  const planUci = strat.moveUci || "";
+  if (recUci && planUci && recUci.slice(0, 4) !== planUci.slice(0, 4)) {
+    // The plan wants one move, the engine recommends another. The recommendation
+    // owns the board; renderBoardAdvice draws it. Say nothing here rather than
+    // drawing a second, contradictory arrow.
+    ov.innerHTML = "";
+    return;
+  }
   const ringColor = PLAN_COLOR[(strat.arrows[0] || {}).kind] || "#e0be79";
   let s = "";
   (strat.rings || []).forEach((sq, i) => { const C = planCxy(sq); s += `<circle class="ring" cx="${C.x}" cy="${C.y}" r="44" fill="none" stroke="${ringColor}" stroke-width="6" opacity="0.75" style="animation-delay:${(i * 0.1).toFixed(2)}s"/>`; });
@@ -2816,7 +2838,16 @@ function renderGlassLens() {
       (st2.length ? `<div class="gl-plan-bar"><span style="width:${st2.length ? Math.round((dn / st2.length) * 100) : 0}%"></span></div>` : "") +
       `<div class="gl-plan-now">${warn
         ? escapeHtml(GBStrategyState.statusLine(stratState, uciHistory.length))
-        : (nowStep ? "<b>Now:</b> " + escapeHtml(nowStep.text) : escapeHtml(lp.idea || ""))}</div>`;
+        : (nowStep ? "<b>Now:</b> " + escapeHtml(nowStep.text) : escapeHtml(lp.idea || ""))}</div>` +
+      // THE GUIDE: every objective, with what is done, what you are on, and what is
+      // still to come. Choosing a plan used to leave only a one-line "Now:" and the
+      // general recommendation card — no step-by-step at all.
+      (st2.length ? `<ol class="gl-steps${planExpanded ? " open" : ""}">` + st2.map((st3, i) => {
+        const state = st3.done ? "done" : i === dn ? "now" : "todo";
+        return `<li class="gl-step ${state}"><span class="gs-dot">${st3.done ? "✓" : i === dn ? "▸" : ""}</span>` +
+          `<span>${escapeHtml(st3.text || "")}</span></li>`;
+      }).join("") + `</ol>` +
+        `<button class="gl-steps-toggle" id="lensSteps" type="button">${planExpanded ? "Hide the plan ▲" : `The plan — ${dn} of ${st2.length} done ▼`}</button>` : "");
   } else {
     planHead = `<div class="gl-plan-head none"><span class="gp-ic">🧭</span>` +
       `<b class="gp-name">No plan yet</b>` +
