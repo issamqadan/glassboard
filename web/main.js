@@ -1561,6 +1561,7 @@ let planRevealed = false;      // has the plan's concrete move been revealed thi
 // step list one tap away — the difference between fitting on a phone and making
 // the player scroll past the board to find their own plan.
 let planExpanded = false;
+
 function openStepsSheet(picked) { planPanelOpen = true; renderPlanPanel(); }
 function closePlanPanel() { planPanelOpen = false; renderPlanPanel(); }
 function togglePlanPicker() { planPickerOpen = !planPickerOpen; renderPlanPanel(); }
@@ -1581,104 +1582,42 @@ function renderPlanPanel() {
   const sr = assistData && assistData.strategy;
   const list = (sr && sr.strategies) || [];
   const inGame = !firstGame && game.status() === "ongoing" && game.sideToMove() === humanColor;
-  if (!inGame || !list.length) { el.hidden = true; el.innerHTML = ""; drawPlan(null); return; }
-
   const picked = activePlanLive();
-  const reassess = GBStrategyState.needsReassess(stratState);
+
+  // Board annotations always follow the ACTIVE plan, even while the chooser is
+  // closed — and are cleared the moment the plan isn't the engine's any more, so
+  // no stale arrows survive a takeback or a change of plan.
+  drawPlan(inGame && picked && !picked.stale ? picked : null);
+
+  // This element is now ONLY the strategy chooser, opened from "Change strategy"
+  // in the guidance card. Everything else about the plan — name, progress,
+  // objective, and the single recommendation it serves — lives in that one card.
+  if (!inGame || !list.length || !planPickerOpen) { el.hidden = true; el.innerHTML = ""; return; }
   el.hidden = false;
-  el.className = "plan-panel" + (reassess ? " reassess" : "") + (planExpanded ? " expanded" : "");
-
-  // The board annotations come from the engine's own arrows/rings for this plan,
-  // so what is drawn is always about the position actually on the board.
-  drawPlan(picked && !picked.stale ? picked : null);
-
-  // Is something more urgent than the plan right now? pickPriority already applies
-  // the safety ladder; we only REPORT what it decided, so the plan panel can never
-  // contradict the advice.
-  const prio = (!firstGame && assistData) ? pickPriority() : null;
-  const urgent = prio && prio.kind === "urgent" ? prio : null;
-
-  if (!picked) {
-    // No plan yet: offer the engine's best-fitting plans, each with its own idea.
-    el.innerHTML =
-      `<div class="pp-head"><span class="pp-ic">🧭</span><b>Choose a plan</b></div>` +
-      `<p class="pp-idea">A plan is what you're trying to achieve. Pick one and the guidance follows it, move by move.</p>` +
-      `<div class="pp-choices">` + list.slice(0, 3).map((x) =>
-        `<button class="pp-choice" data-id="${x.id}"><span class="pc-ic">${STRAT_ICON[x.id] || "◆"}</span>` +
-        `<span class="pc-txt"><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.idea || "")}</small></span></button>`).join("") +
-      `</div>`;
-    el.querySelectorAll(".pp-choice").forEach((btn) => btn.onclick = () => {
-      setActivePlan(btn.dataset.id); planRevealed = false; paint();
-    });
-    return;
-  }
-
-  const steps = picked.steps || [];
-  const doneN = steps.filter((x) => x.done).length;
-  const now = steps[doneN];
-  const total = steps.length;
-  // Progress is the ENGINE's done-flags, read from the position — not a guess and
-  // not a percentage of a script.
-  const pct = total ? Math.round((doneN / total) * 100) : 0;
-
-  let body =
-    `<div class="pp-head"><span class="pp-ic">${STRAT_ICON[picked.id] || "◆"}</span>` +
-      `<b>${escapeHtml(picked.name)}</b>` +
-      `<span class="pp-prog" title="${doneN} of ${total} objectives met in this position">${doneN}/${total}</span>` +
-      `<button class="pp-change" id="ppChange" title="Choose a different plan">${planPickerOpen ? "✕" : "Change"}</button></div>` +
-    `<div class="pp-bar"><span style="width:${pct}%"></span></div>`;
-  // On a phone the strip above the board is hidden to buy height, so the opening
-  // it named is stated here instead — the information moves, it isn't dropped.
-  const op = currentOpening();
-  if (op) body += `<div class="pp-opening">📖 ${escapeHtml(op.name)}</div>`;
-
-  if (urgent) {
-    // A threat outranks the plan — say so, and say the plan survives it.
-    body += `<p class="pp-warn">⚠ <b>${escapeHtml(urgent.label || "Deal with this first")}</b> — ${escapeHtml(urgent.why || "")}` +
-      ` <span class="pp-intact">Your plan is still on; come back to it next move.</span></p>`;
-  } else if (reassess) {
-    body += `<p class="pp-warn">⚠ ${escapeHtml(GBStrategyState.statusLine(stratState, uciHistory.length))}</p>`;
-  }
-
-  body += `<p class="pp-now">${now ? "<b>Now:</b> " + escapeHtml(now.text) : "<b>All objectives met.</b> " + escapeHtml(picked.idea || "")}</p>`;
-
-  // The concrete move the plan wants, grounded in THIS position. Understanding is
-  // free; revealing the move follows the existing assistance rules unchanged.
-  // The move for this step, once help is out. There is ONE reveal control in the
-  // app — the Lens's — because both buttons called the same askForHelp() and
-  // revealed the same thing; two of them was the duplication in another costume.
-  // Division of labour: the Lens says what to PLAY, this panel says what you're
-  // trying to ACHIEVE, and shows the plan's move alongside it once revealed.
-  if (picked.moveUci && !urgent && showAnswer()) {
-    body += `<div class="pp-move"><span class="pp-san">${escapeHtml(picked.moveSan || picked.moveUci)}</span>` +
-      `<span class="pp-note">${escapeHtml(picked.moveNote || "")}</span></div>` +
-      `<button class="pp-play" id="ppPlay">▶ Play it</button>`;
-  }
-
-  body += `<button class="pp-more" id="ppMore">${planExpanded ? "Hide the steps ▲" : `All ${total} steps ▼`}</button>`;
-  body += `<ol class="pp-steps">` + steps.map((st, i) => {
-      const state = st.done ? "done" : i === doneN ? "now" : "todo";
-      return `<li class="pp-step ${state}"><span class="pp-dot">${st.done ? "✓" : i === doneN ? "▸" : ""}</span>` +
-        `<span>${escapeHtml(st.text || "")}</span></li>`;
-    }).join("") + `</ol>`;
-
-  if (planPickerOpen) {
-    body += `<div class="pp-choices open">` + list.map((x) =>
-      `<button class="pp-choice${x.id === picked.id ? " on" : ""}" data-id="${x.id}">` +
-      `<span class="pc-ic">${STRAT_ICON[x.id] || "◆"}</span>` +
-      `<span class="pc-txt"><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.idea || "")}</small></span></button>`).join("") +
-      `<button class="pp-choice drop" data-id="">✕ <span class="pc-txt"><b>No plan</b><small>Play without one</small></span></button></div>`;
-  }
-
-  el.innerHTML = body;
-  const ch = document.getElementById("ppChange"); if (ch) ch.onclick = togglePlanPicker;
-  const mo = document.getElementById("ppMore");
-  if (mo) mo.onclick = () => { planExpanded = !planExpanded; renderPlanPanel(); };
+  el.className = "plan-panel chooser";
+  el.innerHTML =
+    `<div class="pp-head"><span class="pp-ic">🧭</span><b>Choose a strategy</b>` +
+      `<button class="pp-x" id="ppClose" title="Close">✕</button></div>` +
+    `<div class="pp-choices open">` + list.map((x) => {
+      const st2 = x.steps || [];
+      const dn = st2.filter((y) => y.done).length;
+      return `<button class="pp-choice${picked && x.id === picked.id ? " on" : ""}" data-id="${x.id}">` +
+        `<span class="pc-ic">${STRAT_ICON[x.id] || "◆"}</span>` +
+        `<span class="pc-txt"><b>${escapeHtml(x.name)}</b>` +
+        `<small>${escapeHtml(x.idea || "")}</small>` +
+        (st2.length ? `<small class="pc-prog">${dn} of ${st2.length} already met in this position</small>` : "") +
+        `</span></button>`;
+    }).join("") +
+    (picked ? `<button class="pp-choice drop" data-id=""><span class="pc-ic">✕</span>` +
+      `<span class="pc-txt"><b>No plan</b><small>Play without one</small></span></button>` : "") +
+    `</div>`;
+  const x = document.getElementById("ppClose");
+  if (x) x.onclick = () => { planPickerOpen = false; renderPlanPanel(); };
   el.querySelectorAll(".pp-choice").forEach((btn) => btn.onclick = () => {
-    setActivePlan(btn.dataset.id || null); planPickerOpen = false; planRevealed = false; paint();
+    setActivePlan(btn.dataset.id || null);
+    planPickerOpen = false;
+    paint();
   });
-  const pl = document.getElementById("ppPlay");
-  if (pl) pl.onclick = () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); };
 }
 
 
@@ -2823,9 +2762,34 @@ function renderGlassLens() {
   // clear button — tap ▶ to play it. The plan (pick or steps) folds in here too, so
   // NOTHING else needs to sit below the board — no scrolling to find help.
   const planRow = ""; // strategy lives in the plan panel now — one surface, not three
+  // THE PLAN HEADER, inside the one guidance card. The plan is not a second
+  // opinion alongside the move — it is the context the move is serving.
+  let planHead = "";
+  if (GBStrategyState.isLive(stratState)) {
+    const lp = activePlanLive();
+    const st2 = (lp && lp.steps) || [];
+    const dn = st2.filter((x) => x.done).length;
+    const nowStep = st2[dn];
+    const warn = GBStrategyState.needsReassess(stratState);
+    planHead =
+      `<div class="gl-plan-head${warn ? " warn" : ""}">` +
+        `<span class="gp-ic">${warn ? "⚠" : (STRAT_ICON[lp.id] || "🧭")}</span>` +
+        `<b class="gp-name">${escapeHtml(lp.name)}</b>` +
+        (st2.length ? `<span class="gp-prog" title="${dn} of ${st2.length} objectives met">${dn}/${st2.length}</span>` : "") +
+        `<button class="gp-change" id="lensChange" type="button">Change strategy</button>` +
+      `</div>` +
+      (st2.length ? `<div class="gl-plan-bar"><span style="width:${st2.length ? Math.round((dn / st2.length) * 100) : 0}%"></span></div>` : "") +
+      `<div class="gl-plan-now">${warn
+        ? escapeHtml(GBStrategyState.statusLine(stratState, uciHistory.length))
+        : (nowStep ? "<b>Now:</b> " + escapeHtml(nowStep.text) : escapeHtml(lp.idea || ""))}</div>`;
+  } else {
+    planHead = `<div class="gl-plan-head none"><span class="gp-ic">🧭</span>` +
+      `<b class="gp-name">No plan yet</b>` +
+      `<button class="gp-change" id="lensChange" type="button">Choose a strategy</button></div>`;
+  }
   const meaning = explainMoves ? moveMeaning(p.move) : "";
   el.className = "glass-lens kind-" + p.kind;
-  el.innerHTML = glIdentityRow() +
+  el.innerHTML = glIdentityRow() + planHead +
     `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span>` +
       `<button class="gl-explain${explainMoves ? " on" : ""}" id="lensExplain" type="button" title="${explainMoves ? "Explanations on — tap to hide" : "Explain moves in plain language"}">💡</button>` +
       `<button class="gl-log" id="lensLog" type="button" title="Assistance log">📜</button></div>` +
@@ -2841,6 +2805,8 @@ function renderGlassLens() {
   document.getElementById("lensMore").onclick = () => openAltSheet(p);
   document.getElementById("lensLog").onclick = openGlassSheet;
   const ex = document.getElementById("lensExplain"); if (ex) ex.onclick = toggleExplain;
+  const lc = document.getElementById("lensChange");
+  if (lc) lc.onclick = () => { planPickerOpen = !planPickerOpen; renderPlanPanel(); };
 }
 
 // ---- The board thinks out loud: assistance rendered AS living board intelligence.

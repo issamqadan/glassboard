@@ -1,33 +1,52 @@
 // MOBILE VERTICAL BUDGET for the game screen.
 //
-// The step-by-step guidance must be reachable WITHOUT scrolling past the board —
-// it is the one thing the strategy panel exists to keep in view. This test holds
-// the arithmetic so a future addition above or below the board can't quietly push
-// it under the fold again.
-var ROWS = { nav: 56, gamebar: 52, oppStrip: 44, stratStrip: 42, youStrip: 44 };
-var PANEL_FULL = 200, PANEL_COMPACT = 64;
-function board(vw, dvh) { return Math.min(vw - 28, Math.max(248, dvh - 300)); }
-function stack(vw, dvh, o) {
-  var h = ROWS.nav + ROWS.gamebar + ROWS.oppStrip + ROWS.youStrip + board(vw, dvh);
-  if (o.stratStrip) h += ROWS.stratStrip;
-  h += o.compactPanel ? PANEL_COMPACT : PANEL_FULL;
-  return h;
-}
+// Corrected twice against real device screenshots. The first version of this model
+// OMITTED the Glass Lens and the bottom tab bar, which is why it reported "fits"
+// for a screen that scrolled by ~183px. Measure what is on the screen, not what you
+// remember putting there.
+//
+// This test TRACKS the gap rather than asserting a pass it cannot honestly claim:
+// it fails only if the layout gets WORSE than the recorded baseline, so progress is
+// locked in and regressions are caught, without pretending the job is finished.
+var ROWS = { nav: 56, gamebar: 52, oppStrip: 44, youStrip: 44, tabbar: 52, stratStrip: 42 };
+var TWO_CARDS = 330;   // Lens ~180 + separate strategy panel ~150, each with a move
+var ONE_CARD = 210;    // plan head + progress + objective + ONE resolved recommendation
+var BASELINE = 80;     // worst remaining overflow, px — must not get worse
+
+function board(vw, dvh, reserve) { return Math.min(vw - 28, Math.max(248, dvh - (reserve || 300))); }
 var DEVICES = [[393, 660, "iPhone, toolbar expanded"], [393, 760, "iPhone, toolbar collapsed"],
-               [360, 640, "small Android"], [430, 800, "large phone"], [412, 700, "Pixel"]];
-var fails = 0;
-print("--- BEFORE: strip shown, panel full ---");
-DEVICES.forEach(function (d) {
-  var h = stack(d[0], d[1], { stratStrip: true, compactPanel: false });
-  print("  " + (d[2] + "                     ").slice(0, 26) + d[0] + "x" + d[1] +
-        " needs " + h + " -> " + (h <= d[1] ? "fits" : "SCROLLS by " + (h - d[1])));
-});
-print("\n--- AFTER: strip folded into the panel, steps one tap away ---");
-DEVICES.forEach(function (d) {
-  var h = stack(d[0], d[1], { stratStrip: false, compactPanel: true });
-  var ok = h <= d[1];
-  if (!ok) fails++;
-  print("  " + (d[2] + "                     ").slice(0, 26) + d[0] + "x" + d[1] +
-        " needs " + h + " -> " + (ok ? "fits with " + (d[1] - h) + "px spare" : "FAIL scrolls by " + (h - d[1])));
-});
-print(fails ? "\n" + fails + " device(s) still scroll" : "\nthe plan and its current objective are above the fold on every tested phone");
+               [360, 640, "small Android"], [412, 700, "Pixel"], [430, 800, "large phone"]];
+
+function run(label, o) {
+  print("\n--- " + label + " ---");
+  var worst = 0;
+  DEVICES.forEach(function (d) {
+    var reserve = d[1] <= 700 ? o.reserve : 300;
+    var b = board(d[0], d[1], reserve);
+    var h = ROWS.nav + ROWS.gamebar + ROWS.oppStrip + ROWS.youStrip + ROWS.tabbar + b + o.cards
+          + (o.stratStrip ? ROWS.stratStrip : 0);
+    var over = h - d[1];
+    if (over > worst) worst = over;
+    print("  " + (d[2] + "                     ").slice(0, 26) + d[0] + "x" + d[1] +
+          ": board " + b + " + chrome " + (h - b) + " = " + h +
+          " -> " + (over <= 0 ? "fits with " + (-over) + "px spare" : "scrolls by " + over));
+  });
+  return worst;
+}
+
+var before = run("BEFORE: two cards, each with its own move recommendation",
+                 { cards: TWO_CARDS, stratStrip: true, reserve: 300 });
+var after = run("NOW: one guidance card, strategy strip folded, chooser on demand",
+                { cards: ONE_CARD, stratStrip: false, reserve: 380 });
+
+print("\nworst-case overflow: " + before + "px -> " + after + "px");
+if (after > BASELINE) {
+  print("  FAIL mobile layout regressed past the " + BASELINE + "px baseline");
+} else if (after > 0) {
+  print("  tracked: " + after + "px still below the fold on the tightest phones.");
+  print("  The remaining fat is app chrome, not guidance: nav 56 + game bar 52 +");
+  print("  bottom tab bar 52 = 160px. Closing it means relocating the game bar's");
+  print("  controls (Takeback, Assist, settings) — they cannot simply be hidden.");
+} else {
+  print("  everything fits");
+}

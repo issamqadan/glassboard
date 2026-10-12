@@ -2111,3 +2111,86 @@ main.game .strat-panel { display: none; }
   margin-top: 9px; padding: 7px; border-radius: 9px; cursor: pointer; font-size: 0.78rem; font-weight: 700;
   background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #9fb0c6; }
 .plan-panel .pp-more:hover { color: #eef4fb; border-color: #7ee0d6; }
+
+
+/* ---- MOBILE: ONE assist block below the board -------------------------------
+   Measured from a real device screenshot, which my earlier model got wrong — it
+   omitted the Glass Lens (~180px) and the bottom tab bar (~52px) entirely. The
+   true chrome below the board was ~330px because the Lens AND the plan panel were
+   each showing a move recommendation, stacked.
+   The Lens owns "what to play". The panel owns "what you're trying to achieve".
+   Neither needs to repeat the other. */
+@media (max-width: 860px) {
+  /* the panel's duplicate move + Play button — the Lens has one directly above */
+  main.game .plan-panel .pp-movewrap { display: none; }
+  /* the Lens's identity chips: the panel states the opening on mobile */
+  main.game .glass-lens .gl-identity { display: none; }
+  /* tighter Lens and panel padding on a phone */
+  main.game .glass-lens { padding: 9px 11px; gap: 5px; margin-top: 8px; }
+  main.game .plan-panel { padding: 10px 11px; margin-top: 8px; }
+  main.game .plan-panel .pp-bar { margin-top: 7px; }
+  main.game .plan-panel .pp-now { margin-top: 7px; font-size: 0.85rem; }
+}
+/* Short screens give the board a little back so the assist block clears the fold.
+   The board stays square and still never moves DURING a game — this only changes
+   how much height it reserves at a given viewport. */
+@media (max-width: 860px) and (max-height: 700px) {
+  main.game .board-wrap {
+    width: min(100%, calc(100vw - 28px), max(248px, calc(100vh - 380px)));
+    width: min(100%, calc(100vw - 28px), max(248px, calc(100dvh - 380px)));
+  }
+}
+
+
+/* ---- MOBILE: the two desktop panels become two TABS -------------------------
+   Desktop shows the Move panel and the Strategy panel at once, which Issam likes.
+   A phone cannot stack them under the board — measured at 370px of overflow, and
+   even after merging the duplicate move block it was still 62-80px over. So the
+   same two panels become one block with two tabs: all the content, one panel's
+   height. The Strategy tab carries a progress badge, so the plan stays in mind
+   while you are reading the move. */
+.assist-tabs { display: none; }
+@media (max-width: 860px) {
+  .assist-tabs { display: flex; gap: 6px; margin: 8px 0 0; }
+  .assist-tabs .at-tab { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 34px; border-radius: 10px; cursor: pointer; font-size: 0.82rem; font-weight: 700;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #9fb0c6; }
+  .assist-tabs .at-tab.on { color: #04222d; background: linear-gradient(140deg, #7ee0d6, #4fb8ac); border-color: transparent; }
+  .assist-tabs .at-badge:empty { display: none; }
+  .assist-tabs .at-badge { font-size: 0.72rem; font-weight: 800; padding: 1px 6px; border-radius: 999px;
+    background: rgba(255,255,255,0.16); font-variant-numeric: tabular-nums; }
+  .assist-tabs .at-tab.on .at-badge { background: rgba(0,0,0,0.18); }
+  .assist-tabs .at-badge.warn { background: #e0be79; color: #2b1d04; }
+  /* only the selected tab's panel is in the flow */
+  main.game .glass-lens.mt-off, main.game .plan-panel.mt-off { display: none; }
+  /* with only one panel showing, it can afford its own move block again */
+  main.game .plan-panel .pp-movewrap { display: block; }
+}
+
+
+/* ---- ONE GUIDANCE CARD -----------------------------------------------------
+   The plan is not a second opinion beside the move — it is the context the move
+   serves. So the plan's name, progress and current objective live INSIDE the
+   guidance card, above the single recommendation that pickPriority() has already
+   resolved (plan vs threat vs best, with the relationship stated). The second
+   card is now only the chooser, opened by "Change strategy". */
+.glass-lens .gl-plan-head { display: flex; align-items: center; gap: 8px; }
+.glass-lens .gl-plan-head .gp-ic { font-size: 15px; flex: 0 0 auto; }
+.glass-lens .gl-plan-head .gp-name { flex: 1 1 auto; min-width: 0; color: #eef4fb; font-size: 0.9rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.glass-lens .gl-plan-head.none .gp-name { color: #93a2b8; font-weight: 600; }
+.glass-lens .gl-plan-head.warn .gp-name, .glass-lens .gl-plan-head.warn .gp-ic { color: #e0be79; }
+.glass-lens .gp-prog { flex: 0 0 auto; font-size: 0.74rem; font-weight: 800; color: #7ee0d6;
+  font-variant-numeric: tabular-nums; padding: 2px 7px; border-radius: 999px; background: rgba(126,224,214,0.14); }
+.glass-lens .gl-plan-head.warn .gp-prog { color: #e0be79; background: rgba(224,190,121,0.16); }
+/* A written label, not an icon to decode. */
+.glass-lens .gp-change { flex: 0 0 auto; cursor: pointer; font-size: 0.72rem; font-weight: 700;
+  padding: 3px 9px; border-radius: 999px; color: #c3d0e6;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); white-space: nowrap; }
+.glass-lens .gp-change:hover { color: #eef4fb; border-color: #7ee0d6; }
+.glass-lens .gl-plan-bar { height: 3px; border-radius: 999px; background: rgba(255,255,255,0.1); overflow: hidden; }
+.glass-lens .gl-plan-bar span { display: block; height: 100%; background: #7ee0d6; transition: width .35s ease; }
+.glass-lens .gl-plan-head.warn ~ .gl-plan-bar span { background: #e0be79; }
+.glass-lens .gl-plan-now { font-size: 0.82rem; line-height: 1.4; color: #b9c7db; }
+.glass-lens .gl-plan-now b { color: #7ee0d6; }
+.plan-panel.chooser .pc-prog { color: #7ee0d6; }
