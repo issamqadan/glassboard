@@ -62,6 +62,21 @@ def main():
     end = s.index("\n}", s.index("  engineReply();", s.index("function ensureTurnProgress"))) + 2
     write("deadlock.js", s[start:end])
 
+    # The strategy area: activePlanLive() through the end of renderPlanPanel().
+    start = s.index("// The active plan as the ENGINE sees it right now")
+    i = s.index("function renderPlanPanel()")
+    o = s.index("{", i)
+    depth, m = 0, o
+    while True:
+        if s[m] == "{":
+            depth += 1
+        elif s[m] == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        m += 1
+    write("planpanel.src", s[start:m + 1])
+
     # The level ladder + aiBoost, then adviceMovetime.
     start = s.index("const AI_LEVELS = [")
     end = s.index("\n}", s.index("return { lean, skill, movetime, depth, base: lvl.skill")) + 2

@@ -2042,3 +2042,41 @@ main.game .strat-panel { display: none; }
 .plan-panel .pp-play:hover { background: rgba(126,224,214,0.26); }
 /* The retired modal must not come back by accident. */
 #stepsSheet { display: none !important; }
+
+
+/* The plan panel's picker, progress bar and move block. The panel is the single
+   strategy surface: persistent, beside the board, never covering it. */
+.plan-panel .pp-change { flex: 0 0 auto; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14);
+  color: #c3d0e6; border-radius: 999px; padding: 3px 10px; font-size: 0.74rem; font-weight: 700; cursor: pointer; }
+.plan-panel .pp-change:hover { color: #eef4fb; border-color: #7ee0d6; }
+.plan-panel .pp-bar { height: 4px; border-radius: 999px; background: rgba(255,255,255,0.1); margin: 9px 0 0; overflow: hidden; }
+.plan-panel .pp-bar span { display: block; height: 100%; background: #7ee0d6; border-radius: 999px; transition: width .35s ease; }
+.plan-panel.reassess .pp-bar span { background: #e0be79; }
+.plan-panel .pp-now { margin: 9px 0 0; font-size: 0.88rem; line-height: 1.45; color: #eef4fb; }
+.plan-panel .pp-now b { color: #7ee0d6; }
+.plan-panel .pp-intact { color: #9fb0c6; }
+.plan-panel .pp-move { display: flex; align-items: baseline; gap: 9px; margin: 10px 0 0; padding: 9px 11px;
+  border-radius: 10px; background: rgba(126,224,214,0.1); border: 1px solid rgba(126,224,214,0.3); }
+.plan-panel .pp-san { font-weight: 800; color: #aef0e6; font-size: 0.98rem; flex: 0 0 auto; }
+.plan-panel .pp-note { font-size: 0.8rem; color: #9fb0c6; line-height: 1.4; }
+.plan-panel .pp-play.ghost { background: rgba(255,255,255,0.06); color: #c3d0e6; border-color: rgba(255,255,255,0.16); }
+.plan-panel .pp-choices { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; }
+.plan-panel .pp-choices.open { margin-top: 11px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 11px; }
+.plan-panel .pp-choice { display: flex; align-items: flex-start; gap: 9px; text-align: left; cursor: pointer;
+  padding: 9px 11px; border-radius: 10px; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12); color: #c3d0e6; }
+.plan-panel .pp-choice:hover { border-color: #7ee0d6; }
+.plan-panel .pp-choice.on { border-color: #7ee0d6; background: rgba(126,224,214,0.12); }
+.plan-panel .pp-choice .pc-ic { font-size: 15px; flex: 0 0 auto; }
+.plan-panel .pp-choice .pc-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.plan-panel .pp-choice .pc-txt b { color: #eef4fb; font-size: 0.88rem; }
+.plan-panel .pp-choice .pc-txt small { color: #93a2b8; font-size: 0.76rem; line-height: 1.35; }
+.plan-panel .pp-choice.drop .pc-txt b { color: #b7c4dc; }
+/* Mobile: the strategy area sits directly under the board, ABOVE the move list. */
+@media (max-width: 860px) {
+  main.game .panels > #planPanel { order: -1; margin: 8px 0 0; }
+  .plan-panel .pp-steps { gap: 5px; }
+  .plan-panel .pp-idea, .plan-panel .pp-choice .pc-txt small { font-size: 0.79rem; }
+}
+/* Both retired overlays stay retired. */
+#stepsSheet, #planSheet { display: none !important; }

@@ -159,7 +159,10 @@
     const tc = ctx.timeControl ? `<span class="gs-tc" title="${esc(ctx.timeControlTitle || "")}">⏱ ${esc(ctx.timeControl)}</span>` : "";
     if (!bits.length && !tc) return "";
     const phase = sr && sr.phase ? `<span class="gs-phase">${esc(sr.phase)}</span>` : "";
-    return `<div class="gs-row">${phase}${tc}${bits.join("")}<span class="gs-more">Plans ›</span></div>`;
+    // The "Plans ›" affordance lived here AND in the Lens AND in a rail panel.
+    // Choosing a plan belongs to the one strategy area beside the board, so this
+    // row is pure awareness now: who is playing what, and the clock.
+    return `<div class="gs-row">${phase}${tc}${bits.join("")}</div>`;
   }
 
   // ---- The PRIORITY LADDER (what the Glass Lens headlines this turn) -----------

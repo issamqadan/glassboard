@@ -1252,6 +1252,7 @@ function onPositionChanged() {
   freeCaptures = [];
   assistData = null;
   revealedBest = false; // deeper help must be re-revealed (and re-paid) each position
+  planRevealed = false; // and the plan's move is re-revealed per position too
   // Open Hand shows the answer unasked, so it is charged for the position the
   // moment that position arrives — that's what "counts down as it's offered" means.
   if (helpDelivery === "open" && game.status() === "ongoing" && game.sideToMove() === humanColor) {
@@ -1494,10 +1495,9 @@ function paint() {
     renderAiAssist();
     renderCoach();
     renderAssist();
-    renderStrategy();
     renderPlanDock();
     renderGlassLens();
-  renderPlanPanel(null);
+  renderPlanPanel();
     renderBoardAdvice();
     renderMoveList();
     renderCaptured();
@@ -1542,51 +1542,136 @@ function renderPlanDock() {
   dock.querySelector("#pdSteps").onclick = () => openStepsSheet(picked);
   dock.querySelector("#pdX").onclick = () => { setActivePlan(null); paint(); renderAssist(); };
 }
-// THE PLAN, INLINE. This used to raise a full-screen dimming modal over the board:
-// you picked a plan and the game went dark behind a dialog, which is the opposite
-// of connecting the plan to the position. It is now a panel beside the board
-// (desktop) or under the Lens (mobile). The board stays lit, stays interactive,
-// and keeps showing the plan's move as an arrow while you read the steps.
-let planPanelOpen = false;
-function openStepsSheet(picked) { planPanelOpen = true; renderPlanPanel(picked); }
-function closePlanPanel() { planPanelOpen = false; renderPlanPanel(null); }
-function renderPlanPanel(pickedArg) {
+// ---- THE STRATEGY AREA: one place, always beside the board ------------------
+//
+// Strategy used to be spread over four surfaces — the strip above the board, an
+// identity row and a "Plans" row inside the Lens, and a hidden legacy rail panel
+// that still drew the board arrows — and choosing a plan raised a full-screen
+// modal that blacked out the game. The plan is ABOUT the position, so hiding the
+// position to discuss it was exactly backwards, and every step reopened the dialog.
+//
+// This is now the single strategy surface. It never covers the board, it updates
+// in place as the game moves, and everything it says about the position comes from
+// the engine's own read (steps[].done, arrows, rings, moveNote) — nothing here
+// invents a strategic claim.
+let planPanelOpen = true;      // the area is persistent; this only collapses the detail
+let planPickerOpen = false;    // "change plan" expands inline, never as an overlay
+let planRevealed = false;      // has the plan's concrete move been revealed this position?
+function openStepsSheet(picked) { planPanelOpen = true; renderPlanPanel(); }
+function closePlanPanel() { planPanelOpen = false; renderPlanPanel(); }
+function togglePlanPicker() { planPickerOpen = !planPickerOpen; renderPlanPanel(); }
+
+// The active plan as the ENGINE sees it right now, falling back to what the player
+// chose when the engine isn't currently offering it (so the plan never disappears).
+function activePlanLive() {
+  const sr = assistData && assistData.strategy;
+  const list = (sr && sr.strategies) || [];
+  if (!GBStrategyState.isLive(stratState)) return null;
+  return list.find((x) => x.id === stratState.id)
+    || { id: stratState.id, name: stratState.name, idea: stratState.objective, steps: stratState.steps, stale: true };
+}
+
+function renderPlanPanel() {
   const el = document.getElementById("planPanel");
   if (!el) return;
   const sr = assistData && assistData.strategy;
-  const live = GBStrategyState.isLive(stratState);
-  const picked = pickedArg || (live
-    ? (((sr && sr.strategies) || []).find((x) => x.id === stratState.id)
-       || { id: stratState.id, name: stratState.name, idea: stratState.objective, steps: stratState.steps })
-    : null);
-  if (!planPanelOpen || !picked) { el.hidden = true; el.innerHTML = ""; return; }
-  const steps = picked.steps || [];
-  const doneN = steps.filter((x) => x.done).length;
+  const list = (sr && sr.strategies) || [];
+  const inGame = !firstGame && game.status() === "ongoing" && game.sideToMove() === humanColor;
+  if (!inGame || !list.length) { el.hidden = true; el.innerHTML = ""; drawPlan(null); return; }
+
+  const picked = activePlanLive();
   const reassess = GBStrategyState.needsReassess(stratState);
   el.hidden = false;
   el.className = "plan-panel" + (reassess ? " reassess" : "");
-  el.innerHTML =
+
+  // The board annotations come from the engine's own arrows/rings for this plan,
+  // so what is drawn is always about the position actually on the board.
+  drawPlan(picked && !picked.stale ? picked : null);
+
+  // Is something more urgent than the plan right now? pickPriority already applies
+  // the safety ladder; we only REPORT what it decided, so the plan panel can never
+  // contradict the advice.
+  const prio = (!firstGame && assistData) ? pickPriority() : null;
+  const urgent = prio && prio.kind === "urgent" ? prio : null;
+
+  if (!picked) {
+    // No plan yet: offer the engine's best-fitting plans, each with its own idea.
+    el.innerHTML =
+      `<div class="pp-head"><span class="pp-ic">🧭</span><b>Choose a plan</b></div>` +
+      `<p class="pp-idea">A plan is what you're trying to achieve. Pick one and the guidance follows it, move by move.</p>` +
+      `<div class="pp-choices">` + list.slice(0, 3).map((x) =>
+        `<button class="pp-choice" data-id="${x.id}"><span class="pc-ic">${STRAT_ICON[x.id] || "◆"}</span>` +
+        `<span class="pc-txt"><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.idea || "")}</small></span></button>`).join("") +
+      `</div>`;
+    el.querySelectorAll(".pp-choice").forEach((btn) => btn.onclick = () => {
+      setActivePlan(btn.dataset.id); planRevealed = false; paint();
+    });
+    return;
+  }
+
+  const steps = picked.steps || [];
+  const doneN = steps.filter((x) => x.done).length;
+  const now = steps[doneN];
+  const total = steps.length;
+  // Progress is the ENGINE's done-flags, read from the position — not a guess and
+  // not a percentage of a script.
+  const pct = total ? Math.round((doneN / total) * 100) : 0;
+
+  let body =
     `<div class="pp-head"><span class="pp-ic">${STRAT_ICON[picked.id] || "◆"}</span>` +
       `<b>${escapeHtml(picked.name)}</b>` +
-      `<span class="pp-prog">${doneN}/${steps.length || 0}</span>` +
-      `<button class="pp-x" id="ppClose" title="Collapse">✕</button></div>` +
-    `<p class="pp-idea">${escapeHtml(picked.idea || "")}</p>` +
-    (reassess ? `<p class="pp-warn">⚠ ${escapeHtml(GBStrategyState.statusLine(stratState, uciHistory.length))}</p>` : "") +
-    `<ol class="pp-steps">` + steps.map((st, i) => {
+      `<span class="pp-prog" title="${doneN} of ${total} objectives met in this position">${doneN}/${total}</span>` +
+      `<button class="pp-change" id="ppChange" title="Choose a different plan">${planPickerOpen ? "✕" : "Change"}</button></div>` +
+    `<div class="pp-bar"><span style="width:${pct}%"></span></div>`;
+
+  if (urgent) {
+    // A threat outranks the plan — say so, and say the plan survives it.
+    body += `<p class="pp-warn">⚠ <b>${escapeHtml(urgent.label || "Deal with this first")}</b> — ${escapeHtml(urgent.why || "")}` +
+      ` <span class="pp-intact">Your plan is still on; come back to it next move.</span></p>`;
+  } else if (reassess) {
+    body += `<p class="pp-warn">⚠ ${escapeHtml(GBStrategyState.statusLine(stratState, uciHistory.length))}</p>`;
+  }
+
+  body += `<p class="pp-now">${now ? "<b>Now:</b> " + escapeHtml(now.text) : "<b>All objectives met.</b> " + escapeHtml(picked.idea || "")}</p>`;
+
+  // The concrete move the plan wants, grounded in THIS position. Understanding is
+  // free; revealing the move follows the existing assistance rules unchanged.
+  if (picked.moveUci && !urgent) {
+    if (showAnswer() || planRevealed) {
+      body += `<div class="pp-move"><span class="pp-san">${escapeHtml(picked.moveSan || picked.moveUci)}</span>` +
+        `<span class="pp-note">${escapeHtml(picked.moveNote || "")}</span></div>` +
+        `<button class="pp-play" id="ppPlay">▶ Play it</button>`;
+    } else {
+      body += `<button class="pp-play ghost" id="ppReveal">${helpDelivery === "gentleman" ? "🤝 Ask to see the move" : "🔔 Show the move for this step"}</button>`;
+    }
+  }
+
+  body += `<ol class="pp-steps">` + steps.map((st, i) => {
       const state = st.done ? "done" : i === doneN ? "now" : "todo";
       return `<li class="pp-step ${state}"><span class="pp-dot">${st.done ? "✓" : i === doneN ? "▸" : ""}</span>` +
         `<span>${escapeHtml(st.text || "")}</span></li>`;
-    }).join("") + `</ol>` +
-    (picked.moveUci
-      ? (showAnswer()
-          ? `<button class="pp-play" id="ppPlay">▶ Play the next step — ${escapeHtml(picked.moveSan || picked.moveUci)}</button>`
-          : `<button class="pp-play" id="ppAsk">${helpDelivery === "gentleman" ? "🤝 Request the move" : "🔔 Reveal the move"}</button>`)
-      : "");
-  const x = document.getElementById("ppClose"); if (x) x.onclick = closePlanPanel;
-  const p = document.getElementById("ppPlay");
-  if (p) p.onclick = () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); };
-  const pa = document.getElementById("ppAsk"); if (pa) pa.onclick = askForHelp;
+    }).join("") + `</ol>`;
+
+  if (planPickerOpen) {
+    body += `<div class="pp-choices open">` + list.map((x) =>
+      `<button class="pp-choice${x.id === picked.id ? " on" : ""}" data-id="${x.id}">` +
+      `<span class="pc-ic">${STRAT_ICON[x.id] || "◆"}</span>` +
+      `<span class="pc-txt"><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.idea || "")}</small></span></button>`).join("") +
+      `<button class="pp-choice drop" data-id="">✕ <span class="pc-txt"><b>No plan</b><small>Play without one</small></span></button></div>`;
+  }
+
+  el.innerHTML = body;
+  const ch = document.getElementById("ppChange"); if (ch) ch.onclick = togglePlanPicker;
+  el.querySelectorAll(".pp-choice").forEach((btn) => btn.onclick = () => {
+    setActivePlan(btn.dataset.id || null); planPickerOpen = false; planRevealed = false; paint();
+  });
+  // Revealing follows the existing credit rules; it does NOT play the move.
+  const rv = document.getElementById("ppReveal");
+  if (rv) rv.onclick = () => { askForHelp(); planRevealed = showAnswer(); renderPlanPanel(); };
+  const pl = document.getElementById("ppPlay");
+  if (pl) pl.onclick = () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); };
 }
+
 
 // Name the opening in play (from the strategy catalog) and show its professional
 // plan — this is the "real named strategies" surface, and it names what BOTH sides
@@ -1615,7 +1700,9 @@ function renderOpening() {
     timeControl: ctl ? ctl.label : "",
     timeControlTitle: ctl ? `${ctl.minutes} minutes each${ctl.increment ? `, +${ctl.increment}s per completed move` : ", no increment"}` : "",
   }) || "<div class='gs-row gs-empty'></div>";
-  if (html !== el._h) { el.innerHTML = html; el._h = html; el.onclick = openPlanSheet; }
+  // No click-through to a plans overlay: this strip states what both sides are
+  // playing (awareness), and the plan panel beside the board owns choosing.
+  if (html !== el._h) { el.innerHTML = html; el._h = html; el.onclick = null; }
 }
 
 // "Who's playing what" — fuse the NAMED opening (attributed to whichever side it
@@ -2485,61 +2572,6 @@ function drawPlan(strat) {
   (strat.arrows || []).forEach((a, i) => { s += planArrow(a.from, a.to, PLAN_COLOR[a.kind] || "#5cc9ec", i); });
   ov.innerHTML = s;
 }
-// Strategy is the headline assistance: a visible panel. Pick a plan → the
-// step-by-step follows it (with progress) and its arrows draw on the board.
-function renderStrategy() {
-  const wrap = document.getElementById("stratPanelWrap");
-  const host = document.getElementById("strategy");
-  const sr = assistData && assistData.strategy;
-  if (!sr || !sr.strategies || !sr.strategies.length) {
-    if (wrap) wrap.hidden = true;
-    if (host) host.innerHTML = "";
-    linkPlanPanels(null);
-    drawPlan(null);
-    return;
-  }
-  if (wrap) wrap.hidden = false;
-  // WAS: `if (picked && !candidates.includes(picked)) setActivePlan(null);` —
-  // a repaint deleted the player's plan whenever the engine's candidate list moved
-  // on. observe() records that the position has drifted and NEVER clears it.
-  GBStrategyState.observe(stratState, sr.strategies, uciHistory.length);
-  const picked = sr.strategies.find((s) => s.id === activePlanId());
-  const phaseEl = document.getElementById("stratPhase");
-  if (phaseEl) phaseEl.textContent = sr.phase;
-  if (host) {
-    host.innerHTML = "";
-    if (sr.opponent) { const o = document.createElement("div"); o.className = "opp-read"; o.innerHTML = `<span>👁</span><span>${escapeHtml(sr.opponent)}</span>`; host.appendChild(o); }
-    sr.strategies.forEach((s) => {
-      const card = document.createElement("div");
-      card.className = "scard" + (s.id === activePlanId() ? " on" : "");
-      card.style.setProperty("--sc", STRAT_COLOR[s.id] || "#5cc9ec");
-      card.innerHTML = `<span class="sic">${STRAT_ICON[s.id] || "◆"}</span><div><div class="sname">${escapeHtml(s.name)}</div><div class="sidea">${escapeHtml(s.idea)}</div></div>`;
-      card.addEventListener("click", () => { setActivePlan(s.id); renderStrategy(); renderAssist(); });
-      host.appendChild(card);
-    });
-    if (picked) {
-      const d = document.createElement("div"); d.className = "sdetail"; d.style.setProperty("--sc", STRAT_COLOR[picked.id] || "#5cc9ec");
-      const steps = picked.steps.map((st) => `<div class="step ${st.done ? "done" : ""}"><span class="sd">${st.done ? "✓" : "•"}</span><span>${escapeHtml(st.text)}</span></div>`).join("");
-      // Safety outranks the plan: if a piece is in real danger, hold the plan and
-      // send the player to the coach's rescue before resuming the sequence.
-      const t = threats && threats[0];
-      const onHold = t && t.loss >= 200;
-      const hold = onHold
-        ? `<div class="shold">⏸ <b>Plan on hold</b> — your ${pieceNameAt(t.sq)} on ${sqName(t.sq)} is under attack. Save it first (see the coach), then continue.</div>`
-        : "";
-      d.innerHTML = hold +
-        `<div class="snext${onHold ? " dimmed" : ""}">Next — <b>your move</b><span class="smove" title="Click to play">${escapeHtml(picked.moveSan || picked.moveUci)}</span>${escapeHtml(picked.moveNote)}</div><div class="steps${onHold ? " dimmed" : ""}">${steps}</div>`;
-      host.appendChild(d);
-      const mv = d.querySelector(".smove");
-      if (mv) { mv.style.cursor = "pointer"; mv.addEventListener("click", () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); }); }
-    } else {
-      const hint = document.createElement("div"); hint.className = "shint"; hint.textContent = "Pick a plan to see it on the board.";
-      host.appendChild(hint);
-    }
-  }
-  linkPlanPanels(picked);
-  drawPlan(picked || null);
-}
 // Once a plan is picked, visually tie the Strategy panel and the Suggested-moves
 // panel together — a shared accent stripe + the plan's name on the moves fold —
 // so it reads as "these moves serve this plan," not two separate things.
@@ -2746,50 +2778,6 @@ function previewMove(m, boardOnly) {
 }
 function clearPreview() { if (previewedMove) { previewedMove = null; } }
 
-// THE STRATEGY ROW — pick a plan, see which one you're on, and how far through its
-// steps you are. Deliberately NOT help-gated: this file's own rule is that
-// awareness shows in every mode, and strategy is the headline of the product. It
-// used to be built inside the branch that runs only after the move-answer is
-// revealed, so in On Call mode (and, once allowances arrived, whenever you ran out
-// of tokens) the entire strategy surface disappeared.
-function planRowHTML() {
-  const sr = assistData && assistData.strategy, strategies = (sr && sr.strategies) || [];
-  // Render from the STORED plan, not from the candidate list — otherwise a plan the
-  // engine isn't currently offering would vanish from the row even though the
-  // player is still following it.
-  const live = GBStrategyState.isLive(stratState);
-  const picked = live
-    ? (strategies.find((s) => s.id === stratState.id) || { id: stratState.id, name: stratState.name, idea: stratState.objective, steps: stratState.steps })
-    : null;
-  const bookOp = (followBook && bookNextMove()) ? currentOpening() : null;
-  const plansBtn = `<button class="gl-plansbtn" id="lensPlans" type="button" title="Pick a strategy">🧭 Plans</button>`;
-  if (picked) {
-    // Step progress from the engine's own done-flags — never an invented
-    // percentage, because a strategy is a conditional plan and not a script.
-    const steps = picked.steps || [];
-    const doneN = steps.filter((x) => x.done).length;
-    const pips = steps.map((x, i) => `<span class="gl-pip${x.done ? " done" : i === doneN ? " now" : ""}"></span>`).join("");
-    const reassess = GBStrategyState.needsReassess(stratState);
-    const line = GBStrategyState.statusLine(stratState, uciHistory.length);
-    return `<div class="gl-planrow${reassess ? " reassess" : ""}">` +
-      `<button class="gl-plan" id="lensPlan" type="button" title="${escapeHtml(picked.idea || "")}">` +
-      `${reassess ? "⚠" : "🧭"} ${escapeHtml(picked.name)}</button>` +
-      (steps.length ? `<span class="gl-pips" title="${doneN} of ${steps.length} steps done">${pips}</span>` : "") +
-      (line ? `<span class="gl-stepnow" title="${escapeHtml(line)}">${escapeHtml(line)}</span>` : "") +
-      `${plansBtn}</div>`;
-  }
-  if (bookOp) return `<div class="gl-planrow"><span class="gl-planlab book">📖 ${escapeHtml(bookOp.name)}</span>${plansBtn}</div>`;
-  if (strategies.length) {
-    // Proactive recommendation: the engine's best-fit plan for THIS position, offered
-    // as a one-tap "Try…" — plus the rest behind the Plans button.
-    const top = strategies[0];
-    const rec = `<button class="gl-planrec" data-id="${top.id}" type="button" title="${escapeHtml(top.idea || "")}">💡 Try: ${STRAT_ICON[top.id] || "◆"} ${escapeHtml(top.name)}</button>`;
-    const next = strategies[1] ? `<button class="gl-planpick" data-id="${strategies[1].id}" type="button">${STRAT_ICON[strategies[1].id] || "◆"} ${escapeHtml(strategies[1].name)}</button>` : "";
-    return `<div class="gl-planrow">${rec}${next}${plansBtn}</div>`;
-  }
-  return `<div class="gl-planrow">${plansBtn}</div>`;
-}
-
 function renderGlassLens() {
   const el = document.getElementById("glassLens");
   if (!el) return;
@@ -2802,7 +2790,7 @@ function renderGlassLens() {
     // Out of allowance: the only way on is to ask your opponent. Said plainly,
     // with the reassurance that safety warnings haven't gone anywhere.
     const out = !scarceAvailable();
-    el.innerHTML = glIdentityRow() + planRowHTML() + (
+    el.innerHTML = glIdentityRow() + (
       helpRequestPending
         ? `<div class="gl-askbtn waiting">🤝 Waiting for ${escapeHtml(aiName())}…</div>`
       : out
@@ -2812,7 +2800,6 @@ function renderGlassLens() {
         : `<button class="gl-askbtn" id="lensAsk" type="button">🔔 Show the key move <small>${GBHelpBudget.unlimited(helpMax) ? "unlimited" : `${GBHelpBudget.counter(helpLeft, helpMax)} left`}</small></button>`);
     const b = document.getElementById("lensAsk");
     if (b) b.onclick = out ? requestHelpFromOpponent : askForHelp;
-    bindPlanRow(el); // the strategy row works here too — it isn't help-gated
     return;
   }
   const p = pickPriority();
@@ -2826,7 +2813,7 @@ function renderGlassLens() {
   // Always-visible HUD: the advice is SHOWN (label + why), and the move is a single
   // clear button — tap ▶ to play it. The plan (pick or steps) folds in here too, so
   // NOTHING else needs to sit below the board — no scrolling to find help.
-  const planRow = planRowHTML();
+  const planRow = ""; // strategy lives in the plan panel now — one surface, not three
   const meaning = explainMoves ? moveMeaning(p.move) : "";
   el.className = "glass-lens kind-" + p.kind;
   el.innerHTML = glIdentityRow() +
@@ -2845,69 +2832,6 @@ function renderGlassLens() {
   document.getElementById("lensMore").onclick = () => openAltSheet(p);
   document.getElementById("lensLog").onclick = openGlassSheet;
   const ex = document.getElementById("lensExplain"); if (ex) ex.onclick = toggleExplain;
-  bindPlanRow(el);
-}
-
-// The strategy row is rendered in BOTH Lens states, so its handlers are bound in
-// one place. `picked` is looked up here rather than captured — it used to be a
-// local of the other branch, which is exactly how the row ended up inert.
-function bindPlanRow(el) {
-  if (!el) return;
-  const sr = assistData && assistData.strategy;
-  const picked = ((sr && sr.strategies) || []).find((x) => x.id === activePlanId());
-  const pl = document.getElementById("lensPlan");
-  if (pl) pl.onclick = () => { if (picked) openStepsSheet(picked); else openPlanSheet(); };
-  const pls = document.getElementById("lensPlans"); if (pls) pls.onclick = openPlanSheet;
-  el.querySelectorAll(".gl-planpick, .gl-planrec").forEach((b) => b.onclick = () => { setActivePlan(b.dataset.id); followBook = false; paint(); });
-}
-
-// The Strategy picker — a bottom sheet of plans that FIT this position, filtered by
-// phase: follow-the-book in the opening, the engine's live plans grouped by category,
-// and links to the matching catalog write-ups. Adopting one drives the plan surface
-// (and is visible to your opponent — assistance stays in the open).
-function openPlanSheet() {
-  const body = document.getElementById("planSheetBody"), sh = document.getElementById("planSheet");
-  if (!body || !sh) return;
-  const sr = assistData && assistData.strategy;
-  const phase = (sr && sr.phase) || "opening";
-  const S = window.GBStrategies;
-  const strategies = (sr && sr.strategies) || [];
-  let html = `<div class="ps-phase">Phase — <b>${escapeHtml(phase)}</b></div>`;
-  // Follow the book (opening phase, still in a known line)
-  const op = currentOpening(), bn = bookNextMove();
-  if (op && bn) {
-    html += `<div class="ps-sec">Opening</div>` +
-      `<button class="ps-item book${followBook ? " on" : ""}" data-act="book"><span class="ps-ic">📖</span>` +
-      `<span class="ps-t"><b>${followBook ? "Following the book" : "Follow the book"} — ${escapeHtml(op.name)}</b>` +
-      `<small>${escapeHtml(op.idea || "Play the opening's main line while it stays sound.")}</small></span></button>`;
-  }
-  // Live plans the engine detects here, grouped by category
-  if (strategies.length) {
-    const byCat = {};
-    strategies.forEach((s) => { const cat = (S ? S.themeMeta(s.id).cat : "Plan"); (byCat[cat] || (byCat[cat] = [])).push(s); });
-    (S ? S.categories : Object.keys(byCat)).forEach((cat) => {
-      const items = byCat[cat]; if (!items || !items.length) return;
-      html += `<div class="ps-sec">${escapeHtml(cat)}</div>` + items.map((s) =>
-        `<button class="ps-item${s.id === activePlanId() ? " on" : ""}" data-id="${s.id}" style="--sc:${STRAT_COLOR[s.id] || "#5cc9ec"}">` +
-        `<span class="ps-ic">${STRAT_ICON[s.id] || "◆"}</span><span class="ps-t"><b>${escapeHtml(s.name)}</b><small>${escapeHtml(s.idea || "")}</small></span></button>`).join("");
-    });
-  }
-  // Learn — the catalog write-ups for this phase (opens the library)
-  const cplans = (S && S.plansByPhase) ? S.plansByPhase(phase) : [];
-  if (cplans.length) {
-    html += `<div class="ps-sec">Learn — ${escapeHtml(phase)} strategies</div>` + cplans.map((p) => {
-      const cx = p.cx || (S.complexity ? S.complexity(p) : "");
-      return `<a class="ps-item learn" href="./strategy.html" target="_blank" rel="noopener"><span class="ps-ic">${STRAT_ICON[p.id] || "◆"}</span>` +
-        `<span class="ps-t"><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.idea || "")}</small></span>` +
-        (cx ? `<span class="ps-cx cx-${cx}">${cx}</span>` : "") + `</a>`;
-    }).join("");
-  }
-  if (activePlanId() || followBook) html += `<button class="ps-clear" data-act="clear" type="button">✕ Clear active plan</button>`;
-  body.innerHTML = html;
-  body.querySelectorAll(".ps-item[data-id]").forEach((b) => b.onclick = () => { setActivePlan(b.dataset.id); followBook = false; sh.style.display = "none"; paint(); });
-  const bk = body.querySelector('.ps-item[data-act="book"]'); if (bk) bk.onclick = () => { followBook = !followBook; if (followBook) setActivePlan(null); sh.style.display = "none"; paint(); };
-  const clr = body.querySelector('.ps-clear'); if (clr) clr.onclick = () => { setActivePlan(null); followBook = false; sh.style.display = "none"; paint(); };
-  sh.style.display = "grid";
 }
 
 // ---- The board thinks out loud: assistance rendered AS living board intelligence.
