@@ -61,7 +61,7 @@ print("\n--- understanding is free; the move is separate ---");
 answerShown = false; planRevealed = false; h = render();
 want("objective readable without revealing", /Develop your bishops/.test(h));
 want("the move itself is NOT shown yet", h.indexOf("Nc3") < 0);
-want("offers to reveal it", /ppReveal/.test(h));
+want("does NOT duplicate the reveal control", h.indexOf("ppReveal") < 0);
 want("no play button before revealing", h.indexOf("ppPlay") < 0);
 answerShown = true; h = render();
 want("revealed: shows the move", /Nc3/.test(h));
@@ -96,3 +96,22 @@ want("board annotations cleared", drawnWith === "none");
 game.sideToMove = function () { return "white"; };
 
 print(fails ? "\n" + fails + " FAIL(s)" : "\nthe strategy area behaves");
+
+print("\n--- the plan is named in exactly ONE place ---");
+load(SRC + 'gb-assist-ui.js');
+var A = window.GBAssistUI;
+var ctx = { opening: null, assistData: assistData, myColor: "white", oppColor: "black" };
+var strip = A.stripHTML(ctx) || "";
+var ident = A.identityRowHTML(ctx) || "";
+setActivePlan("develop");
+var panel = render();
+function has(x, s) { return x.indexOf(s) >= 0; }
+want("strip above the board does NOT name the plan", !has(strip, "Develop & Castle"));
+want("identity row does NOT name the plan", !has(ident, "Develop & Castle"));
+want("the panel DOES name it", has(panel, "Develop & Castle"));
+// and with a named opening in play, the strip still does its own job
+var ctx2 = { opening: { name: "Sicilian Defense", side: "black", idea: "Unbalance it", eco: "B20" },
+             assistData: assistData, myColor: "white", oppColor: "black" };
+var strip2 = A.stripHTML(ctx2) || "";
+want("strip still names the OPENING", has(strip2, "Sicilian Defense"));
+want("strip still does not name the plan", !has(strip2, "Develop & Castle"));

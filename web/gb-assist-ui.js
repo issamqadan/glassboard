@@ -103,12 +103,11 @@
       if (op.side === ctx.myColor || op.side === "both") { you.name = op.name; you.family = fam; you.idea = op.idea; you.book = true; }
       if (op.side === ctx.oppColor || op.side === "both") { opp.name = op.name; opp.family = fam; opp.idea = op.idea; }
     }
-    if (sr && sr.strategies && sr.strategies.length) {
-      const top = sr.strategies[0];
-      const tm = meta ? meta.themeMeta(top.id) : { cat: "Plan" };
-      if (!you.name) { you.name = top.name; you.cat = tm.cat; you.idea = top.idea; }
-      else if (!you.book || (sr.phase && sr.phase !== "opening")) you.planHint = top.name; // named opening + a live plan underneath
-    }
+    // The engine's live plan deliberately does NOT leak in here. It used to: with no
+    // named opening this row showed the top plan as "You · <plan>", and with one it
+    // appended "→ <plan>". That put the plan name in a third place alongside the
+    // strip above the board and the strategy panel — the same label three times.
+    // This row answers "which OPENING is each side playing"; the panel owns plans.
     if (sr && sr.opponent && !opp.name) opp.read = sr.opponent;
     return { you, opp, phase: sr ? sr.phase : null };
   }
@@ -148,10 +147,8 @@
       const who = mine ? "You're playing" : theirs ? "Opponent is playing" : "In play";
       bits.push(`<span class="gs-op" title="${esc(op.idea || "")}">📖 <b>${esc(who)}:</b> ${esc(op.name)}</span>`);
     }
-    if (sr && sr.strategies && sr.strategies.length) {
-      const top = sr.strategies[0];
-      bits.push(`<span class="gs-plan" title="${esc(top.idea || "")}">🧭 ${esc(top.name)}</span>`);
-    }
+    // (no plan chip here — the strategy panel beside the board is the one place
+    // the active plan is named, so this strip stays pure opening awareness)
     if (sr && sr.opponent) bits.push(`<span class="gs-opp" title="${esc(sr.opponent)}">🎯 ${esc(sr.opponent)}</span>`);
     // The configured time control, shown INSIDE this existing fixed-height row.
     // Deliberately not its own row: anything above the board that can appear or

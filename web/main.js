@@ -1636,14 +1636,15 @@ function renderPlanPanel() {
 
   // The concrete move the plan wants, grounded in THIS position. Understanding is
   // free; revealing the move follows the existing assistance rules unchanged.
-  if (picked.moveUci && !urgent) {
-    if (showAnswer() || planRevealed) {
-      body += `<div class="pp-move"><span class="pp-san">${escapeHtml(picked.moveSan || picked.moveUci)}</span>` +
-        `<span class="pp-note">${escapeHtml(picked.moveNote || "")}</span></div>` +
-        `<button class="pp-play" id="ppPlay">▶ Play it</button>`;
-    } else {
-      body += `<button class="pp-play ghost" id="ppReveal">${helpDelivery === "gentleman" ? "🤝 Ask to see the move" : "🔔 Show the move for this step"}</button>`;
-    }
+  // The move for this step, once help is out. There is ONE reveal control in the
+  // app — the Lens's — because both buttons called the same askForHelp() and
+  // revealed the same thing; two of them was the duplication in another costume.
+  // Division of labour: the Lens says what to PLAY, this panel says what you're
+  // trying to ACHIEVE, and shows the plan's move alongside it once revealed.
+  if (picked.moveUci && !urgent && showAnswer()) {
+    body += `<div class="pp-move"><span class="pp-san">${escapeHtml(picked.moveSan || picked.moveUci)}</span>` +
+      `<span class="pp-note">${escapeHtml(picked.moveNote || "")}</span></div>` +
+      `<button class="pp-play" id="ppPlay">▶ Play it</button>`;
   }
 
   body += `<ol class="pp-steps">` + steps.map((st, i) => {
@@ -1665,9 +1666,6 @@ function renderPlanPanel() {
   el.querySelectorAll(".pp-choice").forEach((btn) => btn.onclick = () => {
     setActivePlan(btn.dataset.id || null); planPickerOpen = false; planRevealed = false; paint();
   });
-  // Revealing follows the existing credit rules; it does NOT play the move.
-  const rv = document.getElementById("ppReveal");
-  if (rv) rv.onclick = () => { askForHelp(); planRevealed = showAnswer(); renderPlanPanel(); };
   const pl = document.getElementById("ppPlay");
   if (pl) pl.onclick = () => { const q = uciSquares(picked.moveUci); if (q) playMove(q.from, q.to, true); };
 }
