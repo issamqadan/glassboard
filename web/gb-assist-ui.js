@@ -279,7 +279,16 @@
         glyph + (n > 1 ? `<i class="cap-n">${n}</i>` : "") + `</span>`;
     }
     if (hidden) html += `<span class="cap-more" title="${hidden} more taken">+${hidden}</span>`;
-    return total ? `<span class="cap-tray" aria-label="${total} piece${total > 1 ? "s" : ""} taken">${html}</span>` : "";
+    // An EMPTY tray still renders. It used to return "", so before the first
+    // capture there was nothing on screen at all — no slot, no hint, nothing to
+    // learn. That is why "where are the pieces I've taken?" kept coming back even
+    // after the renderer and the clipping were both fixed: in the opening there was
+    // simply nothing to find.
+    if (!total) {
+      return `<span class="cap-tray empty" title="Pieces you take appear here">` +
+        `<span class="cap-none">—</span></span>`;
+    }
+    return `<span class="cap-tray" aria-label="${total} piece${total > 1 ? "s" : ""} taken">${html}</span>`;
   }
   // Reset the pop memory — a new game must not pop every trophy on its first paint.
   function capTrayReset() { Object.keys(trayPrev).forEach((k) => delete trayPrev[k]); }

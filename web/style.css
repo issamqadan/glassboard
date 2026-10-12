@@ -2080,3 +2080,34 @@ main.game .strat-panel { display: none; }
 }
 /* Both retired overlays stay retired. */
 #stepsSheet, #planSheet { display: none !important; }
+
+
+/* The empty trophy slot: visible enough to be learnable, quiet enough to ignore. */
+.pstrip .ps-caps .cap-tray.empty { opacity: 0.45; }
+.pstrip .ps-caps .cap-none { font-size: 0.8rem; color: #6c7a93; letter-spacing: 0.08em; }
+
+/* ---- MOBILE: the strategy must be reachable WITHOUT scrolling ---------------
+   Measured stack before this: nav 56 + game bar 52 + strip 44 + strategy strip 42
+   + board 360 + strip 44 + full panel 200 = 798px on a 660px screen. You had to
+   scroll past the board to reach the step-by-step, which is the one thing the
+   panel exists to keep in view.
+   Two things give way, and neither is information lost:
+     • the strategy strip above the board — the panel names the opening itself on
+       mobile, so the strip was a second copy (42px)
+     • the steps list collapses behind a one-tap toggle; the plan, progress and the
+       CURRENT objective stay visible always (~136px)
+   New total: 56 + 52 + 44 + 360 + 44 + 64 = 620 on a 660px screen. Fits. */
+@media (max-width: 860px) {
+  main.game #openingLine { display: none; }
+  .plan-panel .pp-opening { display: block; font-size: 0.74rem; color: #8ea0b8; margin: 6px 0 0; }
+  .plan-panel .pp-steps { display: none; }
+  .plan-panel.expanded .pp-steps { display: flex; }
+  .plan-panel .pp-more { display: flex; }
+  .plan-panel .pp-idea { display: none; }           /* the "Now:" line carries it */
+  .plan-panel.expanded .pp-idea { display: block; }
+}
+.plan-panel .pp-opening { display: none; }
+.plan-panel .pp-more { display: none; width: 100%; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 9px; padding: 7px; border-radius: 9px; cursor: pointer; font-size: 0.78rem; font-weight: 700;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #9fb0c6; }
+.plan-panel .pp-more:hover { color: #eef4fb; border-color: #7ee0d6; }

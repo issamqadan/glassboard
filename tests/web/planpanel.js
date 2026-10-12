@@ -18,12 +18,16 @@ var STRAT_ICON = { develop: "♘", centre: "✚" };
 var assistData = { strategy: { strategies: [PLAN, OTHER] } };
 var stratState = GBStrategyState.create();
 var planPanelOpen = true, planPickerOpen = false, planRevealed = false;
+// Mobile collapses the step list behind a toggle; the plan, progress and current
+// objective stay visible. Default collapsed, as on a phone.
+var planExpanded = false;
 var drawnWith = "none", answerShown = true, priority = null;
 function escapeHtml(x) { return String(x == null ? "" : x); }
 function drawPlan(s) { drawnWith = s ? s.id : "none"; }
 function pickPriority() { return priority; }
 function showAnswer() { return answerShown; }
 function uciSquares() { return { from: 1, to: 18 }; }
+function currentOpening() { return null; }
 function playMove() {}
 function askForHelp() {}
 function paint() {}
@@ -115,3 +119,15 @@ var ctx2 = { opening: { name: "Sicilian Defense", side: "black", idea: "Unbalanc
 var strip2 = A.stripHTML(ctx2) || "";
 want("strip still names the OPENING", has(strip2, "Sicilian Defense"));
 want("strip still does not name the plan", !has(strip2, "Develop & Castle"));
+
+print("\n--- mobile compaction: the essentials stay, the list folds ---");
+setActivePlan("develop"); planExpanded = false;
+var m = render();
+want("plan name always visible", /Develop & Castle/.test(m));
+want("progress always visible", /1\/3/.test(m));
+want("current objective always visible", /Develop your bishops/.test(m));
+want("a one-tap control for the full list", /ppMore/.test(m));
+want("steps are still in the DOM (CSS folds them)", /pp-steps/.test(m));
+planExpanded = true;
+var m2 = render();
+want("expanding is inline, not an overlay", /expanded/.test(EL.className) && !/sheet-overlay/.test(m2));

@@ -54,3 +54,14 @@ if (!/cap-more/.test(many)) { print("  FAIL overflow must be visible"); fails++;
 var few = S.capTrayHTML({ p: 2 }, "black", "t2");
 print("  a couple of pawns   : " + ((few.match(/class="cap-pc/g) || []).length) + " chip, no overflow marker: " + !/cap-more/.test(few));
 print(fails ? "\n" + fails + " FAIL(s)" : "\nthe strip has room for the trophies");
+
+print("\n--- the trophy slot is discoverable BEFORE the first capture ---");
+var empty = S.capTrayHTML({}, "black", "e1");
+print("  nothing taken yet -> " + (empty ? "a visible slot is rendered" : "NOTHING — the feature is invisible"));
+if (!empty) { print("  FAIL an empty tray must still show where trophies appear"); fails++; }
+if (empty.indexOf("cap-tray") < 0) { print("  FAIL the slot must be the tray itself"); fails++; }
+if (empty.indexOf("Pieces you take appear here") < 0) { print("  FAIL the slot should explain itself on hover"); fails++; }
+var one = S.capTrayHTML({ p: 1 }, "black", "e2");
+print("  after one capture -> " + ((one.match(/cap-pc/g) || []).length) + " chip, placeholder gone: " + (one.indexOf("cap-none") < 0));
+if (one.indexOf("cap-none") >= 0) { print("  FAIL placeholder should be replaced by the real trophy"); fails++; }
+print(fails ? "" : "  the slot is learnable from move one");

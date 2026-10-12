@@ -1557,6 +1557,10 @@ function renderPlanDock() {
 let planPanelOpen = true;      // the area is persistent; this only collapses the detail
 let planPickerOpen = false;    // "change plan" expands inline, never as an overlay
 let planRevealed = false;      // has the plan's concrete move been revealed this position?
+// Mobile shows the plan, progress and the CURRENT objective always, with the full
+// step list one tap away — the difference between fitting on a phone and making
+// the player scroll past the board to find their own plan.
+let planExpanded = false;
 function openStepsSheet(picked) { planPanelOpen = true; renderPlanPanel(); }
 function closePlanPanel() { planPanelOpen = false; renderPlanPanel(); }
 function togglePlanPicker() { planPickerOpen = !planPickerOpen; renderPlanPanel(); }
@@ -1582,7 +1586,7 @@ function renderPlanPanel() {
   const picked = activePlanLive();
   const reassess = GBStrategyState.needsReassess(stratState);
   el.hidden = false;
-  el.className = "plan-panel" + (reassess ? " reassess" : "");
+  el.className = "plan-panel" + (reassess ? " reassess" : "") + (planExpanded ? " expanded" : "");
 
   // The board annotations come from the engine's own arrows/rings for this plan,
   // so what is drawn is always about the position actually on the board.
@@ -1623,6 +1627,10 @@ function renderPlanPanel() {
       `<span class="pp-prog" title="${doneN} of ${total} objectives met in this position">${doneN}/${total}</span>` +
       `<button class="pp-change" id="ppChange" title="Choose a different plan">${planPickerOpen ? "✕" : "Change"}</button></div>` +
     `<div class="pp-bar"><span style="width:${pct}%"></span></div>`;
+  // On a phone the strip above the board is hidden to buy height, so the opening
+  // it named is stated here instead — the information moves, it isn't dropped.
+  const op = currentOpening();
+  if (op) body += `<div class="pp-opening">📖 ${escapeHtml(op.name)}</div>`;
 
   if (urgent) {
     // A threat outranks the plan — say so, and say the plan survives it.
@@ -1647,6 +1655,7 @@ function renderPlanPanel() {
       `<button class="pp-play" id="ppPlay">▶ Play it</button>`;
   }
 
+  body += `<button class="pp-more" id="ppMore">${planExpanded ? "Hide the steps ▲" : `All ${total} steps ▼`}</button>`;
   body += `<ol class="pp-steps">` + steps.map((st, i) => {
       const state = st.done ? "done" : i === doneN ? "now" : "todo";
       return `<li class="pp-step ${state}"><span class="pp-dot">${st.done ? "✓" : i === doneN ? "▸" : ""}</span>` +
@@ -1663,6 +1672,8 @@ function renderPlanPanel() {
 
   el.innerHTML = body;
   const ch = document.getElementById("ppChange"); if (ch) ch.onclick = togglePlanPicker;
+  const mo = document.getElementById("ppMore");
+  if (mo) mo.onclick = () => { planExpanded = !planExpanded; renderPlanPanel(); };
   el.querySelectorAll(".pp-choice").forEach((btn) => btn.onclick = () => {
     setActivePlan(btn.dataset.id || null); planPickerOpen = false; planRevealed = false; paint();
   });
