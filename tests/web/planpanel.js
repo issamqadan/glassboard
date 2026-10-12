@@ -100,3 +100,31 @@ var on = prio("g1f3", "Develops a knight.", "g1f3");
 want("on-plan move says so instead", /Continue your/.test(on.label) && !/not your plan/.test(on.label));
 var noplan = prio("e2e4", "Grabs space in the centre.", null);
 want("with no plan, no plan talk", !/plan/.test(noplan.why));
+
+print("\n--- the Change control survives every render branch ---");
+// The Lens rebuilds innerHTML on every paint and has branches for: awaiting a
+// reveal, no recommendation yet, "Analyzing…", and the normal case. The plan
+// header must appear in all of them, or tapping Change does nothing while the
+// card happens to be in another state.
+var src = readFile("web/main.js");
+// Brace-match the function instead of slicing to another name: openStepsSheet is
+// defined EARLIER in the file, so the original slice was empty and the assertion
+// passed vacuously (0 === 0). A test that cannot fail is worse than no test.
+function fnBody(src, name) {
+  var a = src.indexOf("function " + name), o = src.indexOf("{", a), d = 0, m = o;
+  while (true) {
+    if (src[m] === "{") d++;
+    else if (src[m] === "}") { d--; if (d === 0) break; }
+    m++;
+  }
+  return src.slice(a, m + 1);
+}
+var lens = fnBody(src, "renderGlassLens");
+var branches = (lens.match(/el\.innerHTML = glIdentityRow\(\)/g) || []).length;
+var withHead = (lens.match(/el\.innerHTML = glIdentityRow\(\) \+ planHead/g) || []).length;
+print("  branches that set the card's HTML : " + branches);
+print("  branches that include the plan     : " + withHead);
+want("the slice actually found the function", lens.length > 500 && branches >= 3);
+want("every branch renders the plan header", branches === withHead && branches > 0);
+want("the control is delegated, not re-bound per render", /addEventListener\("click"[\s\S]{0,200}lensChange/.test(src));
+want("no per-render onclick for it remains", !/getElementById\("lensChange"\)/.test(src));

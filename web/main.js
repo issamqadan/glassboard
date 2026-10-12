@@ -1148,6 +1148,22 @@ async function main() {
   if (snd) { snd.checked = soundOn; snd.addEventListener("change", toggleSound); }
   const ub = document.getElementById("undoBtn");
   if (ub) ub.addEventListener("click", () => { closeMenu(); requestTakeback(); });
+  // "Change strategy" is DELEGATED, bound once here rather than re-bound on every
+  // render of the Glass Lens. The Lens rebuilds its innerHTML on every paint — and
+  // three of its branches (awaiting a reveal, no recommendation yet, and
+  // "Analyzing the position…") used to replace the whole card — so a per-render
+  // onclick was destroyed for up to 1.4s at a time while the advice search ran.
+  // Tapping in that window did nothing at all.
+  document.addEventListener("click", (ev) => {
+    const t = ev.target && ev.target.closest ? ev.target.closest("#lensChange") : null;
+    if (!t) return;
+    ev.preventDefault();
+    planPickerOpen = !planPickerOpen;
+    renderPlanPanel();
+    const pp = document.getElementById("planPanel");
+    if (pp && !pp.hidden && pp.scrollIntoView) pp.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
+
   const ay = document.getElementById("aiAskYes"), an = document.getElementById("aiAskNo");
   if (ay) ay.addEventListener("click", () => answerAiAsk(true));
   if (an) an.addEventListener("click", () => answerAiAsk(false));
@@ -2732,36 +2748,6 @@ function renderGlassLens() {
   const active = !firstGame && game.status() === "ongoing" && game.sideToMove() === humanColor && assistData && (assistData.candidates || []).length;
   if (!active) { el.hidden = true; el.innerHTML = ""; return; }
   el.hidden = false;
-  // Modes: don't reveal the move until it's been requested (accounting preserved).
-  if (!showAnswer()) {
-    el.className = "glass-lens ask";
-    // Out of allowance: the only way on is to ask your opponent. Said plainly,
-    // with the reassurance that safety warnings haven't gone anywhere.
-    const out = !scarceAvailable();
-    el.innerHTML = glIdentityRow() + (
-      helpRequestPending
-        ? `<div class="gl-askbtn waiting">🤝 Waiting for ${escapeHtml(aiName())}…</div>`
-      : out
-        ? `<button class="gl-askbtn" id="lensAsk" type="button">🪫 Out of help — ask ${escapeHtml(aiName())} for more <small>safety warnings stay on</small></button>`
-      : helpDelivery === "gentleman"
-        ? `<button class="gl-askbtn" id="lensAsk" type="button">🤝 Ask for the key move <small>opponent must allow</small></button>`
-        : `<button class="gl-askbtn" id="lensAsk" type="button">🔔 Show the key move <small>${GBHelpBudget.unlimited(helpMax) ? "unlimited" : `${GBHelpBudget.counter(helpLeft, helpMax)} left`}</small></button>`);
-    const b = document.getElementById("lensAsk");
-    if (b) b.onclick = out ? requestHelpFromOpponent : askForHelp;
-    return;
-  }
-  const p = pickPriority();
-  if (!p) { el.hidden = true; el.innerHTML = ""; return; }
-  // The strong engine is still calculating — show that honestly rather than a weak move.
-  if (p.analyzing) {
-    el.className = "glass-lens analyzing";
-    el.innerHTML = glIdentityRow() + `<div class="gl-analyzing"><span class="gl-spin"></span> Analyzing the position…</div>`;
-    return;
-  }
-  // Always-visible HUD: the advice is SHOWN (label + why), and the move is a single
-  // clear button — tap ▶ to play it. The plan (pick or steps) folds in here too, so
-  // NOTHING else needs to sit below the board — no scrolling to find help.
-  const planRow = ""; // strategy lives in the plan panel now — one surface, not three
   // THE PLAN HEADER, inside the one guidance card. The plan is not a second
   // opinion alongside the move — it is the context the move is serving.
   let planHead = "";
@@ -2787,6 +2773,44 @@ function renderGlassLens() {
       `<b class="gp-name">No plan yet</b>` +
       `<button class="gp-change" id="lensChange" type="button">Choose a strategy</button></div>`;
   }
+  // Modes: don't reveal the move until it's been requested (accounting preserved).
+  if (!showAnswer()) {
+    el.className = "glass-lens ask";
+    // Out of allowance: the only way on is to ask your opponent. Said plainly,
+    // with the reassurance that safety warnings haven't gone anywhere.
+    const out = !scarceAvailable();
+    el.innerHTML = glIdentityRow() + planHead + (
+      helpRequestPending
+        ? `<div class="gl-askbtn waiting">🤝 Waiting for ${escapeHtml(aiName())}…</div>`
+      : out
+        ? `<button class="gl-askbtn" id="lensAsk" type="button">🪫 Out of help — ask ${escapeHtml(aiName())} for more <small>safety warnings stay on</small></button>`
+      : helpDelivery === "gentleman"
+        ? `<button class="gl-askbtn" id="lensAsk" type="button">🤝 Ask for the key move <small>opponent must allow</small></button>`
+        : `<button class="gl-askbtn" id="lensAsk" type="button">🔔 Show the key move <small>${GBHelpBudget.unlimited(helpMax) ? "unlimited" : `${GBHelpBudget.counter(helpLeft, helpMax)} left`}</small></button>`);
+    const b = document.getElementById("lensAsk");
+    if (b) b.onclick = out ? requestHelpFromOpponent : askForHelp;
+    return;
+  }
+  const p = pickPriority();
+  if (!p) {
+    // No recommendation yet, but if a plan is active the player must still see it
+    // (and be able to change it) — hiding the whole card was how the plan appeared
+    // to come and go.
+    if (!planHead) { el.hidden = true; el.innerHTML = ""; return; }
+    el.className = "glass-lens";
+    el.innerHTML = glIdentityRow() + planHead;
+    return;
+  }
+  // The strong engine is still calculating — show that honestly rather than a weak move.
+  if (p.analyzing) {
+    el.className = "glass-lens analyzing";
+    el.innerHTML = glIdentityRow() + planHead + `<div class="gl-analyzing"><span class="gl-spin"></span> Analyzing the position…</div>`;
+    return;
+  }
+  // Always-visible HUD: the advice is SHOWN (label + why), and the move is a single
+  // clear button — tap ▶ to play it. The plan (pick or steps) folds in here too, so
+  // NOTHING else needs to sit below the board — no scrolling to find help.
+  const planRow = ""; // strategy lives in the plan panel now — one surface, not three
   const meaning = explainMoves ? moveMeaning(p.move) : "";
   el.className = "glass-lens kind-" + p.kind;
   el.innerHTML = glIdentityRow() + planHead +
@@ -2805,8 +2829,6 @@ function renderGlassLens() {
   document.getElementById("lensMore").onclick = () => openAltSheet(p);
   document.getElementById("lensLog").onclick = openGlassSheet;
   const ex = document.getElementById("lensExplain"); if (ex) ex.onclick = toggleExplain;
-  const lc = document.getElementById("lensChange");
-  if (lc) lc.onclick = () => { planPickerOpen = !planPickerOpen; renderPlanPanel(); };
 }
 
 // ---- The board thinks out loud: assistance rendered AS living board intelligence.
