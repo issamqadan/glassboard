@@ -77,3 +77,26 @@ want("cleared when it is not your turn", drawnWith === "none");
 game.sideToMove = function () { return "white"; };
 
 print(fails ? "\n" + fails + " FAIL(s)" : "\nthe chooser behaves");
+
+print("\n--- the recommendation states its relationship to the plan ---");
+load(SRC + 'gb-assist-ui.js');
+var AU = window.GBAssistUI;
+function prio(recUci, recNote, planMove) {
+  return AU.pickPriority({
+    assistData: { candidates: [{ uci: recUci, san: "e4", note: recNote }], hanging: [], threats: [] },
+    recommended: { uci: recUci, from: 12, to: 28, san: "e4", note: recNote },
+    picked: planMove ? { moveUci: planMove, moveSan: "Nf3", verb: "development",
+                         steps: [{ text: "Develop your knights", done: false }] } : null,
+    game: null, Game: null, myColor: "white",
+  });
+}
+var off = prio("e2e4", "Grabs space in the centre.", "g1f3");
+want("off-plan move is labelled as such", /not your plan's step/.test(off.label));
+want("it names what the plan wanted", /Nf3/.test(off.why));
+want("it names the objective", /develop your knights/i.test(off.why));
+want("it says the plan survives", /plan is still on/.test(off.why));
+want("it does not force the plan's inferior move", off.move.uci === "e2e4");
+var on = prio("g1f3", "Develops a knight.", "g1f3");
+want("on-plan move says so instead", /Continue your/.test(on.label) && !/not your plan/.test(on.label));
+var noplan = prio("e2e4", "Grabs space in the centre.", null);
+want("with no plan, no plan talk", !/plan/.test(noplan.why));

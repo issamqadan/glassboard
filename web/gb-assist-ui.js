@@ -219,7 +219,27 @@
 
     const fl = ctx.flavor ? ctx.flavor(rec) : null;
     const byFlavor = { aggr: "Press the attack", simp: "Simplify the position", sneak: "A sneaky move", safe: "Build your position" };
-    return { move: rec, label: (fl && byFlavor[fl.key]) || "Best move", why: rec.note || "The engine's strongest move here.", tag: "Best move", kind: "best" };
+    const label = (fl && byFlavor[fl.key]) || "Best move";
+
+    // A PLAN IS ACTIVE BUT THIS MOVE ISN'T ITS STEP. Say so, and say why, instead
+    // of presenting a bare "Best move" under a heading that reads "Now: develop
+    // your knights" — which is the recommendation and the plan talking past each
+    // other. Both moves come from the engine's own analysis, so the comparison is
+    // real and nothing here is invented: we never force the plan's move when the
+    // engine rates another higher, and we never silently drop the plan either.
+    if (picked && picked.moveUci) {
+      const planSan = picked.moveSan || picked.moveUci;
+      const stepNow = (picked.steps || []).filter((x) => !x.done)[0];
+      return {
+        move: rec, kind: "best", tag: "Best move · off-plan",
+        label: label + " — not your plan's step",
+        why: (rec.note || "The engine rates this highest here.") +
+          ` Your plan wants ${planSan}${stepNow && stepNow.text ? ` (${stepNow.text.toLowerCase()})` : ""}, ` +
+          `but the engine rates this higher in this position. Your plan is still on — play this, then come back to it.`,
+        planMove: planSan,
+      };
+    }
+    return { move: rec, label, why: rec.note || "The engine's strongest move here.", tag: "Best move", kind: "best" };
   }
 
   // ---- THE CAPTURE TRAY ------------------------------------------------------
