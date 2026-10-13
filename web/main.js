@@ -1547,7 +1547,9 @@ function paint() {
     renderPlanDock();
     renderGlassLens();
   renderPlanPanel();
-    renderAssistSheet();
+    // Guarded for the same reason as in a human game: presentation must never be
+    // able to take down the assistance it presents.
+    try { renderAssistSheet(); } catch (e) { console.error("assist sheet:", e); }
     renderBoardAdvice();
     renderMoveList();
     renderCaptured();

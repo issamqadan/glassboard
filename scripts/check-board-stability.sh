@@ -51,7 +51,7 @@ if python3 scripts/resolve-css.py --self-test > /dev/null 2>&1; then
 else printf "  FAIL the CSS resolver is broken -> mobile renders are not mobile\n"; fail=1; fi
 
 # The sheet must stay anchored to the visible screen, above the tab bar.
-if grep -q "bottom: calc(52px + env(safe-area-inset-bottom" "$CSS"; then
+if grep -q "bottom: calc(64px + env(safe-area-inset-bottom" "$CSS"; then
   printf "  ok   assistance sheet clears the tab bar and the safe area\n";
 else printf "  FAIL the sheet is not anchored above the tab bar/safe area\n"; fail=1; fi
 if grep -q ".assist-sheet { display: contents; }" "$CSS"; then

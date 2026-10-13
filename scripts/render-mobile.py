@@ -30,18 +30,26 @@ BOARD_SQUARES = "".join(
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from importlib import import_module
 resolve_css = import_module("resolve-css").resolve_css
-RAW = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        "..", "web", "style.css")).read()
+_WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web")
+RAW = open(os.path.join(_WEB, "style.css")).read()
+# The app nav and the mobile TAB BAR are styled inside nav.js, not style.css. The
+# harness used to invent its own 52px tab bar, which is how the sheet shipped
+# sitting UNDER the real 64px one. Pull the actual rules in.
+_nav = open(os.path.join(_WEB, "nav.js")).read()
+_i = _nav.index("const css = `") + len("const css = `")
+NAVCSS = _nav[_i:_nav.index("`", _i)]
+RAW = RAW + "\n/* ---- from nav.js ---- */\n" + NAVCSS
 
 
 def page(w, h, state):
     """state: "peek" | "choose" | "guide" — the three sheet states."""
     """One device frame: the game screen as it is actually composed."""
-    APP_NAV, TAB_BAR, RESERVE = 56, 52, 430
+    APP_NAV, TAB_BAR, RESERVE = 58, 64, 430   # nav.js's own figures
     gameh = h - APP_NAV - TAB_BAR
     # the real board rule: two media queries, the <=700px-tall one reserving more
     reserve = 360 if h <= 700 else 300
     boardw = min(w - 28, max(248, h - reserve))
+    app_nav = APP_NAV
     sheeth = h - 232  # the real max-height: calc(100dvh - 232px)
     # The stylesheet is RESOLVED for this exact device: @media flattened, vh/vw and
     # env() substituted. Without this the renderer silently used desktop CSS.
@@ -110,7 +118,7 @@ def page(w, h, state):
 <style>
   /* main.game's own height still measures the WINDOW, so it is pinned to what
      this device leaves between the app nav and the tab bar. */
-  .frame main.game {{ height: {gameh}px; max-height: {gameh}px; }}
+  .frame main.game {{ height: {gameh}px; max-height: {gameh}px; margin-top: {app_nav}px; }}
   .frame main.game .board-wrap {{ width: {boardw}px; }}
   /* position:fixed must resolve against the DEVICE FRAME, not QuickLook's window,
      so the frame is made a containing block (transform, below). */
@@ -123,18 +131,13 @@ def page(w, h, state):
     border:2px solid #ff3b30;margin:6px;background:var(--bg,#0e1420)}}
   .frame .lbl{{position:absolute;right:2px;top:2px;z-index:99;background:#ff3b30;color:#fff;
     font:10px/1.4 -apple-system,sans-serif;padding:1px 5px;border-radius:3px}}
-  .appnav{{height:56px;display:flex;align-items:center;padding:0 12px;color:#eef4fb;
-    font:600 15px -apple-system,sans-serif;border-bottom:1px solid rgba(255,255,255,.08)}}
-  .tabbar{{position:absolute;left:0;right:0;bottom:0;height:52px;display:flex;
-    align-items:center;justify-content:space-around;color:#8ea0b8;
-    font:10px -apple-system,sans-serif;border-top:1px solid rgba(255,255,255,.08);
-    background:#0e1420}}
+  /* nav.js styles .gbnav and .gbtabs itself — nothing invented here. */
   .board{{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1}}
   .sq{{aspect-ratio:1;display:grid;place-items:center;font-size:13px}}
   .sq.light{{background:#b6c0d0}} .sq.dark{{background:#3b465c}}
 </style></head><body>
 <div class="frame"><span class="lbl">{w}x{h} {state}</span>
-  <div class="appnav">Glassboard</div>
+  <div class="gbnav"><a class="gbnav-brand"><span class="gbnav-mark">&#9822;</span> Glassboard</a></div>
   <main class="game">
     <div class="gamebar"><div class="gb-actions">
       <span class="pill eval-pill">+0.2</span><span class="pill">💪 1902?</span>
@@ -149,7 +152,12 @@ def page(w, h, state):
       <aside class="panels">{card}</aside>
     </div>
   </main>
-  <div class="tabbar"><span>Lobby</span><span>Play AI</span><span>Learn</span><span>Strategies</span><span>More</span></div>
+  <div class="gbtabs">
+    <a class="gbtab"><span class="gbtab-ic">&#127968;</span><span>Lobby</span></a>
+    <a class="gbtab on"><span class="gbtab-ic">&#129302;</span><span>Play AI</span></a>
+    <a class="gbtab"><span class="gbtab-ic">&#9823;</span><span>Learn</span></a>
+    <a class="gbtab"><span class="gbtab-ic">&#128214;</span><span>Strategies</span></a>
+    <a class="gbtab"><span class="gbtab-ic">&#8943;</span><span>More</span></a></div>
 </div></body></html>"""
 
 

@@ -1051,7 +1051,11 @@ function paint() {
   renderCaptured();
   renderOpening();
   renderGlassLens();
-  renderAssistSheet();
+  // Guarded: paint() has no error handling, so a throw here would silently skip
+  // the coach, the assist list, the strategy panel, the glass log and the budget —
+  // every remaining piece of assistance. The sheet is presentation; it is not
+  // allowed to be load-bearing for the things it presents.
+  try { renderAssistSheet(); } catch (e) { console.error("assist sheet:", e); }
   renderCoach();
   renderAssist();
   renderStrategy();
@@ -1600,7 +1604,15 @@ function mpOpenPlanSheet() {
 // other, and the last surface that was written twice disagreed within a week.
 // The chooser here is the existing strategy sheet; the sheet's job is to keep the
 // plan, its progress and the current objective on screen without a page scroll.
-let sheetOpen = false;
+// A HUMAN GAME'S SHEET STARTS OPEN. In Play-AI the collapsed peek still carries
+// the plan, the objective and the move button, so peeking loses nothing. Here the
+// sheet holds the Glass Lens and NOTHING ELSE — there is no separate guide or
+// chooser to swap in — so collapsing it by default hid the entire assistance
+// surface. That is exactly what "the game play did not include the assistance"
+// was. Assistance is the point of this product; it is never hidden by default.
+let sheetOpen = (function () {
+  try { return localStorage.getItem("gb.sheet.mp") !== "closed"; } catch { return true; }
+})();
 function renderAssistSheet() {
   const sheet = el2("assistSheet");
   if (!sheet || !window.GBAssistSheet) return;
@@ -1622,7 +1634,11 @@ function renderAssistSheet() {
     sheet, peek: el2("asPeek"), quick: el2("asQuick"),
     state: stratState, live, ply: state && state.fen ? plyFromFen(state.fen) : 0,
     open: sheetOpen, move: p && p.move && !p.analyzing && mine ? p.move : null,
-    onToggle: () => { sheetOpen = !sheetOpen; paint(); },
+    onToggle: () => {
+      sheetOpen = !sheetOpen;
+      try { localStorage.setItem("gb.sheet.mp", sheetOpen ? "open" : "closed"); } catch {}
+      paint();
+    },
     onQuick: (m) => sendMove(m.from, m.to),
   });
 }

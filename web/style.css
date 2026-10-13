@@ -2270,9 +2270,13 @@ main.game .strat-panel { display: none; }
   .assist-sheet {
     display: flex; flex-direction: column;
     position: fixed; left: 0; right: 0; z-index: 46;
-    /* Above the tab bar, and above the iOS home indicator / Safari bottom bar.
-       dvh elsewhere handles the collapsing URL bar; this handles the safe area. */
-    bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+    /* Clear of the home indicator / Safari bottom bar. The mobile TAB BAR is added
+       on top of this below 640px (see the next query) — it does not exist between
+       641 and 860px, which is why this can't be one flat offset. 64px is nav.js's
+       own reserve (`body { padding-bottom: 64px }`), not a guess: the tab bar's CSS
+       lives in nav.js, so measuring it from style.css alone gave 52px and the sheet
+       sat UNDER the tab bar. */
+    bottom: env(safe-area-inset-bottom, 0px);
     max-height: calc(100dvh - 232px);
     padding: 0 10px calc(8px + env(safe-area-inset-bottom, 0px));
     background: linear-gradient(180deg, rgba(16,22,34,0.97), rgba(10,14,22,0.99));
@@ -2329,4 +2333,10 @@ main.game .strat-panel { display: none; }
   /* Reserve the collapsed sheet's height so the page's own content can always
      clear it, and so nothing underneath is permanently unreachable. */
   main.game { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+}
+/* The bottom tab bar only exists below 640px (nav.js). Written as its own query
+   rather than nested, so it is a plain top-level rule the renderer can resolve. */
+@media (max-width: 640px) {
+  .assist-sheet { bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  main.game { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
 }
