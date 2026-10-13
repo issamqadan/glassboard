@@ -1045,25 +1045,30 @@ function renderOpening() {
   const html = GBAssistUI.stripHTML({ opening: mpOpening(), assistData, myColor, oppColor: myColor === "white" ? "black" : "white" }) || "<div class='gs-row gs-empty'></div>";
   if (html !== box._h) { box.innerHTML = html; box._h = html; }
 }
+// Every renderer runs in isolation. paint() used to be a bare list of calls, so
+// the FIRST one that threw silently cancelled every renderer after it — a
+// use-before-declaration in renderPlayers() took out the strips, the captures, the
+// Glass Lens, the coach, the strategy panel, the move list, the glass log, the
+// budget and the status line, and the screen just looked like assistance had been
+// turned off. One broken panel must cost you that panel, not the whole game.
+function safeRender(name, fn) {
+  try { fn(); } catch (e) { console.error("Glassboard render failed: " + name, e); }
+}
 function paint() {
-  renderBoard();
-  renderPlayers();
-  renderCaptured();
-  renderOpening();
-  renderGlassLens();
-  // Guarded: paint() has no error handling, so a throw here would silently skip
-  // the coach, the assist list, the strategy panel, the glass log and the budget —
-  // every remaining piece of assistance. The sheet is presentation; it is not
-  // allowed to be load-bearing for the things it presents.
-  try { renderAssistSheet(); } catch (e) { console.error("assist sheet:", e); }
-  renderCoach();
-  renderAssist();
-  renderStrategy();
-  renderBoardAdvice();
-  renderPlanDock();
-  renderGlass();
-  renderStatus();
-  renderBudget();
+  safeRender("renderBoard", renderBoard);
+  safeRender("renderPlayers", renderPlayers);
+  safeRender("renderCaptured", renderCaptured);
+  safeRender("renderOpening", renderOpening);
+  safeRender("renderGlassLens", renderGlassLens);
+  safeRender("renderAssistSheet", renderAssistSheet);
+  safeRender("renderCoach", renderCoach);
+  safeRender("renderAssist", renderAssist);
+  safeRender("renderStrategy", renderStrategy);
+  safeRender("renderBoardAdvice", renderBoardAdvice);
+  safeRender("renderPlanDock", renderPlanDock);
+  safeRender("renderGlass", renderGlass);
+  safeRender("renderStatus", renderStatus);
+  safeRender("renderBudget", renderBudget);
 }
 
 // Plan Dock: the strategy glanceable + always-visible under the board (plan ·
@@ -1307,6 +1312,12 @@ function renderPlayers() {
   const youLead = myColor === "white" ? cap.materialDiff : -cap.materialDiff;
   const S = window.GBAssistUI;
   if (!S) return;
+  // THE CLOCK. Human games had none; these numbers are the SERVER's, smoothed
+  // locally between pushes so the display doesn't freeze between moves. The local
+  // estimate never decides anything — only the server can flag a player.
+  const ctl = state.minutes > 0;
+  const myMs = ctl ? smoothedMs(myColor) : 0;
+  const oppMs = ctl ? smoothedMs(myColor === "white" ? "black" : "white") : 0;
   const opp = S.playerStripHTML({
     clock: ctl ? GBClock.fmt(oppMs) : "", low: ctl && GBClock.pressure(oppMs) !== "normal",
     icon: `<span class="dot ${myColor === "white" ? "black" : "white"}"></span>${oppSeated ? "👤" : "⏳"}`,
@@ -1315,12 +1326,6 @@ function renderPlayers() {
     extra: oppSeated ? rivalryChip(oppName) : "", // keep the head-to-head record visible
     turn: turn && turn !== myColor, turnText: "their move",
   });
-  // THE CLOCK. Human games had none; these numbers are the SERVER's, smoothed
-  // locally between pushes so the display doesn't freeze between moves. The local
-  // estimate never decides anything — only the server can flag a player.
-  const ctl = state.minutes > 0;
-  const myMs = ctl ? smoothedMs(myColor) : 0;
-  const oppMs = ctl ? smoothedMs(myColor === "white" ? "black" : "white") : 0;
   const al = myAl();
   const budgetChip = (al && al.max) ? `<span class="ps-budget">🤝 ${GBHelpBudget.counter(Math.max(0, al.left || 0), al.max)}</span>` : "";
   const you = S.playerStripHTML({

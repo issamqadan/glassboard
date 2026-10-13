@@ -59,6 +59,12 @@ if grep -q ".assist-sheet { display: contents; }" "$CSS"; then
 else printf "  FAIL the sheet has a box on desktop -> the rail layout changes\n"; fail=1; fi
 
 
+# Use-before-declaration inside a renderer. ADVISORY: two known false positives
+# (prose inside nested template literals), so it reports but does not fail the
+# build. Read it — the real one it caught took out every panel in a human game.
+printf "  --   use-before-declaration (advisory):\n"
+python3 scripts/check-tdz.py web/main.js web/multiplayer.js | sed 's/^/  /'
+
 if [ "$fail" -eq 0 ]; then printf "All good — nothing above the board can resize.\n"; else
   printf "\nBROKEN: an above-board element can change height → the board will jump.\n"; fi
 exit $fail

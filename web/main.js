@@ -1534,31 +1534,38 @@ function renderOfflinePill() {
   if (!el) return;
   el.hidden = firstGame || !offlineReady() || !aiSaved;
 }
+// Every renderer runs in isolation. paint() used to be a bare list of calls, so
+// the FIRST one that threw silently cancelled every renderer after it — a
+// use-before-declaration in renderPlayers() took out the strips, the captures, the
+// Glass Lens, the coach, the strategy panel, the move list, the glass log, the
+// budget and the status line, and the screen just looked like assistance had been
+// turned off. One broken panel must cost you that panel, not the whole game.
+function safeRender(name, fn) {
+  try { fn(); } catch (e) { console.error("Glassboard render failed: " + name, e); }
+}
 function paint() {
   keepScroll(() => {
-    renderFirstGame();
-    renderBoard();
-    renderPlayers();
-    renderOfflinePill();
-    renderEval();
-    renderAiAssist();
-    renderCoach();
-    renderAssist();
-    renderPlanDock();
-    renderGlassLens();
-  renderPlanPanel();
-    // Guarded for the same reason as in a human game: presentation must never be
-    // able to take down the assistance it presents.
-    try { renderAssistSheet(); } catch (e) { console.error("assist sheet:", e); }
-    renderBoardAdvice();
-    renderMoveList();
-    renderCaptured();
-    renderOpening();
-    renderClocks();
-    renderGlass();
-    renderStatus();
-    renderBudget();
-    showGameOverIfNeeded();
+    safeRender("renderFirstGame", renderFirstGame);
+    safeRender("renderBoard", renderBoard);
+    safeRender("renderPlayers", renderPlayers);
+    safeRender("renderOfflinePill", renderOfflinePill);
+    safeRender("renderEval", renderEval);
+    safeRender("renderAiAssist", renderAiAssist);
+    safeRender("renderCoach", renderCoach);
+    safeRender("renderAssist", renderAssist);
+    safeRender("renderPlanDock", renderPlanDock);
+    safeRender("renderGlassLens", renderGlassLens);
+    safeRender("renderPlanPanel", renderPlanPanel);
+    safeRender("renderAssistSheet", renderAssistSheet);
+    safeRender("renderBoardAdvice", renderBoardAdvice);
+    safeRender("renderMoveList", renderMoveList);
+    safeRender("renderCaptured", renderCaptured);
+    safeRender("renderOpening", renderOpening);
+    safeRender("renderClocks", renderClocks);
+    safeRender("renderGlass", renderGlass);
+    safeRender("renderStatus", renderStatus);
+    safeRender("renderBudget", renderBudget);
+    safeRender("showGameOverIfNeeded", showGameOverIfNeeded);
   });
 }
 
