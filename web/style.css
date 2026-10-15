@@ -1118,8 +1118,12 @@ main.game #coach { display: none; }
 .plan-sheet-body .cx-Advanced { background: rgba(242,112,126,0.16); color: #f2a6ae; }
 .plan-sheet-body .ps-clear { margin-top: 10px; font: inherit; font-weight: 700; font-size: 0.82rem; cursor: pointer;
   color: #f2a6ae; background: rgba(242,112,126,0.1); border: 1px solid rgba(242,112,126,0.3); border-radius: 11px; padding: 10px; }
-.glass-lens .gl-r1 { display: flex; align-items: center; gap: 8px; }
-.glass-lens .gl-label { font-weight: 800; font-size: 1rem; color: #eef4fb; letter-spacing: -0.01em; flex: 1; }
+/* `flex: 1` on the label means flex-basis 0, so when the tag and the two buttons
+   fill the row the label shrinks to min-content — a column of single words. It
+   gets a real basis and may take its own line instead. */
+.glass-lens .gl-r1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.glass-lens .gl-label { font-weight: 800; font-size: 1rem; color: #eef4fb; letter-spacing: -0.01em;
+  flex: 1 1 auto; min-width: 10ch; }
 .glass-lens .gl-tag { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
   padding: 2px 7px; border-radius: 999px; background: rgba(147,162,192,0.2); color: #b9c6da; white-space: nowrap; }
 .glass-lens .gl-tag.t-urgent { background: rgba(242,109,122,0.22); color: #f4a2ab; }
@@ -2339,4 +2343,54 @@ main.game .strat-panel { display: none; }
 @media (max-width: 640px) {
   .assist-sheet { bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
   main.game { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
+}
+
+
+/* ---- TWO PANELS: the strategy and the move ---------------------------------
+   "What am I trying to achieve" and "what do I play right now" are different
+   questions. Merged into one block the move recommendation read as a footnote to
+   the plan. The Lens becomes a transparent container and each half carries its
+   own card chrome, with an eyebrow naming it — so the rail shows two panels, as
+   it did before the consolidation, without going back to two render paths that
+   could disagree about the move. */
+.glass-lens.split { background: none; border: 0; box-shadow: none; padding: 0; gap: 10px; }
+.glass-lens.split > .gl-card {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 11px 13px; border-radius: 14px;
+  background: linear-gradient(150deg, rgba(92,201,236,0.12), rgba(126,224,214,0.05));
+  border: 1px solid rgba(92,201,236,0.34);
+  box-shadow: 0 10px 30px -18px rgba(92,201,236,0.6); }
+/* The strategy panel reads as the calmer, longer-lived of the two. */
+.glass-lens.split > .gl-strategy {
+  background: linear-gradient(150deg, rgba(126,224,214,0.13), rgba(92,201,236,0.04));
+  border-color: rgba(126,224,214,0.4); }
+.glass-lens .gl-eyebrow { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase; color: #7f93ad; }
+/* eyebrow left, tools right — the title row below is then free for the label. */
+.glass-lens .gl-cardhead { display: flex; align-items: center; gap: 6px; }
+.glass-lens .gl-cardhead .gl-eyebrow { flex: 1 1 auto; min-width: 0; }
+.glass-lens .gl-cardhead > button { flex: 0 0 auto; }
+.glass-lens.split > .gl-strategy .gl-eyebrow { color: #7ee0d6; opacity: 0.8; }
+/* The urgency tint belongs to the MOVE, not to the plan — a hanging piece does
+   not make your strategy urgent. */
+.glass-lens.split.kind-urgent > .gl-move {
+  background: linear-gradient(150deg, rgba(242,109,122,0.16), rgba(242,109,122,0.05)); border-color: rgba(242,109,122,0.5); }
+.glass-lens.split.kind-strategy > .gl-move {
+  background: linear-gradient(150deg, rgba(126,224,214,0.14), rgba(92,201,236,0.05)); border-color: rgba(126,224,214,0.45); }
+.glass-lens.split.kind-draw > .gl-move {
+  background: linear-gradient(150deg, rgba(138,160,255,0.16), rgba(138,160,255,0.05)); border-color: rgba(138,160,255,0.5); }
+/* The plan head sat flush against the card edge; inside its own panel it follows
+   the eyebrow instead. */
+.glass-lens.split > .gl-strategy .gl-plan-head { margin-top: 0; }
+
+/* Inside the bottom sheet the two panels must NOT be cards-within-a-card: the
+   sheet already supplies the chrome, and the nested padding/borders cost ~40px
+   of the one screen where height is scarce. They become flat sections with a
+   hairline between them — still two clearly named areas, no wasted height. */
+@media (max-width: 860px) {
+  main.game .assist-sheet .glass-lens.split { gap: 0; }
+  main.game .assist-sheet .glass-lens.split > .gl-card {
+    background: none; border: 0; box-shadow: none; padding: 2px 0 8px; border-radius: 0; }
+  main.game .assist-sheet .glass-lens.split > .gl-move {
+    border-top: 1px solid rgba(255,255,255,0.1); padding-top: 9px; }
 }

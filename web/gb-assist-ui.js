@@ -232,7 +232,11 @@
       const stepNow = (picked.steps || []).filter((x) => !x.done)[0];
       return {
         move: rec, kind: "best", tag: "Best move · off-plan",
-        label: label + " — not your plan's step",
+        // NOT `label + " — not your plan's step"`: the tag beside it already reads
+        // "BEST MOVE · OFF-PLAN" and the why-text explains it in full. The long
+        // label said the same thing a third time and, being the flexible item in
+        // the row, collapsed to one word per line.
+        label,
         why: (rec.note || "The engine rates this highest here.") +
           ` Your plan wants ${planSan}${stepNow && stepNow.text ? ` (${stepNow.text.toLowerCase()})` : ""}, ` +
           `but the engine rates this higher in this position. Your plan is still on — play this, then come back to it.`,

@@ -91,7 +91,16 @@ function prio(recUci, recNote, planMove) {
   });
 }
 var off = prio("e2e4", "Grabs space in the centre.", "g1f3");
-want("off-plan move is labelled as such", /not your plan's step/.test(off.label));
+// The off-plan case must be UNMISTAKABLE, but not by repeating itself three
+// times: the tag carries it, the why-text explains it, and planMove names the
+// plan's own move so the UI can offer it. The label used to append "— not your
+// plan's step" as well, which duplicated the tag beside it and, being the
+// flexible item in its row, collapsed to one word per line on a real screen.
+want("off-plan move is tagged as off-plan", /off-plan/i.test(off.tag));
+want("off-plan why-text names the plan's move", /Nf3/.test(off.why));
+want("off-plan result carries the plan's move for the UI to offer", off.planMove === "Nf3");
+want("off-plan label is NOT padded with a duplicate of the tag",
+     !/not your plan's step/.test(off.label));
 want("it names what the plan wanted", /Nf3/.test(off.why));
 want("it names the objective", /develop your knights/i.test(off.why));
 want("it says the plan survives", /plan is still on/.test(off.why));
@@ -121,7 +130,10 @@ function fnBody(src, name) {
 }
 var lens = fnBody(src, "renderGlassLens");
 var branches = (lens.match(/el\.innerHTML = glIdentityRow\(\)/g) || []).length;
-var withHead = (lens.match(/el\.innerHTML = glIdentityRow\(\) \+ planHead/g) || []).length;
+// planHead now goes through strategyCard(), which wraps it in its own panel so
+// desktop shows the strategy and the move as two cards. The property under test
+// is unchanged: EVERY branch must render the plan.
+var withHead = (lens.match(/el\.innerHTML = glIdentityRow\(\) \+ (?:planHead|strategyCard\(planHead\))/g) || []).length;
 print("  branches that set the card's HTML : " + branches);
 print("  branches that include the plan     : " + withHead);
 want("the slice actually found the function", lens.length > 500 && branches >= 3);

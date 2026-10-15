@@ -2850,6 +2850,14 @@ function previewMove(m, boardOnly) {
 }
 function clearPreview() { if (previewedMove) { previewedMove = null; } }
 
+// The strategy half of the Lens, as its own panel. Empty when there is no plan —
+// then the Lens is simply the one move panel.
+function strategyCard(planHead) {
+  return planHead
+    ? `<section class="gl-card gl-strategy"><span class="gl-eyebrow">Your strategy</span>${planHead}</section>`
+    : "";
+}
+
 function renderGlassLens() {
   const el = document.getElementById("glassLens");
   if (!el) return;
@@ -2930,8 +2938,10 @@ function renderGlassLens() {
   }
   // The strong engine is still calculating — show that honestly rather than a weak move.
   if (p.analyzing) {
-    el.className = "glass-lens analyzing";
-    el.innerHTML = glIdentityRow() + planHead + `<div class="gl-analyzing"><span class="gl-spin"></span> Analyzing the position…</div>`;
+    el.className = "glass-lens split analyzing";
+    el.innerHTML = glIdentityRow() + strategyCard(planHead) +
+      `<section class="gl-card gl-move"><span class="gl-eyebrow">This move</span>` +
+      `<div class="gl-analyzing"><span class="gl-spin"></span> Analyzing the position…</div></section>`;
     return;
   }
   // Always-visible HUD: the advice is SHOWN (label + why), and the move is a single
@@ -2956,11 +2966,20 @@ function renderGlassLens() {
     }
   }
   const meaning = explainMoves ? moveMeaning(p.move) : "";
-  el.className = "glass-lens kind-" + p.kind;
-  el.innerHTML = glIdentityRow() + planHead +
-    `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span>` +
+  el.className = "glass-lens split kind-" + p.kind;
+  el.innerHTML = glIdentityRow() + strategyCard(planHead) +
+    // THE MOVE PANEL. Desktop shows the strategy and the move as two distinct
+    // cards side by side in the rail — "what am I trying to achieve" and "what do
+    // I play right now" are different questions and reading them as one block
+    // made the move recommendation look like a footnote to the plan.
+    // The two tool buttons live on the card's OWN header line, not in the title
+    // row. Sharing a row with the label and the tag left too little width, so the
+    // row wrapped and dropped 📜 onto a line of its own.
+    `<section class="gl-card gl-move">` +
+    `<div class="gl-cardhead"><span class="gl-eyebrow">This move</span>` +
       `<button class="gl-explain${explainMoves ? " on" : ""}" id="lensExplain" type="button" title="${explainMoves ? "Explanations on — tap to hide" : "Explain moves in plain language"}">💡</button>` +
       `<button class="gl-log" id="lensLog" type="button" title="Assistance log">📜</button></div>` +
+    `<div class="gl-r1"><span class="gl-label">${escapeHtml(p.label)}</span><span class="gl-tag t-${p.kind}">${escapeHtml(p.tag)}</span></div>` +
     (meaning ? `<div class="gl-mean">💡 ${escapeHtml(meaning)}</div>` : "") +
     (p.why ? `<div class="gl-why">${escapeHtml(p.why)}</div>` : "") +
     `<div class="gl-actions">` +
@@ -2977,7 +2996,7 @@ function renderGlassLens() {
       ? `<button class="gl-planalt" id="lensPlanMove" type="button" title="${escapeHtml(offPlanNote)}">` +
           `🧭 Play your plan instead — ${escapeHtml(offPlanSan)}` +
           `<small>advances “${escapeHtml(offPlanStep)}”</small></button>`
-      : "") + planRow;
+      : "") + `</section>` + planRow;
   document.getElementById("lensPlay").onclick = () => playMove(p.move.from, p.move.to, true);
   const lpm = document.getElementById("lensPlanMove");
   if (lpm && offPlanMove) lpm.onclick = () => playMove(offPlanMove.from, offPlanMove.to, true);
